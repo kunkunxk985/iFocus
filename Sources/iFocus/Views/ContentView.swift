@@ -346,21 +346,37 @@ struct ContentView: View {
                 WindowChrome.layoutMainWindowTrafficLights()
             }
         } label: {
-            HStack {
-                Image(systemName: sidebarCollapsed ? "sidebar.left" : "sidebar.leading")
-                    .font(.system(size: 13, weight: .semibold))
-                if !sidebarCollapsed {
+            if sidebarCollapsed {
+                // Chevron = “push rail open” — clearer than the dual-pane SF Symbol.
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    .frame(width: 28, height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(AppTheme.elevatedBackground(for: colorScheme))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 10, weight: .bold))
                     Text("收起侧栏")
                         .font(.caption.weight(.semibold))
                     Spacer()
                 }
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
             }
-            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-            .padding(.horizontal, sidebarCollapsed ? 0 : 14)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SoftScaleButtonStyle())
         .help(sidebarCollapsed ? "展开侧栏" : "收起侧栏")
     }
 
