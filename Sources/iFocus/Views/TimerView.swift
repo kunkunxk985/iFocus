@@ -48,6 +48,9 @@ struct TimerView: View {
             let w = geo.size.width
             let compact = h < 680
             let topChrome: CGFloat = 48
+            let stageScale = compact
+                ? 1
+                : min(1.5, max(1, min(w / 1200, h / 820)))
             
             // Reserve vertical space for fixed chrome so the ring absorbs the rest.
             let reserved: CGFloat =
@@ -64,7 +67,7 @@ struct TimerView: View {
             
             let ringBudget = max(160, h - reserved)
             let ringSize = min(
-                compact ? 240 : 300,
+                compact ? 240 : 300 * stageScale,
                 min(ringBudget, w * 0.48)
             )
             
@@ -72,11 +75,11 @@ struct TimerView: View {
                 ambientBackground
                 
                 VStack(spacing: compact ? 12 : 16) {
-                    topMeta(compact: compact)
+                    topMeta(compact: compact, scale: stageScale)
                         .padding(.top, topChrome + (compact ? 6 : 10))
                     
                     taskFocusBlock(compact: compact)
-                        .frame(maxWidth: min(480, w - 40))
+                        .frame(maxWidth: min(480 * stageScale, w - 40))
                     
                     Spacer(minLength: 4)
                     
@@ -85,9 +88,9 @@ struct TimerView: View {
                     Spacer(minLength: 4)
                     
                     modeSwitcher(compact: compact)
-                        .frame(maxWidth: min(400, w - 48))
+                        .frame(maxWidth: min(400 * stageScale, w - 48))
                     
-                    controlButtons(compact: compact)
+                    controlButtons(compact: compact, scale: stageScale)
                     
                     sessionHint
                         .padding(.bottom, compact ? 12 : 18)
@@ -137,7 +140,7 @@ struct TimerView: View {
     
     // MARK: - Top meta
     
-    private func topMeta(compact: Bool) -> some View {
+    private func topMeta(compact: Bool, scale: CGFloat) -> some View {
         VStack(spacing: compact ? 10 : 12) {
             // Status pill — centered
             HStack(spacing: 8) {
@@ -193,7 +196,7 @@ struct TimerView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .frame(maxWidth: 420)
+            .frame(maxWidth: 420 * scale)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.82 : 0.55))
@@ -447,11 +450,12 @@ struct TimerView: View {
     
     // MARK: - Controls
     
-    private func controlButtons(compact: Bool) -> some View {
-        let main: CGFloat = compact ? 64 : 72
-        let side: CGFloat = compact ? 44 : 50
+    private func controlButtons(compact: Bool, scale: CGFloat) -> some View {
+        let controlScale = min(1.25, scale)
+        let main: CGFloat = (compact ? 64 : 72) * controlScale
+        let side: CGFloat = (compact ? 44 : 50) * controlScale
         
-        return HStack(spacing: compact ? 24 : 30) {
+        return HStack(spacing: (compact ? 24 : 30) * controlScale) {
             controlCircle(
                 systemName: "forward.end.fill",
                 title: "跳过",

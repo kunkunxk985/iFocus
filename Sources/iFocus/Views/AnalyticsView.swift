@@ -127,8 +127,12 @@ struct AnalyticsView: View {
         GeometryReader { geo in
             let pad: CGFloat = 40
             let topInset = AppTheme.detailTopInset
-            let contentW = min(1040, geo.size.width - pad * 2)
+            let availableW = max(0, geo.size.width - pad * 2)
+            let contentW = min(availableW, min(1760, max(1040, availableW * 0.84)))
             let contentH = max(0, geo.size.height - topInset)
+            let primaryRowHeight = min(300, max(220, contentH * 0.30))
+            let secondaryRowHeight = min(220, max(150, contentH * 0.20))
+            let recentMinHeight = min(160, max(104, contentH * 0.14))
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -146,7 +150,7 @@ struct AnalyticsView: View {
                         weeklyCard
                             .frame(maxWidth: .infinity)
                     }
-                    .frame(minHeight: 220)
+                    .frame(height: primaryRowHeight)
 
                     HStack(alignment: .top, spacing: 16) {
                         categoryCard
@@ -156,9 +160,10 @@ struct AnalyticsView: View {
                         insightsCard
                             .frame(maxWidth: .infinity)
                     }
-                    .frame(minHeight: 150)
+                    .frame(height: secondaryRowHeight)
 
                     recentSessionsCard
+                        .frame(minHeight: recentMinHeight)
                         .padding(.bottom, 28)
                 }
                 .frame(width: contentW, alignment: .topLeading)

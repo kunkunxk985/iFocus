@@ -332,6 +332,24 @@ struct SettingsWindowView: View {
                         .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                 }
 
+                if timerStore.notificationStatus == "已授权" {
+                    HStack(spacing: 10) {
+                        Button("发送测试通知") {
+                            timerStore.notificationFeedback = nil
+                            timerStore.sendTestNotification()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+
+                        if let feedback = timerStore.notificationFeedback {
+                            Text(feedback)
+                                .font(.caption)
+                                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                                .lineLimit(2)
+                        }
+                    }
+                }
+
                 if settings.soundEnabled {
                     HStack {
                         Text("提示音")

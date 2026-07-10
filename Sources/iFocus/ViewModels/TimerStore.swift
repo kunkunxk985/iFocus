@@ -57,6 +57,7 @@ class TimerStore: ObservableObject {
     @Published var isRunning: Bool = false
     @Published var completedPomodoros: Int = 0
     @Published var notificationStatus: String = "未请求"
+    @Published var notificationFeedback: String?
     
     /// High-frequency clock. NOT `@Published` — publishing every second was
     /// invalidating the entire view tree (task list + edit sheet) and freezing macOS Form.
@@ -140,6 +141,7 @@ class TimerStore: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             self?.resyncFromWallClock()
+            self?.updateNotificationStatus()
         }
         // Midnight: reset "today" pomodoro / focus-minute counters without restarting the app.
         let dayChanged = NotificationCenter.default.addObserver(
@@ -528,6 +530,45 @@ class TimerStore: ObservableObject {
         }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { [weak self] _, _ in
             self?.updateNotificationStatus()
+        }
+    }
+
+    func sendTestNotification() {
+        guard isPackagedApp else {
+            notificationFeedback = "仅应用版可发送通知"
+            return
+        }
+
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { [weak self] notificationSettings in
+            guard let self else { return }
+            guard notificationSettings.authorizationStatus == .authorized ||
+                    notificationSettings.authorizationStatus == .provisional else {
+                DispatchQueue.main.async {
+                    self.notificationFeedback = "请先在系统设置中允许通知"
+                    self.updateNotificationStatus()
+                }
+                return
+            }
+
+            let content = UNMutableNotificationContent()
+            content.title = "iFocus 通知测试"
+            content.body = "通知已正常启用，专注结束时会在这里提醒你。"
+            content.sound = self.settings.soundEnabled ? .default : nil
+            let request = UNNotificationRequest(
+                identifier: "ifocus.test.\(UUID().uuidString)",
+                content: content,
+                trigger: nil
+            )
+            center.add(request) { error in
+                DispatchQueue.main.async {
+                    if let error {
+                        self.notificationFeedback = "发送失败：\(error.localizedDescription)"
+                    } else {
+                        self.notificationFeedback = "测试通知已发送"
+                    }
+                }
+            }
         }
     }
 

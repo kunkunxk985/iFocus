@@ -28,10 +28,12 @@ struct ContentView: View {
     @EnvironmentObject var timerStore: TimerStore
     @Environment(\.colorScheme) private var colorScheme
 
-    /// ~18–19% of default window — navigation without starving the stage.
-    private let sidebarWidth: CGFloat = 216
     /// Space under the transparent titlebar so sidebar content clears traffic lights.
     private let titlebarContentInset: CGFloat = AppTheme.detailTopInset
+
+    private func sidebarWidth(for availableWidth: CGFloat) -> CGFloat {
+        min(252, max(216, availableWidth * 0.10))
+    }
 
     private var smartItems: [SidebarItem] {
         // Single O(n) scan — previously six filter+sorts on every sidebar body pass.
@@ -60,30 +62,35 @@ struct ContentView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            HStack(spacing: 0) {
-                sidebarPane
-                    .frame(width: sidebarWidth)
-
-                detailPane
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            
-            if isAccountMenuPresented {
-                // Tap-catcher above content, below popover — dismiss account menu.
-                Color.black.opacity(0.001)
+        GeometryReader { geometry in
+            ZStack(alignment: .topLeading) {
+                AppTheme.contentBackground(for: colorScheme)
                     .ignoresSafeArea()
-                    .onTapGesture {
-                        dismissAccountMenu()
-                    }
-                    .zIndex(25)
-                
-                accountPopover
-                    .padding(.leading, 14)
-                    .padding(.bottom, 78)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                    .transition(accountMenuTransition)
-                    .zIndex(30)
+
+                HStack(spacing: 0) {
+                    sidebarPane
+                        .frame(width: sidebarWidth(for: geometry.size.width))
+
+                    detailPane
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if isAccountMenuPresented {
+                    // Tap-catcher above content, below popover — dismiss account menu.
+                    Color.black.opacity(0.001)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            dismissAccountMenu()
+                        }
+                        .zIndex(25)
+
+                    accountPopover
+                        .padding(.leading, 14)
+                        .padding(.bottom, 78)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                        .transition(accountMenuTransition)
+                        .zIndex(30)
+                }
             }
         }
         // Draw under the transparent titlebar so no system white strip shows through.

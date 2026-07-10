@@ -41,6 +41,16 @@ cp -R "$APP_DIR" "$TEMP_DIR/"
 ln -s /Applications "$TEMP_DIR/Applications"
 
 echo "Creating disk image (DMG)..."
-hdiutil create -volname "${APP_NAME}" -srcfolder "$TEMP_DIR" -ov -format UDZO "$DMG_PATH"
+rm -f "$DMG_PATH"
+if diskutil image create from --help >/dev/null 2>&1; then
+    diskutil image create from \
+        --volumeName "${APP_NAME}" \
+        --format UDZO \
+        "$TEMP_DIR" \
+        "$DMG_PATH"
+else
+    # Compatibility fallback for macOS versions before `diskutil image`.
+    hdiutil create -volname "${APP_NAME}" -srcfolder "$TEMP_DIR" -format UDZO "$DMG_PATH"
+fi
 
 echo "Success! DMG packaged at: $DMG_PATH"

@@ -24,18 +24,30 @@ struct PageContainer<Content: View>: View {
     }
 
     var body: some View {
-        Group {
-            if let maxWidth {
-                content
-                    .frame(maxWidth: maxWidth, alignment: .topLeading)
-                    .padding(.horizontal, horizontalPadding)
-            } else {
-                content
-                    .padding(.horizontal, horizontalPadding)
+        GeometryReader { geometry in
+            let usableWidth = max(0, geometry.size.width - horizontalPadding * 2)
+
+            Group {
+                if let maxWidth {
+                    let responsiveWidth = min(
+                        usableWidth,
+                        min(maxWidth * 1.8, max(maxWidth, usableWidth * 0.82))
+                    )
+                    content
+                        .frame(maxWidth: responsiveWidth, alignment: .topLeading)
+                        .padding(.horizontal, horizontalPadding)
+                } else {
+                    content
+                        .padding(.horizontal, horizontalPadding)
+                }
             }
+            .padding(.top, topPadding)
+            .frame(
+                width: geometry.size.width,
+                height: geometry.size.height,
+                alignment: .top
+            )
         }
-        .padding(.top, topPadding)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(
             showBackground
                 ? AnyView(AppTheme.contentBackground(for: colorScheme))

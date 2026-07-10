@@ -1,7 +1,8 @@
 import SwiftUI
 import AppKit
+import UserNotifications
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     /// Shared so we can flush persistence on quit.
     static weak var taskStore: TaskStore?
     
@@ -19,8 +20,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        UNUserNotificationCenter.current().delegate = self
         WindowChrome.applyAll()
         NSApp.setActivationPolicy(.regular)
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
     }
     
     func applicationWillTerminate(_ notification: Notification) {
@@ -176,7 +186,7 @@ struct iFocusApp: App {
             WindowChrome.applyAll()
         }
         
-        WindowGroup("设置", id: "settings") {
+        Window("设置", id: "settings") {
             SettingsWindowView()
                 .environmentObject(settings)
                 .environmentObject(timerStore)
