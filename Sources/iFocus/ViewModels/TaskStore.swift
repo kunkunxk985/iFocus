@@ -177,12 +177,15 @@ class TaskStore: ObservableObject {
     }
 
     private var isLoadingFromDisk = false
+    /// When true, disk writes are blocked so a corrupt load cannot overwrite the original file.
+    private var blockPersistence = false
     private var saveTasksWorkItem: DispatchWorkItem?
     private var saveSessionsWorkItem: DispatchWorkItem?
     private var saveStateWorkItem: DispatchWorkItem?
     private var undoDeletionWorkItem: DispatchWorkItem?
-    /// Tasks removed by the latest delete — restored by `undoLastDeletion()`.
+    /// Soft-deleted tasks awaiting undo (may accumulate multiple deletes in the window).
     private var pendingDeletedTasks: [FocusTask] = []
+    /// Only set when a delete actually cleared the active task.
     private var pendingDeletedActiveTaskId: UUID?
     
     @Published var tasks: [FocusTask] = [] {
@@ -197,6 +200,9 @@ class TaskStore: ObservableObject {
             scheduleSaveSessions()
         }
     }
+    
+    /// Non-nil after a corrupt tasks/sessions load — UI should show recovery options.
+    @Published private(set) var dataLoadErrorMessage: String?
     
     @Published var newTaskTitle: String = ""
     @Published var newTaskCategory: TaskCategory = .study
@@ -358,6 +364,7 @@ class TaskStore: ObservableObject {
         tasks.append(task)
         newTaskTitle = ""
         newTaskRecurrence = .none
+        saveTasksImmediately()
         return task.id
     }
     
@@ -368,10 +375,12 @@ class TaskStore: ObservableObject {
             if tasks[index].isCompleted && activeTaskId == task.id {
                 activeTaskId = nil
             }
-            // Completing a recurring task spawns the next occurrence.
+            // Completing a recurring task spawns the next occurrence (once per cycle).
             if !wasCompleted, tasks[index].isCompleted, tasks[index].recurrence != .none {
                 spawnNextRecurrence(from: tasks[index])
             }
+            saveTasksImmediately()
+            saveStateImmediately()
         }
     }
     
@@ -379,6 +388,17 @@ class TaskStore: ObservableObject {
     private func spawnNextRecurrence(from completed: FocusTask) {
         guard completed.recurrence != .none else { return }
         let nextDue = FocusTask.nextDueDate(after: completed.dueDate, recurrence: completed.recurrence)
+        // Avoid duplicates when user un-completes and completes again.
+        if let nextDue {
+            let nextDay = Calendar.current.startOfDay(for: nextDue)
+            let alreadyOpen = tasks.contains { t in
+                !t.isCompleted
+                    && t.recurrence == completed.recurrence
+                    && t.title == completed.title
+                    && t.dueDate.map { Calendar.current.isDate($0, inSameDayAs: nextDay) } == true
+            }
+            if alreadyOpen { return }
+        }
         let nextIndex = (tasks.map(\.sortIndex).max() ?? -1) + 1
         let next = FocusTask(
             title: completed.title,
@@ -394,29 +414,10 @@ class TaskStore: ObservableObject {
         tasks.append(next)
     }
     
-    /// Incomplete recurring tasks with past due dates roll to the next cycle (keeps lists current).
+    /// Previously rolled overdue recurring dues forward on launch (hid overdue).
+    /// Kept as no-op for API stability — overdue recurring tasks stay visible.
     func rollForwardOverdueRecurringTasks(relativeTo now: Date = Date(), calendar: Calendar = .current) {
-        let today = calendar.startOfDay(for: now)
-        var changed = false
-        for index in tasks.indices {
-            guard !tasks[index].isCompleted, tasks[index].recurrence != .none else { continue }
-            guard let due = tasks[index].dueDate else { continue }
-            var cursor = calendar.startOfDay(for: due)
-            var guardCount = 0
-            while cursor < today, guardCount < 400 {
-                guard let next = FocusTask.nextDueDate(after: cursor, recurrence: tasks[index].recurrence, calendar: calendar) else { break }
-                cursor = calendar.startOfDay(for: next)
-                guardCount += 1
-            }
-            if cursor != calendar.startOfDay(for: due) {
-                tasks[index].dueDate = cursor
-                changed = true
-            }
-        }
-        if changed {
-            saveTasksWorkItem?.cancel()
-            saveTasks()
-        }
+        // Intentionally empty: rolling due dates erased "已逾期" signal for daily/weekly tasks.
     }
     
     // MARK: - Persistence
@@ -467,6 +468,7 @@ class TaskStore: ObservableObject {
     }
     
     private func scheduleSaveTasks() {
+        guard !blockPersistence else { return }
         saveTasksWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.saveTasks() }
         saveTasksWorkItem = work
@@ -474,6 +476,7 @@ class TaskStore: ObservableObject {
     }
     
     private func scheduleSaveSessions() {
+        guard !blockPersistence else { return }
         saveSessionsWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.saveSessions() }
         saveSessionsWorkItem = work
@@ -481,6 +484,7 @@ class TaskStore: ObservableObject {
     }
 
     private func scheduleSaveState() {
+        guard !blockPersistence else { return }
         saveStateWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.saveState() }
         saveStateWorkItem = work
@@ -497,7 +501,35 @@ class TaskStore: ObservableObject {
         saveState()
     }
     
+    /// User accepts empty state after corrupt load — re-enable writes.
+    func acknowledgeCorruptLoadAndStartFresh() {
+        blockPersistence = false
+        dataLoadErrorMessage = nil
+        saveTasksImmediately()
+        saveSessionsImmediately()
+        saveStateImmediately()
+    }
+    
+    private func saveTasksImmediately() {
+        guard !blockPersistence else { return }
+        saveTasksWorkItem?.cancel()
+        saveTasks()
+    }
+    
+    private func saveSessionsImmediately() {
+        guard !blockPersistence else { return }
+        saveSessionsWorkItem?.cancel()
+        saveSessions()
+    }
+    
+    private func saveStateImmediately() {
+        guard !blockPersistence else { return }
+        saveStateWorkItem?.cancel()
+        saveState()
+    }
+    
     private func saveTasks() {
+        guard !blockPersistence else { return }
         do {
             let data = try Self.makeEncoder().encode(tasks)
             try data.write(to: tasksFileURL, options: .atomic)
@@ -518,11 +550,15 @@ class TaskStore: ObservableObject {
         } catch {
             print("[TaskStore] loadTasks failed: \(error)")
             backupCorruptFile(at: fileURL)
+            // Keep original file on disk — do not overwrite with empty until user confirms.
+            blockPersistence = true
+            dataLoadErrorMessage = "任务数据文件损坏，已备份到同目录。未写入空数据，避免覆盖。可打开数据文件夹找回备份，或确认后从空白开始。"
             self.tasks = []
         }
     }
     
     private func saveSessions() {
+        guard !blockPersistence else { return }
         do {
             let data = try Self.makeEncoder().encode(focusSessions)
             try data.write(to: sessionsFileURL, options: .atomic)
@@ -543,11 +579,16 @@ class TaskStore: ObservableObject {
         } catch {
             print("[TaskStore] loadSessions failed: \(error)")
             backupCorruptFile(at: fileURL)
+            blockPersistence = true
+            if dataLoadErrorMessage == nil {
+                dataLoadErrorMessage = "专注记录文件损坏，已备份。未覆盖原文件。可打开数据文件夹找回，或确认后从空白记录开始。"
+            }
             self.focusSessions = []
         }
     }
 
     private func saveState() {
+        guard !blockPersistence else { return }
         do {
             let state = PersistedState(activeTaskId: activeTaskId)
             let data = try Self.makeEncoder().encode(state)
@@ -651,6 +692,7 @@ class TaskStore: ObservableObject {
             } else {
                 tasks[index].dueDate = nil
             }
+            saveTasksImmediately()
         }
     }
     
@@ -665,6 +707,8 @@ class TaskStore: ObservableObject {
                 spawnNextRecurrence(from: tasks[index])
             }
         }
+        saveTasksImmediately()
+        saveStateImmediately()
     }
     
     func setDueDate(ids: Set<UUID>, to date: Date?) {
@@ -674,6 +718,7 @@ class TaskStore: ObservableObject {
                 tasks[index].dueDate = normalized
             }
         }
+        saveTasksImmediately()
     }
     
     func moveToInbox(ids: Set<UUID>) {
@@ -683,21 +728,23 @@ class TaskStore: ObservableObject {
     func deleteTasks(ids: Set<UUID>) {
         let removed = tasks.filter { ids.contains($0.id) }
         guard !removed.isEmpty else { return }
-        // Stash for undo before mutating.
-        pendingDeletedTasks = removed
-        pendingDeletedActiveTaskId = activeTaskId
-        tasks.removeAll { ids.contains($0.id) }
+        // Accumulate soft-deletes so rapid multi-delete can still undo all.
+        pendingDeletedTasks.append(contentsOf: removed)
         if let active = activeTaskId, ids.contains(active) {
+            pendingDeletedActiveTaskId = active
             activeTaskId = nil
         }
-        presentUndoDeletionBanner(count: removed.count)
+        tasks.removeAll { ids.contains($0.id) }
+        saveTasksImmediately()
+        saveStateImmediately()
+        presentUndoDeletionBanner(count: pendingDeletedTasks.count)
     }
     
     func deleteTask(_ task: FocusTask) {
         deleteTasks(ids: [task.id])
     }
     
-    /// Restore the last soft-deleted batch (if still within the undo window).
+    /// Restore soft-deleted tasks (if still within the undo window).
     @discardableResult
     func undoLastDeletion() -> Bool {
         guard !pendingDeletedTasks.isEmpty else { return false }
@@ -709,13 +756,15 @@ class TaskStore: ObservableObject {
         undoDeletionWorkItem = nil
         undoDeletionBanner = nil
         
-        // Avoid id collisions if something was re-created (rare).
         let existing = Set(tasks.map(\.id))
         let toInsert = restore.filter { !existing.contains($0.id) }
         tasks.append(contentsOf: toInsert)
+        // Only restore active id when delete had cleared it.
         if let priorActive, tasks.contains(where: { $0.id == priorActive }) {
             activeTaskId = priorActive
         }
+        saveTasksImmediately()
+        saveStateImmediately()
         return !toInsert.isEmpty
     }
     
@@ -754,6 +803,7 @@ class TaskStore: ObservableObject {
             let minPinned = tasks.filter(\.isPinned).map(\.sortIndex).min() ?? 0
             tasks[index].sortIndex = minPinned - 1
         }
+        saveTasksImmediately()
     }
     
     /// Drag-reorder a visible section (e.g. overdue-only) inside a filter list.
@@ -781,6 +831,7 @@ class TaskStore: ObservableObject {
                 tasks[idx].sortIndex = offset
             }
         }
+        saveTasksImmediately()
     }
     
     func logFocusSession(

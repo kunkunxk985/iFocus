@@ -2,7 +2,7 @@ import SwiftUI
 import iFocusCore
 
 struct ProfileCategoryStat: Identifiable {
-    let id = UUID()
+    var id: String { category.rawValue }
     let category: TaskCategory
     let minutes: Int
     let count: Int

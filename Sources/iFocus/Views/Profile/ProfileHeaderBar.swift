@@ -47,18 +47,9 @@ struct ProfileIdentityBlock: View {
                 size: 104
             )
             
-            HStack(spacing: 8) {
-                Text(username)
-                    .font(.title.bold())
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                
-                Text("Plus")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(AppTheme.accent))
-            }
+            Text(username)
+                .font(.title.bold())
+                .foregroundColor(AppTheme.primaryText(for: colorScheme))
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 8)

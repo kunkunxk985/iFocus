@@ -74,7 +74,7 @@ struct TaskListView: View {
         switch viewState.selectedScreen {
         case .todayTask: return "今天到期与逾期 · 优先处理红色项"
         case .tomorrowTask: return "提前安排明天要做的事"
-        case .weekTask: return "本周计划（不含今天、明天）"
+        case .weekTask: return "近 7 天内（不含今天、明天）"
         case .plannedTask: return "所有带截止日期的未完成任务"
         case .completedTask: return "已完成任务的回顾"
         case .inboxTask: return "随手记下，稍后再安排日期"
@@ -155,7 +155,8 @@ struct TaskListView: View {
         case .all:
             return true
         case .highPriority:
-            return task.priority <= 2
+            // Higher number = higher urgency (matches sort + priorityColor).
+            return task.priority >= 3
         case .pinned:
             return task.isPinned
         case .hasNotes:
@@ -171,7 +172,7 @@ struct TaskListView: View {
         baseTasks.filter { task in
             switch chip {
             case .all: return true
-            case .highPriority: return task.priority <= 2
+            case .highPriority: return task.priority >= 3
             case .pinned: return task.isPinned
             case .hasNotes: return !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case .hasLink: return task.hasLink
@@ -246,9 +247,10 @@ struct TaskListView: View {
                     onUndo: { taskStore.undoLastDeletion() },
                     onDismiss: { taskStore.dismissUndoDeletionBanner() }
                 )
-                .padding(.bottom, 20)
+                // Sit above the floating focus pill when a session is in progress off-timer.
+                .padding(.bottom, timerStore.isSessionInProgress ? 88 : 20)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .zIndex(20)
+                .zIndex(40)
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.86), value: taskStore.undoDeletionBanner?.token)
@@ -257,6 +259,10 @@ struct TaskListView: View {
             selectedIDs.removeAll()
             activeChip = .all
             dueOverride = nil
+        }
+        .onChange(of: activeChip) { _ in
+            // Avoid deleting off-screen tasks that were selected under another chip.
+            selectedIDs = selectedIDs.intersection(Set(currentTasks.map(\.id)))
         }
         // Snapshot identity (`EditTaskSession`) — never `sheet(item:)` a live FocusTask
         // that mutates while the timer is running.
@@ -274,7 +280,8 @@ struct TaskListView: View {
                     linkURL: linkURL
                 )
             }
-            .id(session.id)
+            // Force full re-init of @State when reopening the same task after save.
+            .id("\(session.id)-\(session.notes)-\(session.linkURL)-\(session.title)-\(session.priority)")
         }
     }
     
@@ -325,7 +332,8 @@ struct TaskListView: View {
     }
     
     private var batchToolbar: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let isCompletedList = viewState.selectedScreen == .completedTask
+        return VStack(alignment: .leading, spacing: 10) {
             Text(selectedIDs.isEmpty ? "点选任务进行批量操作" : "已选 \(selectedIDs.count) 项")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(AppTheme.secondaryText(for: colorScheme))
@@ -334,27 +342,39 @@ struct TaskListView: View {
                 batchButton("全选") {
                     selectedIDs = Set(currentTasks.map(\.id))
                 }
-                batchButton("完成") {
-                    taskStore.completeTasks(ids: selectedIDs)
-                    selectedIDs.removeAll()
+                if isCompletedList {
+                    batchButton("标为未完成") {
+                        for id in selectedIDs {
+                            if let t = taskStore.tasks.first(where: { $0.id == id }), t.isCompleted {
+                                taskStore.toggleCompletion(for: t)
+                            }
+                        }
+                        selectedIDs.removeAll()
+                    }
+                    .disabled(selectedIDs.isEmpty)
+                } else {
+                    batchButton("完成") {
+                        taskStore.completeTasks(ids: selectedIDs)
+                        selectedIDs.removeAll()
+                    }
+                    .disabled(selectedIDs.isEmpty)
+                    batchButton("今天") {
+                        taskStore.setDueDate(ids: selectedIDs, to: Calendar.current.startOfDay(for: Date()))
+                        selectedIDs.removeAll()
+                    }
+                    .disabled(selectedIDs.isEmpty)
+                    batchButton("明天") {
+                        let t = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: Date()))
+                        taskStore.setDueDate(ids: selectedIDs, to: t)
+                        selectedIDs.removeAll()
+                    }
+                    .disabled(selectedIDs.isEmpty)
+                    batchButton("收集箱") {
+                        taskStore.moveToInbox(ids: selectedIDs)
+                        selectedIDs.removeAll()
+                    }
+                    .disabled(selectedIDs.isEmpty)
                 }
-                .disabled(selectedIDs.isEmpty)
-                batchButton("今天") {
-                    taskStore.setDueDate(ids: selectedIDs, to: Calendar.current.startOfDay(for: Date()))
-                    selectedIDs.removeAll()
-                }
-                .disabled(selectedIDs.isEmpty)
-                batchButton("明天") {
-                    let t = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: Date()))
-                    taskStore.setDueDate(ids: selectedIDs, to: t)
-                    selectedIDs.removeAll()
-                }
-                .disabled(selectedIDs.isEmpty)
-                batchButton("收集箱") {
-                    taskStore.moveToInbox(ids: selectedIDs)
-                    selectedIDs.removeAll()
-                }
-                .disabled(selectedIDs.isEmpty)
                 batchButton("删除", destructive: true) {
                     taskStore.deleteTasks(ids: selectedIDs)
                     selectedIDs.removeAll()
@@ -673,8 +693,8 @@ struct TaskListView: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-                .frame(minHeight: CGFloat(incomplete.count) * 78)
-                .environment(\.defaultMinListRowHeight, 64)
+                .frame(minHeight: CGFloat(incomplete.count) * (settings.uiDensity == .compact ? 64 : 74))
+                .environment(\.defaultMinListRowHeight, settings.uiDensity == .compact ? 52 : 60)
             }
             ForEach(completed) { task in
                 taskRow(task)

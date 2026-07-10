@@ -169,7 +169,11 @@ final class TimerStoreTests: XCTestCase {
         XCTAssertEqual(tasks.activeTaskId, a)
         XCTAssertTrue(timer.isRunning)
         
+        // Mid-session switch requires confirm (or force).
         timer.selectTask(b)
+        XCTAssertEqual(tasks.activeTaskId, a)
+        XCTAssertNotNil(timer.pendingSessionDiscard)
+        timer.confirmPendingSessionDiscard()
         XCTAssertEqual(tasks.activeTaskId, b)
         // Switching mid-run restarts a fresh segment on the new task.
         XCTAssertTrue(timer.isRunning)

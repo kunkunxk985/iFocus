@@ -46,11 +46,8 @@ struct ContentView: View {
     private var smartItems: [SidebarItem] {
         // Single O(n) scan — previously six filter+sorts on every sidebar body pass.
         let counts = taskStore.sidebarBadgeCounts()
-        let todayBadge: String? = {
-            if counts.overdue > 0 { return "\(counts.overdue)" }
-            if counts.today > 0 { return "\(counts.today)" }
-            return nil
-        }()
+        // Show total today open tasks; overdue only affects badge color, not the number alone.
+        let todayBadge: String? = counts.today > 0 ? "\(counts.today)" : nil
         return [
             SidebarItem(title: "今天", screen: .todayTask, badge: todayBadge, icon: "sun.max.fill", tint: Color(hex: "#F59E0B")),
             SidebarItem(title: "明天", screen: .tomorrowTask, badge: badgeIfPositive(counts.tomorrow), icon: "sunrise.fill", tint: Color(hex: "#EC4899")),
@@ -59,6 +56,10 @@ struct ContentView: View {
             SidebarItem(title: "已完成", screen: .completedTask, badge: nil, icon: "checkmark.circle.fill", tint: Color(hex: "#10B981")),
             SidebarItem(title: "收集箱", screen: .inboxTask, badge: badgeIfPositive(counts.inbox), icon: "tray.fill", tint: Color(hex: "#3B82F6"))
         ]
+    }
+    
+    private var todayOverdueCount: Int {
+        taskStore.sidebarBadgeCounts().overdue
     }
     
     private func badgeIfPositive(_ count: Int) -> String? {
@@ -105,6 +106,10 @@ struct ContentView: View {
                     OnboardingOverlay {
                         withAnimation(.easeOut(duration: 0.25)) {
                             hasCompletedOnboarding = true
+                            // After first-run, offer pending resume if any.
+                            if timerStore.pendingResumeSnapshot != nil {
+                                showResumeSessionAlert = true
+                            }
                         }
                     }
                     .transition(.opacity)
@@ -137,8 +142,8 @@ struct ContentView: View {
             // Keep AppStorage sidebar flag in sync for traffic-light layout.
             WindowLayoutStore.isSidebarCollapsed = sidebarCollapsed
             WindowChrome.layoutMainWindowTrafficLights()
-            // Offer resume after crash / force-quit (dirty snapshot from last run).
-            if timerStore.pendingResumeSnapshot != nil {
+            // Offer resume after quit mid-session — wait until onboarding is done.
+            if hasCompletedOnboarding, timerStore.pendingResumeSnapshot != nil {
                 showResumeSessionAlert = true
             }
         }
@@ -203,6 +208,39 @@ struct ContentView: View {
             }
         } message: {
             Text(resumeAlertMessage)
+        }
+        .confirmationDialog(
+            "丢弃当前时段？",
+            isPresented: Binding(
+                get: { timerStore.pendingSessionDiscard != nil },
+                set: { if !$0 { timerStore.cancelPendingSessionDiscard() } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("确定丢弃并继续", role: .destructive) {
+                timerStore.confirmPendingSessionDiscard()
+            }
+            Button("取消", role: .cancel) {
+                timerStore.cancelPendingSessionDiscard()
+            }
+        } message: {
+            Text(timerStore.pendingSessionDiscard?.message ?? "")
+        }
+        .alert(
+            "数据文件异常",
+            isPresented: Binding(
+                get: { taskStore.dataLoadErrorMessage != nil },
+                set: { if !$0 { /* keep until user acts */ } }
+            )
+        ) {
+            Button("打开数据文件夹") {
+                settings.openDataFolderInFinder()
+            }
+            Button("从空白开始", role: .destructive) {
+                taskStore.acknowledgeCorruptLoadAndStartFresh()
+            }
+        } message: {
+            Text(taskStore.dataLoadErrorMessage ?? "")
         }
         // IMPORTANT: never subscribe to `clockTick` on this root view.
         // Per-second invalidation re-renders the whole tree (task list + edit sheet)
@@ -418,10 +456,22 @@ struct ContentView: View {
             viewState.selectedScreen = screen
         } label: {
             HStack(spacing: sidebarCollapsed ? 0 : 11) {
-                Image(systemName: icon)
-                    .font(.system(size: sidebarCollapsed ? 14 : 13, weight: .semibold))
-                    .foregroundColor(isSelected ? AppTheme.accent : (emphasizeRunning ? AppTheme.accent : tint))
-                    .frame(width: sidebarCollapsed ? 22 : 20)
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: icon)
+                        .font(.system(size: sidebarCollapsed ? 14 : 13, weight: .semibold))
+                        .foregroundColor(isSelected ? AppTheme.accent : (emphasizeRunning ? AppTheme.accent : tint))
+                        .frame(width: sidebarCollapsed ? 22 : 20, height: sidebarCollapsed ? 22 : 20)
+                    if sidebarCollapsed, let badge, !badge.isEmpty {
+                        Circle()
+                            .fill(
+                                screen == .todayTask && todayOverdueCount > 0
+                                ? Color.red.opacity(0.9)
+                                : AppTheme.accent.opacity(0.9)
+                            )
+                            .frame(width: 7, height: 7)
+                            .offset(x: 3, y: -2)
+                    }
+                }
 
                 if !sidebarCollapsed {
                     Text(title)
@@ -434,12 +484,12 @@ struct ContentView: View {
                     if let badge, !badge.isEmpty {
                         Text(badge)
                             .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .foregroundColor(badgeForeground(isSelected: isSelected, emphasizeRunning: emphasizeRunning, badge: badge))
+                            .foregroundColor(badgeForeground(isSelected: isSelected, emphasizeRunning: emphasizeRunning, badge: badge, screen: screen))
                             .padding(.horizontal, 7)
                             .padding(.vertical, 2)
                             .background(
                                 Capsule()
-                                    .fill(badgeBackground(isSelected: isSelected, emphasizeRunning: emphasizeRunning, badge: badge))
+                                    .fill(badgeBackground(isSelected: isSelected, emphasizeRunning: emphasizeRunning, badge: badge, screen: screen))
                             )
                     }
                 }
@@ -447,7 +497,7 @@ struct ContentView: View {
             .padding(.horizontal, sidebarCollapsed ? 0 : 10)
             .padding(.vertical, sidebarCollapsed ? 10 : 9)
             .frame(maxWidth: .infinity, alignment: sidebarCollapsed ? .center : .leading)
-            .help(sidebarCollapsed ? title : "")
+            .help(sidebarCollapsed ? (badge.map { "\(title) · \($0)" } ?? title) : "")
             .background(
                 RoundedRectangle(cornerRadius: sidebarCollapsed ? 12 : 10, style: .continuous)
                     .fill(isSelected
@@ -468,17 +518,16 @@ struct ContentView: View {
         .buttonStyle(SoftHoverButtonStyle(cornerRadius: sidebarCollapsed ? 12 : 10))
     }
     
-    private func badgeForeground(isSelected: Bool, emphasizeRunning: Bool, badge: String) -> Color {
+    private func badgeForeground(isSelected: Bool, emphasizeRunning: Bool, badge: String, screen: AppScreen) -> Color {
         if isSelected || emphasizeRunning { return .white }
-        let overdue = taskStore.tasks(for: .todayTask).filter(\.isOverdue).count
-        if overdue > 0 && badge == "\(overdue)" { return .white }
+        // Only the 今天 row uses overdue styling — never match by badge digit alone.
+        if screen == .todayTask, todayOverdueCount > 0 { return .white }
         return AppTheme.secondaryText(for: colorScheme)
     }
     
-    private func badgeBackground(isSelected: Bool, emphasizeRunning: Bool, badge: String) -> Color {
+    private func badgeBackground(isSelected: Bool, emphasizeRunning: Bool, badge: String, screen: AppScreen) -> Color {
         if isSelected || emphasizeRunning { return AppTheme.accent }
-        let overdue = taskStore.tasks(for: .todayTask).filter(\.isOverdue).count
-        if overdue > 0 && badge == "\(overdue)" { return Color.red.opacity(0.85) }
+        if screen == .todayTask, todayOverdueCount > 0 { return Color.red.opacity(0.85) }
         return colorScheme == .light ? Color.black.opacity(0.06) : Color.white.opacity(0.10)
     }
 

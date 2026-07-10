@@ -11,6 +11,8 @@ struct EditProfileSheet: View {
     @State private var isPickingAvatar = false
     @State private var isShowingAvatarError = false
     @State private var avatarErrorMessage = "请选择 JPG、PNG、HEIC 或其他可读取的图片。"
+    @State private var originalAvatarPath: String?
+    @State private var originalAvatarColorIndex: Int = 0
     
     var body: some View {
         VStack(spacing: 22) {
@@ -66,6 +68,9 @@ struct EditProfileSheet: View {
             
             HStack(spacing: 12) {
                 Button("取消") {
+                    // Roll back avatar path/color if user uploaded then cancelled.
+                    settings.avatarPath = originalAvatarPath
+                    settings.avatarColorIndex = originalAvatarColorIndex
                     isPresented = false
                 }
                 .keyboardShortcut(.cancelAction)
@@ -73,6 +78,9 @@ struct EditProfileSheet: View {
                 Button("保存") {
                     settings.username = tempUsername
                     settings.sanitizeUsername()
+                    // Avatar already on disk from picker — keep current path.
+                    originalAvatarPath = settings.avatarPath
+                    originalAvatarColorIndex = settings.avatarColorIndex
                     isPresented = false
                 }
                 .buttonStyle(.borderedProminent)
@@ -91,6 +99,10 @@ struct EditProfileSheet: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(AppTheme.separator(for: colorScheme), lineWidth: 1)
         )
+        .onAppear {
+            originalAvatarPath = settings.avatarPath
+            originalAvatarColorIndex = settings.avatarColorIndex
+        }
         .alert("无法更换头像", isPresented: $isShowingAvatarError) {
             Button("好", role: .cancel) {}
         } message: {

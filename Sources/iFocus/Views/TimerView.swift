@@ -223,8 +223,10 @@ struct TimerView: View {
     }
     
     /// Start/resume work with optional Focus-mode hint (settings-controlled, default on).
+    /// Hint only for a **fresh** work start — not pause/resume of an in-progress session.
     private func requestStartOrToggle() {
         let willStartWork = !timerStore.isRunning
+            && !timerStore.isSessionInProgress
             && timerStore.mode == .work
             && settings.showFocusModeHintOnStart
         if willStartWork {
@@ -617,7 +619,7 @@ struct TimerView: View {
             ForEach(TimerMode.allCases) { mode in
                 let selected = timerStore.mode == mode
                 Button {
-                    timerStore.setMode(mode)
+                    timerStore.requestSetMode(mode)
                 } label: {
                     VStack(spacing: 2) {
                         Text(mode.rawValue)
@@ -641,6 +643,7 @@ struct TimerView: View {
                 }
                 .buttonStyle(SoftScaleButtonStyle())
                 .disabled(timerStore.isRunning)
+                .opacity(timerStore.isRunning ? 0.55 : (timerStore.isSessionInProgress && !selected ? 0.75 : 1))
             }
         }
         .opacity(timerStore.isRunning ? 0.55 : 1)

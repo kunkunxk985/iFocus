@@ -79,7 +79,13 @@ enum DeepLinkRouter {
         guard let action = parse(url) else { return }
         switch action {
         case .start:
-            if !timerStore.isRunning { timerStore.start() }
+            // Product meaning: start **focus work**, not whatever mode is idle.
+            if timerStore.mode != .work {
+                timerStore.requestSetMode(.work)
+            }
+            if timerStore.mode == .work, !timerStore.isRunning {
+                timerStore.start()
+            }
             AppNavigation.post(.timer)
         case .pause:
             if timerStore.isRunning { timerStore.pause() }
@@ -92,9 +98,7 @@ enum DeepLinkRouter {
         case .settings:
             NotificationCenter.default.post(name: AppNavigation.openSettings, object: nil)
         case .freeFocus:
-            timerStore.selectTask(nil)
-            if timerStore.mode != .work { timerStore.setMode(.work) }
-            if !timerStore.isRunning { timerStore.start() }
+            timerStore.requestFreeFocus()
             AppNavigation.post(.timer)
         case .open(let screen):
             if let screen {

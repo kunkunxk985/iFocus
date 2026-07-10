@@ -138,15 +138,19 @@ struct AnalyticsView: View {
     private var categoryTop: [(name: String, icon: String, color: Color, minutes: Int)] {
         var minutesStats = [TaskCategory: Int]()
         for session in sessionsInRange {
-            let cat: TaskCategory
+            // Free focus (no task) is not a category — exclude from Top so 其他 is not inflated.
+            let cat: TaskCategory?
             if let c = session.taskCategory {
                 cat = c
             } else if let id = session.taskId,
                       let task = taskStore.tasks.first(where: { $0.id == id }) {
                 cat = task.category
+            } else if session.taskId == nil {
+                cat = nil
             } else {
                 cat = .other
             }
+            guard let cat else { continue }
             minutesStats[cat, default: 0] += session.durationMinutes
         }
         return minutesStats
@@ -726,11 +730,23 @@ struct AnalyticsView: View {
         
         let body = lines.joined(separator: "\n")
         let subject = "iFocus 周报 \(end)"
-        let allowed = CharacterSet.urlQueryAllowed
+        // Strict query encoding — urlQueryAllowed leaves & and = unescaped.
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
         guard let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: allowed),
-              let encodedBody = body.addingPercentEncoding(withAllowedCharacters: allowed),
-              let url = URL(string: "mailto:?subject=\(encodedSubject)&body=\(encodedBody)") else { return }
-        NSWorkspace.shared.open(url)
+              let encodedBody = body.addingPercentEncoding(withAllowedCharacters: allowed) else {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(body, forType: .string)
+            return
+        }
+        let urlString = "mailto:?subject=\(encodedSubject)&body=\(encodedBody)"
+        if let url = URL(string: urlString), urlString.count < 7000 {
+            NSWorkspace.shared.open(url)
+        } else {
+            // Fallback when body is too long for mailto:
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString("\(subject)\n\n\(body)", forType: .string)
+        }
     }
 }
 

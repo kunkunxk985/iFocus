@@ -187,6 +187,15 @@ final class MenuBarController: NSObject, ObservableObject {
                 .sink { [weak self] in self?.updateStatusItem() }
                 .store(in: &cancellables)
         }
+        
+        // Menu bar display style / accent live updates.
+        timerStore.settings.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] in
+                self?.updateStatusItem()
+                self?.timerStore.refreshPauseWatchFromSettings()
+            }
+            .store(in: &cancellables)
     }
     
     private func updateStatusItem() {
@@ -386,12 +395,17 @@ final class MenuBarController: NSObject, ObservableObject {
     }
     
     @objc private func startFreeFocus() {
-        timerStore.selectTask(nil)
-        if timerStore.mode != .work {
-            timerStore.setMode(.work)
-        }
-        if !timerStore.isRunning {
-            timerStore.start()
+        if timerStore.isSessionInProgress {
+            let alert = NSAlert()
+            alert.messageText = "丢弃当前时段？"
+            alert.informativeText = PendingSessionDiscard.freeFocus.message
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "继续")
+            alert.addButton(withTitle: "取消")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            timerStore.requestFreeFocus(force: true)
+        } else {
+            timerStore.requestFreeFocus()
         }
         updateStatusItem()
     }
@@ -399,12 +413,32 @@ final class MenuBarController: NSObject, ObservableObject {
     @objc private func selectTodayTask(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String,
               let id = UUID(uuidString: raw) else { return }
-        timerStore.startFocus(on: id)
+        if timerStore.isSessionInProgress,
+           timerStore.taskStore?.activeTaskId != id {
+            let alert = NSAlert()
+            alert.messageText = "切换任务？"
+            alert.informativeText = PendingSessionDiscard.selectTask(id).message
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "切换")
+            alert.addButton(withTitle: "取消")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            timerStore.requestSelectTask(id, force: true)
+            if timerStore.mode != .work {
+                timerStore.requestSetMode(.work)
+            }
+            if !timerStore.isRunning {
+                timerStore.start()
+            }
+        } else {
+            timerStore.startFocus(on: id)
+        }
         updateStatusItem()
     }
     
     @objc private func resetTimer() {
-        timerStore.reset()
+        // Match main window: confirmation via ContentView dialog.
+        NotificationCenter.default.post(name: AppNavigation.resetTimer, object: nil)
+        WindowChromeController.shared.showMainWindow()
         updateStatusItem()
     }
     

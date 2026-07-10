@@ -52,6 +52,9 @@ enum ToggleShortcutPreset: String, CaseIterable, Identifiable {
         case .controlCmdSpace: return [.command, .control]
         }
     }
+    
+    /// Prefer ⌃⌘T — ⇧⌘空格 often collides with input-source switching on Chinese Macs.
+    static var defaultPreset: ToggleShortcutPreset { .controlCmdT }
 }
 
 class SettingsStore: ObservableObject {
@@ -331,8 +334,8 @@ class SettingsStore: ObservableObject {
         // Only show ON at launch if already registered in the OS (user previously opted in).
         self.launchAtLogin = LaunchAtLogin.isEnabled || savedLaunch
         
-        let shortcutRaw = defaults.string(forKey: Key.toggleShortcut) ?? ToggleShortcutPreset.shiftCmdSpace.rawValue
-        self.toggleShortcut = ToggleShortcutPreset(rawValue: shortcutRaw) ?? .shiftCmdSpace
+        let shortcutRaw = defaults.string(forKey: Key.toggleShortcut) ?? ToggleShortcutPreset.defaultPreset.rawValue
+        self.toggleShortcut = ToggleShortcutPreset(rawValue: shortcutRaw) ?? .defaultPreset
         self.showFocusModeHintOnStart = defaults.object(forKey: Key.showFocusModeHint) as? Bool ?? true
         self.pauseReminderEnabled = defaults.object(forKey: Key.pauseReminderEnabled) as? Bool ?? true
         self.pauseReminderMinutes = Self.intValue(for: Key.pauseReminderMinutes, in: defaults, defaultValue: 5)

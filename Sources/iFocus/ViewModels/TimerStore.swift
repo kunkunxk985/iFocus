@@ -46,6 +46,24 @@ enum TimerMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// Destructive mid-session action awaiting user confirmation.
+enum PendingSessionDiscard: Equatable {
+    case selectTask(UUID?)
+    case freeFocus
+    case setMode(TimerMode)
+    
+    var message: String {
+        switch self {
+        case .selectTask:
+            return "切换任务会丢弃当前进行中的时段（不记入专注记录）。确定切换？"
+        case .freeFocus:
+            return "开始自由专注会丢弃当前进行中的时段（不记入记录）。确定继续？"
+        case .setMode:
+            return "切换模式会重置当前时段（不记入记录）。确定切换？"
+        }
+    }
+}
+
 class TimerStore: ObservableObject {
     private struct WorkSessionContext {
         let taskId: UUID?
@@ -65,6 +83,8 @@ class TimerStore: ObservableObject {
     @Published var showDailyGoalCelebration: Bool = false
     /// Unclean-exit snapshot waiting for user to resume or discard (set at launch).
     @Published var pendingResumeSnapshot: TimerSessionSnapshot?
+    /// When set, UI should confirm discarding the mid-session before applying the action.
+    @Published var pendingSessionDiscard: PendingSessionDiscard?
     /// True when paused mid-session longer than the reminder threshold.
     @Published var isPauseIdleTooLong: Bool = false
     /// Whole minutes already spent paused (for UI copy).
@@ -164,13 +184,15 @@ class TimerStore: ObservableObject {
             self?.resyncFromWallClock()
             self?.updateNotificationStatus()
         }
-        // Midnight: reset "today" pomodoro / focus-minute counters without restarting the app.
+        // Midnight: refresh daily counters only when idle (don't yank stats mid-session).
         let dayChanged = NotificationCenter.default.addObserver(
             forName: .NSCalendarDayChanged,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.refreshStatsFromHistory()
+            guard let self else { return }
+            if self.isSessionInProgress || self.isRunning { return }
+            self.refreshStatsFromHistory()
         }
         lifecycleObservers = [wake, active, dayChanged]
     }
@@ -431,17 +453,43 @@ class TimerStore: ObservableObject {
     }
     
     func setMode(_ newMode: TimerMode) {
+        requestSetMode(newMode)
+    }
+    
+    /// Request mode change; confirms if a mid-session would be wiped.
+    func requestSetMode(_ newMode: TimerMode) {
         guard !isRunning else { return }
+        guard newMode != mode else { return }
+        if isSessionInProgress {
+            pendingSessionDiscard = .setMode(newMode)
+            return
+        }
+        applySetMode(newMode)
+    }
+    
+    private func applySetMode(_ newMode: TimerMode) {
         mode = newMode
         reset()
         updateDockBadge()
         emitClockTick()
     }
 
-    /// Select a task without allowing an in-progress work segment to change ownership.
-    /// A running work segment restarts immediately; a paused one resets and stays paused.
+    /// Select a task. Mid-session switches ask for confirmation via `pendingSessionDiscard`.
     func selectTask(_ taskId: UUID?) {
+        requestSelectTask(taskId)
+    }
+    
+    func requestSelectTask(_ taskId: UUID?, force: Bool = false) {
         guard taskStore?.activeTaskId != taskId else { return }
+        if !force && mode == .work && (isSessionInProgress || workSessionContext != nil) {
+            pendingSessionDiscard = .selectTask(taskId)
+            return
+        }
+        pendingSessionDiscard = nil
+        applySelectTask(taskId)
+    }
+    
+    private func applySelectTask(_ taskId: UUID?) {
         let shouldRestart = isRunning && mode == .work
         if mode == .work && (isSessionInProgress || workSessionContext != nil) {
             reset()
@@ -451,31 +499,107 @@ class TimerStore: ObservableObject {
             start()
         }
     }
-
-    /// Start or resume focus for a task. Switching tasks always starts a fresh work segment.
-    func startFocus(on taskId: UUID) {
-        selectTask(taskId)
-        guard !isRunning else { return }
-        if mode != .work {
-            setMode(.work)
+    
+    /// Free focus entry (menu / deep link) with mid-session guard.
+    func requestFreeFocus(force: Bool = false) {
+        if !force && (isSessionInProgress || workSessionContext != nil) {
+            pendingSessionDiscard = .freeFocus
+            return
         }
-        start()
+        pendingSessionDiscard = nil
+        applyFreeFocus()
+    }
+    
+    private func applyFreeFocus() {
+        // Always discard mid-session when force-applying free focus.
+        if isSessionInProgress || workSessionContext != nil {
+            reset()
+        }
+        taskStore?.activeTaskId = nil
+        if mode != .work {
+            applySetMode(.work)
+        }
+        if !isRunning {
+            start()
+        }
+    }
+    
+    func confirmPendingSessionDiscard() {
+        guard let pending = pendingSessionDiscard else { return }
+        pendingSessionDiscard = nil
+        switch pending {
+        case .selectTask(let id):
+            applySelectTask(id)
+            if let id, !isRunning {
+                if mode != .work { applySetMode(.work) }
+                start()
+            }
+        case .freeFocus:
+            applyFreeFocus()
+        case .setMode(let mode):
+            applySetMode(mode)
+        }
+    }
+    
+    func cancelPendingSessionDiscard() {
+        pendingSessionDiscard = nil
+    }
+
+    /// Start or resume focus for a task. Switching mid-session confirms first.
+    func startFocus(on taskId: UUID) {
+        if taskStore?.activeTaskId == taskId {
+            if mode != .work {
+                requestSetMode(.work)
+                if mode == .work, !isRunning { start() }
+                return
+            }
+            if !isRunning { start() }
+            return
+        }
+        if mode == .work && (isSessionInProgress || workSessionContext != nil) {
+            pendingSessionDiscard = .selectTask(taskId)
+            return
+        }
+        applySelectTask(taskId)
+        if mode != .work {
+            applySetMode(.work)
+        }
+        if !isRunning {
+            start()
+        }
     }
     
     /// Skip the current segment without logging a completed pomodoro.
+    /// Next mode follows the same long-break cadence as natural completion (skip does not count as a pomodoro).
     func skipToNext() {
         guard !isCompleting else { return }
+        let previousMode = mode
         pause()
         elapsedBeforePause = 0
         segmentStartedAt = nil
         sessionPlannedDuration = nil
         workSessionContext = nil
-        let next = mode.next
+        let next = Self.nextMode(
+            after: previousMode,
+            workSessionsCompletedToday: previousMode == .work ? completedPomodoros : 0
+        )
         mode = next
         timeRemaining = next.duration(settings: settings)
         updateDockBadge()
         emitClockTick()
         clearSessionSnapshot()
+    }
+    
+    /// Re-arm pause idle watch when settings change while already paused.
+    func refreshPauseWatchFromSettings() {
+        if !isRunning, isSessionInProgress, settings.pauseReminderEnabled {
+            if pauseStartedAt == nil {
+                pauseStartedAt = Date()
+            }
+            startPauseWatchIfNeeded()
+        } else if !settings.pauseReminderEnabled {
+            clearPauseIdleState()
+        }
     }
     
     // MARK: - Session snapshot (crash / force-quit resume)
@@ -570,15 +694,24 @@ class TimerStore: ObservableObject {
         timeRemaining = max(0, snap.timeRemaining)
         elapsedBeforePause = max(0, snap.elapsedBeforePause)
         sessionPlannedDuration = snap.sessionPlannedDuration
-        if let taskId = snap.activeTaskId {
-            taskStore?.activeTaskId = taskId
+        
+        // Only reattach task id if it still exists and is incomplete.
+        var restoredTaskId = snap.activeTaskId
+        if let taskId = restoredTaskId {
+            if let task = taskStore?.tasks.first(where: { $0.id == taskId }), !task.isCompleted {
+                taskStore?.activeTaskId = taskId
+            } else {
+                restoredTaskId = nil
+                taskStore?.activeTaskId = nil
+            }
         }
+        
         if restoredMode == .work {
             let category = snap.workTaskCategory.flatMap { raw in
                 TaskCategory.allCases.first { $0.rawValue == raw }
             }
             workSessionContext = WorkSessionContext(
-                taskId: snap.activeTaskId,
+                taskId: restoredTaskId,
                 taskTitle: snap.workTaskTitle ?? "自由专注",
                 taskCategory: category
             )
