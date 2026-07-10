@@ -46,6 +46,10 @@ struct FocusTask: Identifiable, Equatable, Codable {
     var dueDate: Date?
     var createdAt: Date = Date()
     var timeSpentMinutes: Int = 0 // accumulated focus time
+    /// Manual pin — always sorts above unpinned in the same list.
+    var isPinned: Bool = false
+    /// Lower = higher in list after pin. User drag-reorder updates this.
+    var sortIndex: Int = 0
     
     var isOverdue: Bool {
         TaskFiltering.isOverdue(dueDate: dueDate, isCompleted: isCompleted)
@@ -59,6 +63,56 @@ struct FocusTask: Identifiable, Equatable, Codable {
             priority: priority,
             createdAt: createdAt
         )
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id, title, category, isCompleted, priority
+        case estimatedPomodoros, completedPomodoros, dueDate, createdAt, timeSpentMinutes
+        case isPinned, sortIndex
+    }
+    
+    init(
+        id: UUID = UUID(),
+        title: String,
+        category: TaskCategory,
+        isCompleted: Bool = false,
+        priority: Int = 1,
+        estimatedPomodoros: Int = 1,
+        completedPomodoros: Int = 0,
+        dueDate: Date? = nil,
+        createdAt: Date = Date(),
+        timeSpentMinutes: Int = 0,
+        isPinned: Bool = false,
+        sortIndex: Int = 0
+    ) {
+        self.id = id
+        self.title = title
+        self.category = category
+        self.isCompleted = isCompleted
+        self.priority = priority
+        self.estimatedPomodoros = estimatedPomodoros
+        self.completedPomodoros = completedPomodoros
+        self.dueDate = dueDate
+        self.createdAt = createdAt
+        self.timeSpentMinutes = timeSpentMinutes
+        self.isPinned = isPinned
+        self.sortIndex = sortIndex
+    }
+    
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        category = try c.decode(TaskCategory.self, forKey: .category)
+        isCompleted = try c.decodeIfPresent(Bool.self, forKey: .isCompleted) ?? false
+        priority = try c.decodeIfPresent(Int.self, forKey: .priority) ?? 1
+        estimatedPomodoros = try c.decodeIfPresent(Int.self, forKey: .estimatedPomodoros) ?? 1
+        completedPomodoros = try c.decodeIfPresent(Int.self, forKey: .completedPomodoros) ?? 0
+        dueDate = try c.decodeIfPresent(Date.self, forKey: .dueDate)
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        timeSpentMinutes = try c.decodeIfPresent(Int.self, forKey: .timeSpentMinutes) ?? 0
+        isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        sortIndex = try c.decodeIfPresent(Int.self, forKey: .sortIndex) ?? 0
     }
 }
 
@@ -137,7 +191,17 @@ class TaskStore: ObservableObject {
         for task in tasks where byID[task.id] == nil {
             byID[task.id] = task
         }
-        return orderedIDs.compactMap { byID[$0] }
+        let base = orderedIDs.compactMap { byID[$0] }
+        // Pin first, then user sortIndex, then keep filter order as tie-breaker.
+        return base.enumerated().sorted { a, b in
+            if a.element.isPinned != b.element.isPinned {
+                return a.element.isPinned && !b.element.isPinned
+            }
+            if a.element.sortIndex != b.element.sortIndex {
+                return a.element.sortIndex < b.element.sortIndex
+            }
+            return a.offset < b.offset
+        }.map(\.element)
     }
     
     /// Sidebar badges in one pass (no six sorted filters).
@@ -203,12 +267,14 @@ class TaskStore: ObservableObject {
             break
         }
         
+        let nextIndex = (tasks.map(\.sortIndex).max() ?? -1) + 1
         let task = FocusTask(
             title: trimmedTitle,
             category: category,
             priority: min(4, max(1, newTaskPriority)),
             estimatedPomodoros: min(20, max(1, newTaskPomodoros)),
-            dueDate: dueDate
+            dueDate: dueDate,
+            sortIndex: nextIndex
         )
         tasks.append(task)
         newTaskTitle = ""
@@ -447,6 +513,43 @@ class TaskStore: ObservableObject {
         tasks.removeAll { $0.id == task.id }
         if activeTaskId == task.id {
             activeTaskId = nil
+        }
+    }
+    
+    func togglePin(for task: FocusTask) {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        tasks[index].isPinned.toggle()
+        if tasks[index].isPinned {
+            // New pins float to the top of the pinned group.
+            let minPinned = tasks.filter(\.isPinned).map(\.sortIndex).min() ?? 0
+            tasks[index].sortIndex = minPinned - 1
+        }
+    }
+    
+    /// Drag-reorder a visible section (e.g. overdue-only) inside a filter list.
+    func reorderVisible(_ visible: [FocusTask], from source: IndexSet, to destination: Int, filter: TaskFilter) {
+        guard !visible.isEmpty else { return }
+        var section = visible
+        section.move(fromOffsets: source, toOffset: destination)
+        let sectionIDs = Set(visible.map(\.id))
+        let full = tasks(for: filter)
+        var rebuilt: [FocusTask] = []
+        rebuilt.reserveCapacity(full.count)
+        var sectionIndex = 0
+        for task in full {
+            if sectionIDs.contains(task.id) {
+                if sectionIndex < section.count {
+                    rebuilt.append(section[sectionIndex])
+                    sectionIndex += 1
+                }
+            } else {
+                rebuilt.append(task)
+            }
+        }
+        for (offset, item) in rebuilt.enumerated() {
+            if let idx = tasks.firstIndex(where: { $0.id == item.id }) {
+                tasks[idx].sortIndex = offset
+            }
         }
     }
     

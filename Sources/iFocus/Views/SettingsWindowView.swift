@@ -270,9 +270,21 @@ struct SettingsWindowView: View {
     
     private var shortcutsPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
-            settingsCard("专注", icon: "timer") {
-                ShortcutRow(keys: "空格", action: "开始 / 暂停（专注页）")
-                ShortcutRow(keys: "⇧⌘空格", action: "开始 / 暂停（全局）")
+            settingsCard("开始 / 暂停（可自定义）", icon: "keyboard") {
+                Picker("组合键", selection: $settings.toggleShortcut) {
+                    ForEach(ToggleShortcutPreset.allCases) { preset in
+                        Text(preset.label).tag(preset)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.radioGroup)
+                Text("在 App 前台时生效（菜单「专注」）。专注页仍可用单独空格。")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            }
+            settingsCard("固定快捷键", icon: "timer") {
+                ShortcutRow(keys: "空格", action: "开始 / 暂停（仅专注页）")
+                ShortcutRow(keys: settings.toggleShortcut.label, action: "开始 / 暂停（菜单，当前选择）")
                 ShortcutRow(keys: "⌘R", action: "重置当前计时")
                 ShortcutRow(keys: "⌘→", action: "跳过当前段")
             }
@@ -284,7 +296,7 @@ struct SettingsWindowView: View {
                 ShortcutRow(keys: "⌘,", action: "设置")
             }
             settingsCard("菜单栏", icon: "menubar.rectangle") {
-                Text("右上角番茄图标显示实时倒计时；点击可暂停、重置或显示主窗口。关闭主窗口后计时仍会继续。")
+                Text("右上角显示倒计时与今日进度；菜单可快速选今日任务、自由专注、开始/暂停。")
                     .font(.caption)
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
@@ -360,6 +372,19 @@ struct SettingsWindowView: View {
                 StepperRow(title: "长休息", value: $settings.longBreakMinutes, suffix: "分钟", range: 5...60, step: 5) {
                     if timerStore.mode == .longBreak { timerStore.syncDurationFromSettingsIfIdle() }
                 }
+            }
+            
+            settingsCard("专注提示", icon: "moon.fill") {
+                Toggle(isOn: $settings.showFocusModeHintOnStart) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("开始专注前提示系统专注模式")
+                            .font(.subheadline.weight(.medium))
+                        Text("无法代替系统一键开启勿扰，但会提醒你减少打扰。")
+                            .font(.caption)
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    }
+                }
+                .toggleStyle(.switch)
             }
 
             settingsCard("每日目标", icon: "target") {
@@ -476,12 +501,12 @@ enum AppWindowMetrics {
 }
 
 enum AppVersion {
-    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.1 / 61).
+    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.2 / 62).
     static var short: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.1"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.2"
     }
     static var build: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "61"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "62"
     }
 }
 

@@ -49,6 +49,13 @@ struct TaskRowView: View {
             
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
+                    if task.isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(AppTheme.accent)
+                            .help("已置顶")
+                    }
+                    
                     Text(task.title)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(task.isCompleted
@@ -92,6 +99,19 @@ struct TaskRowView: View {
                     }
                     
                     Spacer(minLength: 0)
+                    
+                    if !task.isCompleted {
+                        Button {
+                            taskStore.togglePin(for: task)
+                        } label: {
+                            Image(systemName: task.isPinned ? "pin.fill" : "pin")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(task.isPinned ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme).opacity(0.45))
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .help(task.isPinned ? "取消置顶" : "置顶")
+                    }
                     
                     Button(action: onEdit) {
                         Image(systemName: "pencil")
@@ -191,6 +211,14 @@ struct TaskRowView: View {
         } label: {
             Label(task.isCompleted ? "标记为未完成" : "标记为已完成",
                   systemImage: task.isCompleted ? "circle" : "checkmark.circle.fill")
+        }
+        
+        if !task.isCompleted {
+            Button {
+                taskStore.togglePin(for: task)
+            } label: {
+                Label(task.isPinned ? "取消置顶" : "置顶", systemImage: task.isPinned ? "pin.slash" : "pin")
+            }
         }
         
         Menu("修改优先级") {

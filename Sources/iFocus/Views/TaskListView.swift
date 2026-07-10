@@ -315,10 +315,18 @@ struct TaskListView: View {
                         tasks: dueTodayTasks
                     )
                 }
-            } else {
+                if !currentTasks.isEmpty {
+                    Text("拖拽左侧把手可排序 · 图钉可置顶")
+                        .font(.caption2)
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
+                        .padding(.top, 4)
+                }
+            } else if viewState.selectedScreen == .completedTask {
                 ForEach(currentTasks) { task in
                     taskRow(task)
                 }
+            } else {
+                reorderableTaskStack(tasks: incompleteFiltered + completedFiltered)
             }
         }
     }
@@ -342,7 +350,38 @@ struct TaskListView: View {
             }
             .padding(.horizontal, 2)
             
-            ForEach(tasks) { task in
+            reorderableTaskStack(tasks: tasks)
+        }
+    }
+    
+    /// List + onMove so macOS users can drag-reorder without Edit mode chrome.
+    private func reorderableTaskStack(tasks: [FocusTask]) -> some View {
+        let incomplete = tasks.filter { !$0.isCompleted }
+        let completed = tasks.filter(\.isCompleted)
+        return VStack(spacing: 8) {
+            if !incomplete.isEmpty {
+                List {
+                    ForEach(incomplete) { task in
+                        taskRow(task)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    }
+                    .onMove { source, dest in
+                        taskStore.reorderVisible(
+                            incomplete,
+                            from: source,
+                            to: dest,
+                            filter: currentFilter
+                        )
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: CGFloat(incomplete.count) * 78)
+                .environment(\.defaultMinListRowHeight, 64)
+            }
+            ForEach(completed) { task in
                 taskRow(task)
             }
         }

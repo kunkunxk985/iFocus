@@ -217,6 +217,27 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.tasks[0].timeSpentMinutes, 25)
     }
     
+    func testPinAndReorderWithinFilter() {
+        let store = TaskStore(storageDirectory: tempDir)
+        store.newTaskTitle = "A"
+        store.addTask(for: .inboxTask)
+        store.newTaskTitle = "B"
+        store.addTask(for: .inboxTask)
+        store.newTaskTitle = "C"
+        store.addTask(for: .inboxTask)
+        
+        let b = store.tasks.first { $0.title == "B" }!
+        store.togglePin(for: b)
+        XCTAssertEqual(store.tasks(for: .inboxTask).map(\.title).first, "B")
+        
+        // Unpin then drag first item to end of the list.
+        store.togglePin(for: store.tasks.first { $0.title == "B" }!)
+        let list = store.tasks(for: .inboxTask)
+        store.reorderVisible(list, from: IndexSet(integer: 0), to: list.count, filter: .inboxTask)
+        let after = store.tasks(for: .inboxTask).map(\.title)
+        XCTAssertEqual(after.last, list[0].title)
+    }
+    
     func testLoadsLegacySessionsWithoutCategory() throws {
         let legacyJSON = """
         [

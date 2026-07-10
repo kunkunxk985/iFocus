@@ -18,6 +18,42 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// App-menu shortcut for 开始/暂停 (global while app is frontmost).
+enum ToggleShortcutPreset: String, CaseIterable, Identifiable {
+    case shiftCmdSpace
+    case controlCmdT
+    case optionCmdP
+    case controlCmdSpace
+    
+    var id: String { rawValue }
+    
+    var label: String {
+        switch self {
+        case .shiftCmdSpace: return "⇧⌘空格"
+        case .controlCmdT: return "⌃⌘T"
+        case .optionCmdP: return "⌥⌘P"
+        case .controlCmdSpace: return "⌃⌘空格"
+        }
+    }
+    
+    var keyEquivalent: KeyEquivalent {
+        switch self {
+        case .shiftCmdSpace, .controlCmdSpace: return .space
+        case .controlCmdT: return "t"
+        case .optionCmdP: return "p"
+        }
+    }
+    
+    var modifiers: EventModifiers {
+        switch self {
+        case .shiftCmdSpace: return [.command, .shift]
+        case .controlCmdT: return [.command, .control]
+        case .optionCmdP: return [.command, .option]
+        case .controlCmdSpace: return [.command, .control]
+        }
+    }
+}
+
 class SettingsStore: ObservableObject {
     private enum Key {
         static let workMinutes = "workMinutes"
@@ -32,6 +68,8 @@ class SettingsStore: ObservableObject {
         static let avatarColorIndex = "avatarColorIndex"
         static let avatarPath = "avatarPath"
         static let launchAtLogin = "launchAtLogin"
+        static let toggleShortcut = "toggleShortcutPreset"
+        static let showFocusModeHint = "showFocusModeHintOnStart"
     }
     
     private let defaults: UserDefaults
@@ -119,6 +157,15 @@ class SettingsStore: ObservableObject {
     
     /// Last human-readable feedback from login-item registration.
     @Published var launchAtLoginFeedback: String?
+    
+    @Published var toggleShortcut: ToggleShortcutPreset {
+        didSet { defaults.set(toggleShortcut.rawValue, forKey: Key.toggleShortcut) }
+    }
+    
+    /// When starting a work segment, offer to open System Focus settings.
+    @Published var showFocusModeHintOnStart: Bool {
+        didSet { defaults.set(showFocusModeHintOnStart, forKey: Key.showFocusModeHint) }
+    }
     
     /// Reflect OS login-item state in the toggle (read-only sync).
     /// Does **not** register the app — only the Settings switch calls `applyLaunchAtLoginPreference()`.
@@ -240,6 +287,10 @@ class SettingsStore: ObservableObject {
         let savedLaunch = defaults.object(forKey: Key.launchAtLogin) as? Bool ?? false
         // Only show ON at launch if already registered in the OS (user previously opted in).
         self.launchAtLogin = LaunchAtLogin.isEnabled || savedLaunch
+        
+        let shortcutRaw = defaults.string(forKey: Key.toggleShortcut) ?? ToggleShortcutPreset.shiftCmdSpace.rawValue
+        self.toggleShortcut = ToggleShortcutPreset(rawValue: shortcutRaw) ?? .shiftCmdSpace
+        self.showFocusModeHintOnStart = defaults.object(forKey: Key.showFocusModeHint) as? Bool ?? true
         
         // Drop legacy keys that used to persist transient UI/runtime state.
         defaults.removeObject(forKey: "isLocked")

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Immersive focus surface — scales to the available stage so min-window
 /// always shows task picker, ring, mode chips, and play controls together.
@@ -11,6 +12,7 @@ struct TimerView: View {
     /// Local clock surface — driven by `clockTick`, not full store publishes.
     @State private var clockVersion: UInt = 0
     @State private var showResetConfirm = false
+    @State private var showFocusModeHint = false
     
     private var modeColor: Color { timerStore.mode.accent }
     
@@ -112,6 +114,50 @@ struct TimerView: View {
             clockVersion &+= 1
         }
         .onAppear { clockVersion &+= 1 }
+        .confirmationDialog(
+            "开始专注",
+            isPresented: $showFocusModeHint,
+            titleVisibility: .visible
+        ) {
+            Button("直接开始") {
+                timerStore.toggle()
+            }
+            Button("打开系统专注设置…") {
+                openSystemFocusSettings()
+                timerStore.toggle()
+            }
+            Button("不再提示并开始") {
+                settings.showFocusModeHintOnStart = false
+                timerStore.toggle()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("建议在系统设置中开启专注模式，减少通知打扰。iFocus 无法代替系统一键开关勿扰。")
+        }
+    }
+    
+    /// Start/resume work with optional Focus-mode hint (settings-controlled, default on).
+    private func requestStartOrToggle() {
+        let willStartWork = !timerStore.isRunning
+            && timerStore.mode == .work
+            && settings.showFocusModeHintOnStart
+        if willStartWork {
+            showFocusModeHint = true
+        } else {
+            timerStore.toggle()
+        }
+    }
+    
+    private func openSystemFocusSettings() {
+        let urls = [
+            "x-apple.systempreferences:com.apple.Focus-Settings.extension",
+            "x-apple.systempreferences:com.apple.preference.notifications"
+        ]
+        for value in urls {
+            if let url = URL(string: value), NSWorkspace.shared.open(url) {
+                return
+            }
+        }
     }
     
     // MARK: - Ambient
@@ -533,7 +579,7 @@ struct TimerView: View {
             .help("立即跳过当前段 (⌘→)")
             
             Button {
-                timerStore.toggle()
+                requestStartOrToggle()
             } label: {
                 ZStack {
                     Circle()

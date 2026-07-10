@@ -1,11 +1,9 @@
 import AppKit
 import Combine
 
-/// Menu-bar tomato + live countdown (`mm:ss`).
+/// Menu-bar tomato + live countdown (`mm:ss`) + quick actions.
 ///
 /// `NSStatusBar.statusItem` must not be created during `App.init`.
-/// On newer macOS, menu extras attach via hosted scenes; creating the item
-/// before `applicationDidFinishLaunching` can fatal with "missing context".
 final class MenuBarController: NSObject, ObservableObject {
     private var statusItem: NSStatusItem?
     private let timerStore: TimerStore
@@ -16,8 +14,11 @@ final class MenuBarController: NSObject, ObservableObject {
     private enum MenuTag: Int {
         case countdown = 99
         case status = 100
+        case progress = 107
         case task = 101
         case toggle = 102
+        case freeFocus = 108
+        case pickTask = 109
         case reset = 103
         case nextMode = 104
         case show = 105
@@ -34,13 +35,11 @@ final class MenuBarController: NSObject, ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            // Extra delay so AppKit finishes status-bar scene plumbing.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 self?.installStatusItemIfNeeded()
             }
         }
         
-        // Late creation path (controller built after launch already finished).
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
             guard let self else { return }
             if NSApp.isRunning, !NSApp.windows.isEmpty || self.applicationHasFinishedLaunching {
@@ -70,7 +69,6 @@ final class MenuBarController: NSObject, ObservableObject {
         }
         guard NSApp.isRunning else { return }
         
-        // Prefer real app-bundle launches (avoids odd CLI-only contexts).
         let bundlePath = Bundle.main.bundlePath
         let looksLikeAppBundle = bundlePath.hasSuffix(".app") || bundlePath.contains(".app/")
         guard looksLikeAppBundle else { return }
@@ -95,32 +93,32 @@ final class MenuBarController: NSObject, ObservableObject {
             button.imageHugsTitle = true
             button.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
             button.toolTip = "iFocus 倒计时"
-            // Prefer attributed title for monospaced digits + mode tint.
             button.setButtonType(.momentaryLight)
         }
         
+        rebuildMenu()
+    }
+    
+    private func rebuildMenu() {
+        guard let statusItem else { return }
         let menu = NSMenu()
         menu.autoenablesItems = false
+        menu.delegate = self
         
-        // Large countdown row at top of menu (updates live while open via status item title).
         let countdownRow = NSMenuItem(title: "00:00", action: nil, keyEquivalent: "")
         countdownRow.tag = MenuTag.countdown.rawValue
         countdownRow.isEnabled = false
-        if let font = NSFont.monospacedDigitSystemFont(ofSize: 22, weight: .semibold) as NSFont? {
-            countdownRow.attributedTitle = NSAttributedString(
-                string: "00:00",
-                attributes: [
-                    .font: font,
-                    .foregroundColor: NSColor.labelColor
-                ]
-            )
-        }
         menu.addItem(countdownRow)
         
         let statusRow = NSMenuItem(title: "状态", action: nil, keyEquivalent: "")
         statusRow.tag = MenuTag.status.rawValue
         statusRow.isEnabled = false
         menu.addItem(statusRow)
+        
+        let progressRow = NSMenuItem(title: "今日 0/8", action: nil, keyEquivalent: "")
+        progressRow.tag = MenuTag.progress.rawValue
+        progressRow.isEnabled = false
+        menu.addItem(progressRow)
         
         let taskRow = NSMenuItem(title: "任务", action: nil, keyEquivalent: "")
         taskRow.tag = MenuTag.task.rawValue
@@ -132,6 +130,15 @@ final class MenuBarController: NSObject, ObservableObject {
         let toggleItem = NSMenuItem(title: "开始", action: #selector(toggleTimer), keyEquivalent: "")
         toggleItem.tag = MenuTag.toggle.rawValue
         menu.addItem(toggleItem)
+        
+        let freeItem = NSMenuItem(title: "自由专注", action: #selector(startFreeFocus), keyEquivalent: "")
+        freeItem.tag = MenuTag.freeFocus.rawValue
+        menu.addItem(freeItem)
+        
+        let pickRoot = NSMenuItem(title: "今日任务", action: nil, keyEquivalent: "")
+        pickRoot.tag = MenuTag.pickTask.rawValue
+        pickRoot.submenu = NSMenu(title: "今日任务")
+        menu.addItem(pickRoot)
         
         let resetItem = NSMenuItem(title: "重置计时器", action: #selector(resetTimer), keyEquivalent: "")
         resetItem.tag = MenuTag.reset.rawValue
@@ -158,36 +165,26 @@ final class MenuBarController: NSObject, ObservableObject {
         menu.addItem(quitItem)
         
         menu.items.forEach { item in
-            if item.action != nil {
-                item.target = self
-            }
+            if item.action != nil { item.target = self }
         }
         statusItem.menu = menu
     }
     
     private func bindStores() {
-        // Structural changes (start/pause/mode) — not every clock tick.
         timerStore.objectWillChange
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.updateStatusItem()
-            }
+            .sink { [weak self] in self?.updateStatusItem() }
             .store(in: &cancellables)
         
-        // Second-by-second countdown — menu bar only, not SwiftUI tree.
         timerStore.clockTick
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.updateStatusItem()
-            }
+            .sink { [weak self] in self?.updateStatusItem() }
             .store(in: &cancellables)
         
         if let taskStore = timerStore.taskStore {
             taskStore.objectWillChange
                 .receive(on: RunLoop.main)
-                .sink { [weak self] _ in
-                    self?.updateStatusItem()
-                }
+                .sink { [weak self] in self?.updateStatusItem() }
                 .store(in: &cancellables)
         }
     }
@@ -199,23 +196,25 @@ final class MenuBarController: NSObject, ObservableObject {
         let isRunning = timerStore.isRunning
         let inProgress = timerStore.isSessionInProgress
         let mode = timerStore.mode
+        let goal = timerStore.settings.dailyGoal
+        let done = timerStore.completedPomodoros
         
-        // Menu bar button: time-first live countdown.
         let barText = Self.barTitle(
             timeString: time,
             mode: mode,
             isRunning: isRunning,
-            isSessionInProgress: inProgress
+            isSessionInProgress: inProgress,
+            completed: done,
+            goal: goal
         )
         if let button = statusItem.button {
-            // Only attributedTitle — assigning `.title` after would wipe monospaced styling.
             button.attributedTitle = Self.attributedBarTitle(
                 barText,
                 mode: mode,
                 isRunning: isRunning,
                 isSessionInProgress: inProgress
             )
-            button.setAccessibilityLabel("iFocus 倒计时 \(time)")
+            button.setAccessibilityLabel("iFocus \(time) 今日 \(done)/\(goal)")
         }
         
         let runStateLabel: String = {
@@ -225,7 +224,7 @@ final class MenuBarController: NSObject, ObservableObject {
         }()
         
         let taskTitle = timerStore.taskStore?.activeTask?.title
-        var tooltip = "iFocus 倒计时\n\(mode.rawValue) \(time) · \(runStateLabel)"
+        var tooltip = "iFocus\n\(mode.rawValue) \(time) · \(runStateLabel)\n今日 \(done)/\(goal) 番茄"
         if let taskTitle, !taskTitle.isEmpty {
             tooltip += "\n当前任务：\(taskTitle)"
         } else if mode == .work {
@@ -235,7 +234,6 @@ final class MenuBarController: NSObject, ObservableObject {
         
         guard let menu = statusItem.menu else { return }
         
-        // Big countdown at top of dropdown.
         if let countdownItem = menu.item(withTag: MenuTag.countdown.rawValue) {
             let font = NSFont.monospacedDigitSystemFont(ofSize: 22, weight: .semibold)
             countdownItem.attributedTitle = NSAttributedString(
@@ -249,6 +247,8 @@ final class MenuBarController: NSObject, ObservableObject {
         
         menu.item(withTag: MenuTag.status.rawValue)?.title =
             "\(mode.rawValue)  · \(runStateLabel)"
+        menu.item(withTag: MenuTag.progress.rawValue)?.title =
+            "今日进度  \(done) / \(goal) 番茄"
         
         if let taskTitle, !taskTitle.isEmpty {
             menu.item(withTag: MenuTag.task.rawValue)?.title = "任务：\(taskTitle)"
@@ -272,29 +272,59 @@ final class MenuBarController: NSObject, ObservableObject {
             }
         }
         menu.item(withTag: MenuTag.toggle.rawValue)?.title = toggleTitle
+        menu.item(withTag: MenuTag.freeFocus.rawValue)?.isEnabled = true
         
         menu.item(withTag: MenuTag.nextMode.rawValue)?.isEnabled = true
-        let next = mode.next
-        menu.item(withTag: MenuTag.nextMode.rawValue)?.title = "切换到\(next.rawValue)"
+        menu.item(withTag: MenuTag.nextMode.rawValue)?.title = "切换到\(mode.next.rawValue)"
+        
+        refreshTodayTaskSubmenu(menu)
     }
     
-    // MARK: - Title formatting (unit-testable)
+    private func refreshTodayTaskSubmenu(_ menu: NSMenu) {
+        guard let pickRoot = menu.item(withTag: MenuTag.pickTask.rawValue) else { return }
+        let sub = NSMenu(title: "今日任务")
+        let today = timerStore.taskStore?.tasks(for: .todayTask).filter { !$0.isCompleted } ?? []
+        if today.isEmpty {
+            let empty = NSMenuItem(title: "今天没有待办", action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            sub.addItem(empty)
+        } else {
+            for task in today.prefix(12) {
+                let item = NSMenuItem(
+                    title: task.isPinned ? "📌 \(task.title)" : task.title,
+                    action: #selector(selectTodayTask(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = task.id.uuidString
+                item.state = (task.id == timerStore.taskStore?.activeTaskId) ? .on : .off
+                sub.addItem(item)
+            }
+        }
+        pickRoot.submenu = sub
+    }
     
-    /// Status-item plain text. Time is always first so the bar reads as a countdown.
+    // MARK: - Title formatting
+    
     static func barTitle(
         timeString: String,
         mode: TimerMode,
         isRunning: Bool,
-        isSessionInProgress: Bool
+        isSessionInProgress: Bool,
+        completed: Int = 0,
+        goal: Int = 0
     ) -> String {
+        let progress: String = {
+            guard goal > 0 else { return "" }
+            return " \(completed)/\(goal)"
+        }()
         if isRunning {
-            return " \(timeString)"
+            return " \(timeString)\(progress)"
         }
         if isSessionInProgress {
-            return " ⏸\(timeString)"
+            return " ⏸\(timeString)\(progress)"
         }
-        // Idle: still show remaining (full duration) so the bar is useful at a glance.
-        return " \(timeString)"
+        return " \(timeString)\(progress)"
     }
     
     static func attributedBarTitle(
@@ -315,16 +345,34 @@ final class MenuBarController: NSObject, ObservableObject {
         guard emphasized else { return .labelColor }
         switch mode {
         case .work:
-            return NSColor(calibratedRed: 0.90, green: 0.36, blue: 0.25, alpha: 1) // #E65C40-ish
+            return NSColor(calibratedRed: 0.90, green: 0.36, blue: 0.25, alpha: 1)
         case .shortBreak:
-            return NSColor(calibratedRed: 0.06, green: 0.73, blue: 0.51, alpha: 1) // #10B981
+            return NSColor(calibratedRed: 0.06, green: 0.73, blue: 0.51, alpha: 1)
         case .longBreak:
-            return NSColor(calibratedRed: 0.23, green: 0.51, blue: 0.96, alpha: 1) // #3B82F6
+            return NSColor(calibratedRed: 0.23, green: 0.51, blue: 0.96, alpha: 1)
         }
     }
     
     @objc private func toggleTimer() {
         timerStore.toggle()
+        updateStatusItem()
+    }
+    
+    @objc private func startFreeFocus() {
+        timerStore.selectTask(nil)
+        if timerStore.mode != .work {
+            timerStore.setMode(.work)
+        }
+        if !timerStore.isRunning {
+            timerStore.start()
+        }
+        updateStatusItem()
+    }
+    
+    @objc private func selectTodayTask(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let id = UUID(uuidString: raw) else { return }
+        timerStore.startFocus(on: id)
         updateStatusItem()
     }
     
@@ -356,10 +404,8 @@ final class MenuBarController: NSObject, ObservableObject {
         let image = NSImage(size: size, flipped: false) { rect in
             NSColor.clear.setFill()
             rect.fill()
-            
             NSColor(calibratedRed: 0.96, green: 0.20, blue: 0.14, alpha: 1).setFill()
             NSBezierPath(ovalIn: NSRect(x: 3, y: 2.5, width: 12, height: 12)).fill()
-            
             NSColor(calibratedRed: 0.18, green: 0.56, blue: 0.22, alpha: 1).setFill()
             let leaf = NSBezierPath()
             leaf.move(to: NSPoint(x: 9, y: 14.5))
@@ -368,12 +414,17 @@ final class MenuBarController: NSObject, ObservableObject {
             leaf.line(to: NSPoint(x: 11.8, y: 17))
             leaf.close()
             leaf.fill()
-            
             NSColor(calibratedWhite: 1, alpha: 0.35).setFill()
             NSBezierPath(ovalIn: NSRect(x: 5.5, y: 10, width: 3, height: 2)).fill()
             return true
         }
         image.isTemplate = false
         return image
+    }
+}
+
+extension MenuBarController: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        updateStatusItem()
     }
 }
