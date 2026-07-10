@@ -29,14 +29,25 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
     <key>CFBundleExecutable</key><string>${APP_NAME}</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.6.6</string>
-    <key>CFBundleVersion</key><string>66</string>
+    <key>CFBundleShortVersionString</key><string>1.6.7</string>
+    <key>CFBundleVersion</key><string>67</string>
     <key>LSMinimumSystemVersion</key><string>${MACOS_MIN_VERSION}</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
     <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
     <key>NSUserNotificationAlertStyle</key><string>alert</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.kun.ifocus.deeplink</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>ifocus</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>
 PLIST

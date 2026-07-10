@@ -5,6 +5,8 @@ import UserNotifications
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     /// Shared so we can flush persistence on quit.
     static weak var taskStore: TaskStore?
+    /// Shared for `ifocus://` deep links and clean-exit snapshot.
+    static weak var timerStore: TimerStore?
     
     /// Keep the process alive for menu-bar timer when the main window is hidden.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -42,6 +44,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             WindowLayoutStore.saveMainWindowFrame(window.frame)
         }
     }
+    
+    /// `ifocus://start` / `ifocus://open?screen=today` etc. (registered in Info.plist).
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let timerStore = AppDelegate.timerStore else { return }
+        for url in urls {
+            DeepLinkRouter.handle(url, timerStore: timerStore)
+        }
+    }
 
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
@@ -52,6 +62,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
     
     func applicationWillTerminate(_ notification: Notification) {
+        AppDelegate.timerStore?.markCleanExit()
         AppDelegate.taskStore?.flushPendingSaves()
         NSApp.dockTile.badgeLabel = nil
         NSApp.dockTile.display()
@@ -123,6 +134,7 @@ struct iFocusApp: App {
         _timerStore = StateObject(wrappedValue: timerStore)
         _menuBarController = StateObject(wrappedValue: MenuBarController(timerStore: timerStore))
         AppDelegate.taskStore = taskStore
+        AppDelegate.timerStore = timerStore
         
         NotificationCenter.default.addObserver(
             forName: NSApplication.didFinishLaunchingNotification,

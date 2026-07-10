@@ -58,7 +58,9 @@ final class TaskStoreTests: XCTestCase {
             category: .work,
             priority: 4,
             estimatedPomodoros: 5,
-            dueDate: Calendar.current.startOfDay(for: Date())
+            dueDate: Calendar.current.startOfDay(for: Date()),
+            notes: "  备忘  ",
+            linkURL: " https://example.com/doc "
         )
         
         let task = store.tasks[0]
@@ -67,6 +69,18 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertEqual(task.priority, 4)
         XCTAssertEqual(task.estimatedPomodoros, 5)
         XCTAssertNotNil(task.dueDate)
+        XCTAssertEqual(task.notes, "备忘")
+        XCTAssertEqual(task.linkURL, "https://example.com/doc")
+        XCTAssertTrue(task.hasLink)
+    }
+    
+    func testHasLinkRejectsInvalidSchemes() {
+        var task = FocusTask(title: "x", category: .work, linkURL: "ftp://example.com")
+        XCTAssertFalse(task.hasLink)
+        task.linkURL = "not a url"
+        XCTAssertFalse(task.hasLink)
+        task.linkURL = "https://ok.dev"
+        XCTAssertTrue(task.hasLink)
     }
     
     func testUpdateTaskKeepsTitleWhenBlank() {

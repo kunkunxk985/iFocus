@@ -23,6 +23,7 @@ struct ContentView: View {
     @StateObject private var viewState = ContentViewState()
     @State private var isAccountMenuPresented = false
     @State private var showResetConfirm = false
+    @State private var showResumeSessionAlert = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
     @Environment(\.openWindow) private var openWindow
@@ -107,6 +108,20 @@ struct ContentView: View {
                     .transition(.opacity)
                     .zIndex(40)
                 }
+                
+                if timerStore.showDailyGoalCelebration {
+                    DailyGoalCelebrationOverlay(
+                        completed: timerStore.completedPomodoros,
+                        goal: settings.dailyGoal,
+                        onDismiss: {
+                            withAnimation(.easeOut(duration: 0.25)) {
+                                timerStore.dismissDailyGoalCelebration()
+                            }
+                        }
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    .zIndex(50)
+                }
             }
         }
         // Draw under the transparent titlebar so no system white strip shows through.
@@ -115,6 +130,13 @@ struct ContentView: View {
         .environmentObject(viewState)
         .animation(accountMenuAnimation, value: isAccountMenuPresented)
         .animation(.easeOut(duration: 0.25), value: hasCompletedOnboarding)
+        .animation(.spring(response: 0.4, dampingFraction: 0.86), value: timerStore.showDailyGoalCelebration)
+        .onAppear {
+            // Offer resume after crash / force-quit (dirty snapshot from last run).
+            if timerStore.pendingResumeSnapshot != nil {
+                showResumeSessionAlert = true
+            }
+        }
         .onChange(of: viewState.selectedScreen) { _ in
             if isAccountMenuPresented {
                 dismissAccountMenu()
@@ -155,9 +177,44 @@ struct ContentView: View {
         } message: {
             Text("进行中的时段不会记入专注记录。")
         }
+        .alert(
+            "恢复专注会话？",
+            isPresented: $showResumeSessionAlert
+        ) {
+            Button("恢复") {
+                if timerStore.resumeFromPendingSnapshot() {
+                    viewState.selectedScreen = .timer
+                }
+            }
+            Button("丢弃", role: .destructive) {
+                timerStore.discardPendingResume()
+            }
+            Button("稍后", role: .cancel) {
+                // Keep pending so user can still resume this launch via alert again if needed.
+                // Re-show only if they navigate away and back is awkward — leave pending in store
+                // until resume/discard; next launch will re-offer if still dirty.
+            }
+        } message: {
+            Text(resumeAlertMessage)
+        }
         // IMPORTANT: never subscribe to `clockTick` on this root view.
         // Per-second invalidation re-renders the whole tree (task list + edit sheet)
         // and freezes macOS DatePicker / controls. Clock UI lives in leaf views only.
+    }
+    
+    private var resumeAlertMessage: String {
+        guard let snap = timerStore.pendingResumeSnapshot else {
+            return "上次异常退出时有未完成的计时。"
+        }
+        let modeName = snap.timerMode?.rawValue ?? "计时"
+        let remaining = Int(snap.timeRemaining.rounded())
+        let m = remaining / 60
+        let s = remaining % 60
+        let timePart = String(format: "%d:%02d", m, s)
+        if let title = snap.workTaskTitle, !title.isEmpty, snap.timerMode == .work {
+            return "「\(title)」· \(modeName) 还剩 \(timePart)。恢复后处于暂停，可点继续。"
+        }
+        return "\(modeName) 还剩 \(timePart)。恢复后处于暂停，可点继续。"
     }
     
     private var brandHeader: some View {
@@ -714,6 +771,80 @@ private struct FloatingFocusPill: View {
             return taskStore.activeTask?.title ?? "自由专注"
         }
         return timerStore.mode.rawValue
+    }
+}
+
+// MARK: - Daily goal celebration
+
+private struct DailyGoalCelebrationOverlay: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let completed: Int
+    let goal: Int
+    let onDismiss: () -> Void
+    
+    var body: some View {
+        ZStack {
+            Color.black.opacity(colorScheme == .light ? 0.32 : 0.5)
+                .ignoresSafeArea()
+                .onTapGesture(perform: onDismiss)
+            
+            VStack(spacing: 18) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    AppTheme.accent.opacity(0.28),
+                                    AppTheme.accent.opacity(0.06)
+                                ],
+                                center: .center,
+                                startRadius: 4,
+                                endRadius: 56
+                            )
+                        )
+                        .frame(width: 96, height: 96)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 36, weight: .semibold))
+                        .foregroundColor(AppTheme.accent)
+                }
+                
+                Text("今日目标达成")
+                    .font(.title2.weight(.bold))
+                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                
+                Text("已完成 \(completed) / \(goal) 个番茄")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppTheme.accent)
+                
+                Text("很好！可以收工休息，或继续做轻松任务。")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    .multilineTextAlignment(.center)
+                
+                Button(action: onDismiss) {
+                    Text("太棒了")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(AppTheme.accent))
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.defaultAction)
+                .padding(.top, 4)
+            }
+            .padding(32)
+            .frame(maxWidth: 360)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(AppTheme.cardBackground(for: colorScheme))
+                    .shadow(color: AppTheme.softShadow(for: colorScheme), radius: 28, y: 12)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(AppTheme.accent.opacity(0.25), lineWidth: 1)
+            )
+        }
     }
 }
 

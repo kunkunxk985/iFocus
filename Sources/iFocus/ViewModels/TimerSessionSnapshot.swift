@@ -1,0 +1,61 @@
+import Foundation
+
+/// Disk snapshot so we can offer resume after crash / force-quit.
+struct TimerSessionSnapshot: Codable, Equatable {
+    var mode: String
+    var timeRemaining: TimeInterval
+    var isRunning: Bool
+    var elapsedBeforePause: TimeInterval
+    var sessionPlannedDuration: TimeInterval?
+    var activeTaskId: UUID?
+    var workTaskTitle: String?
+    var workTaskCategory: String?
+    /// false while app is running; true only after clean terminate.
+    var cleanExit: Bool
+    var savedAt: Date
+    
+    var hasResumableSession: Bool {
+        // Mid-session if planned duration set, or remaining not a "fresh full" idle.
+        sessionPlannedDuration != nil || elapsedBeforePause > 0.5
+    }
+    
+    /// True when the previous process likely crashed / force-quit mid-session.
+    var shouldOfferResume: Bool {
+        !cleanExit && hasResumableSession
+    }
+    
+    var timerMode: TimerMode? {
+        TimerMode.allCases.first { $0.rawValue == mode }
+    }
+}
+
+enum TimerSessionPersistence {
+    private static let fileName = "timer_session.json"
+    
+    static func fileURL(in directory: URL? = nil) -> URL {
+        let dir = directory ?? TaskStore.defaultStorageDirectory()
+        return dir.appendingPathComponent(fileName)
+    }
+    
+    static func load(from directory: URL? = nil) -> TimerSessionSnapshot? {
+        let url = fileURL(in: directory)
+        guard FileManager.default.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(TimerSessionSnapshot.self, from: data)
+    }
+    
+    static func save(_ snapshot: TimerSessionSnapshot, to directory: URL? = nil) {
+        let url = fileURL(in: directory)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(snapshot) else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+    
+    static func clear(in directory: URL? = nil) {
+        try? FileManager.default.removeItem(at: fileURL(in: directory))
+    }
+}

@@ -60,9 +60,19 @@ struct FocusTask: Identifiable, Equatable, Codable {
     /// Lower = higher in list after pin. User drag-reorder updates this.
     var sortIndex: Int = 0
     var recurrence: TaskRecurrence = .none
+    /// Optional longer description (not shown as primary title).
+    var notes: String = ""
+    /// Optional URL string (opened in browser when valid).
+    var linkURL: String = ""
     
     var isOverdue: Bool {
         TaskFiltering.isOverdue(dueDate: dueDate, isCompleted: isCompleted)
+    }
+    
+    var hasLink: Bool {
+        guard let url = URL(string: linkURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let scheme = url.scheme?.lowercased() else { return false }
+        return scheme == "http" || scheme == "https"
     }
     
     var snapshot: TaskSnapshot {
@@ -78,7 +88,7 @@ struct FocusTask: Identifiable, Equatable, Codable {
     enum CodingKeys: String, CodingKey {
         case id, title, category, isCompleted, priority
         case estimatedPomodoros, completedPomodoros, dueDate, createdAt, timeSpentMinutes
-        case isPinned, sortIndex, recurrence
+        case isPinned, sortIndex, recurrence, notes, linkURL
     }
     
     init(
@@ -94,7 +104,9 @@ struct FocusTask: Identifiable, Equatable, Codable {
         timeSpentMinutes: Int = 0,
         isPinned: Bool = false,
         sortIndex: Int = 0,
-        recurrence: TaskRecurrence = .none
+        recurrence: TaskRecurrence = .none,
+        notes: String = "",
+        linkURL: String = ""
     ) {
         self.id = id
         self.title = title
@@ -109,6 +121,8 @@ struct FocusTask: Identifiable, Equatable, Codable {
         self.isPinned = isPinned
         self.sortIndex = sortIndex
         self.recurrence = recurrence
+        self.notes = notes
+        self.linkURL = linkURL
     }
     
     init(from decoder: Decoder) throws {
@@ -126,6 +140,8 @@ struct FocusTask: Identifiable, Equatable, Codable {
         isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
         sortIndex = try c.decodeIfPresent(Int.self, forKey: .sortIndex) ?? 0
         recurrence = try c.decodeIfPresent(TaskRecurrence.self, forKey: .recurrence) ?? .none
+        notes = try c.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        linkURL = try c.decodeIfPresent(String.self, forKey: .linkURL) ?? ""
     }
     
     /// Next due date after completing (or rolling) a recurring task.
@@ -336,7 +352,9 @@ class TaskStore: ObservableObject {
             estimatedPomodoros: completed.estimatedPomodoros,
             dueDate: nextDue,
             sortIndex: nextIndex,
-            recurrence: completed.recurrence
+            recurrence: completed.recurrence,
+            notes: completed.notes,
+            linkURL: completed.linkURL
         )
         tasks.append(next)
     }
@@ -576,7 +594,9 @@ class TaskStore: ObservableObject {
         priority: Int,
         estimatedPomodoros: Int,
         dueDate: Date?,
-        recurrence: TaskRecurrence = .none
+        recurrence: TaskRecurrence = .none,
+        notes: String = "",
+        linkURL: String = ""
     ) {
         if let index = tasks.firstIndex(where: { $0.id == id }) {
             let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -588,6 +608,8 @@ class TaskStore: ObservableObject {
             tasks[index].priority = min(4, max(1, priority))
             tasks[index].estimatedPomodoros = min(20, max(1, estimatedPomodoros))
             tasks[index].recurrence = recurrence
+            tasks[index].notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            tasks[index].linkURL = linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
             // Normalize to start-of-day so list filters stay consistent.
             if let dueDate {
                 tasks[index].dueDate = Calendar.current.startOfDay(for: dueDate)

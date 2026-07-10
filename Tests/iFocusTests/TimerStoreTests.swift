@@ -29,7 +29,11 @@ final class TimerStoreTests: XCTestCase {
         defaults.set(workMinutes, forKey: "workMinutes")
         let settings = SettingsStore(defaults: defaults, applyAppearance: false)
         let tasks = TaskStore(storageDirectory: tempDir)
-        let timer = TimerStore(settings: settings, taskStore: tasks)
+        let timer = TimerStore(
+            settings: settings,
+            taskStore: tasks,
+            sessionStorageDirectory: tempDir
+        )
         return (settings, tasks, timer)
     }
     
@@ -198,5 +202,85 @@ final class TimerStoreTests: XCTestCase {
         
         XCTAssertEqual(timer.completedPomodoros, 2)
         XCTAssertEqual(timer.totalSecondsToday, 35 * 60)
+    }
+    
+    // MARK: - Session snapshot resume
+    
+    func testDirtySnapshotOfferedAfterSimulatedCrash() {
+        let (_, tasks, timer) = makeStores()
+        tasks.newTaskTitle = "崩溃恢复任务"
+        tasks.addTask(for: .inboxTask)
+        let id = tasks.tasks[0].id
+        
+        timer.startFocus(on: id)
+        timer.pause()
+        XCTAssertTrue(timer.isSessionInProgress)
+        
+        // Simulate unclean exit: dirty file left on disk, new process boots.
+        let snap = timer.makeSessionSnapshot(cleanExit: false)
+        TimerSessionPersistence.save(snap, to: tempDir)
+        
+        let settings2 = SettingsStore(defaults: defaults, applyAppearance: false)
+        let tasks2 = TaskStore(storageDirectory: tempDir)
+        let timer2 = TimerStore(
+            settings: settings2,
+            taskStore: tasks2,
+            sessionStorageDirectory: tempDir
+        )
+        
+        XCTAssertNotNil(timer2.pendingResumeSnapshot)
+        XCTAssertTrue(timer2.pendingResumeSnapshot?.shouldOfferResume == true)
+        XCTAssertEqual(timer2.pendingResumeSnapshot?.activeTaskId, id)
+        
+        XCTAssertTrue(timer2.resumeFromPendingSnapshot())
+        XCTAssertNil(timer2.pendingResumeSnapshot)
+        XCTAssertFalse(timer2.isRunning)
+        XCTAssertTrue(timer2.isSessionInProgress)
+        XCTAssertEqual(tasks2.activeTaskId, id)
+        XCTAssertEqual(timer2.mode, .work)
+    }
+    
+    func testCleanExitDoesNotOfferResume() {
+        let (_, _, timer) = makeStores()
+        timer.start()
+        timer.pause()
+        timer.markCleanExit()
+        
+        let settings2 = SettingsStore(defaults: defaults, applyAppearance: false)
+        let tasks2 = TaskStore(storageDirectory: tempDir)
+        let timer2 = TimerStore(
+            settings: settings2,
+            taskStore: tasks2,
+            sessionStorageDirectory: tempDir
+        )
+        XCTAssertNil(timer2.pendingResumeSnapshot)
+    }
+    
+    func testDiscardPendingResumeClearsFile() {
+        let snap = TimerSessionSnapshot(
+            mode: TimerMode.work.rawValue,
+            timeRemaining: 600,
+            isRunning: true,
+            elapsedBeforePause: 100,
+            sessionPlannedDuration: 1500,
+            activeTaskId: nil,
+            workTaskTitle: "自由专注",
+            workTaskCategory: nil,
+            cleanExit: false,
+            savedAt: Date()
+        )
+        TimerSessionPersistence.save(snap, to: tempDir)
+        
+        let settings = SettingsStore(defaults: defaults, applyAppearance: false)
+        let tasks = TaskStore(storageDirectory: tempDir)
+        let timer = TimerStore(
+            settings: settings,
+            taskStore: tasks,
+            sessionStorageDirectory: tempDir
+        )
+        XCTAssertNotNil(timer.pendingResumeSnapshot)
+        timer.discardPendingResume()
+        XCTAssertNil(timer.pendingResumeSnapshot)
+        XCTAssertNil(TimerSessionPersistence.load(from: tempDir))
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct TaskRowView: View {
     @EnvironmentObject var taskStore: TaskStore
@@ -17,6 +18,10 @@ struct TaskRowView: View {
     let onStartFocus: () -> Void
     
     @EnvironmentObject private var settings: SettingsStore
+    
+    private var hasNotes: Bool {
+        !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
     
     var body: some View {
         let density = settings.uiDensity
@@ -102,6 +107,25 @@ struct TaskRowView: View {
                     
                     if task.recurrence != .none {
                         metaChip(task.recurrence.rawValue, color: Color(hex: "#8B5CF6").opacity(0.75))
+                    }
+                    
+                    if hasNotes {
+                        Image(systemName: "note.text")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.7))
+                            .help(task.notes)
+                    }
+                    
+                    if task.hasLink {
+                        Button {
+                            openTaskLink()
+                        } label: {
+                            Image(systemName: "link")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(AppTheme.accent.opacity(0.9))
+                        }
+                        .buttonStyle(.plain)
+                        .help(task.linkURL)
                     }
                     
                     if let due = task.dueDate {
@@ -296,6 +320,14 @@ struct TaskRowView: View {
             Label("编辑任务", systemImage: "pencil")
         }
         
+        if task.hasLink {
+            Button {
+                openTaskLink()
+            } label: {
+                Label("打开链接", systemImage: "link")
+            }
+        }
+        
         Divider()
         
         Button(role: .destructive) {
@@ -303,6 +335,12 @@ struct TaskRowView: View {
         } label: {
             Label("删除任务", systemImage: "trash")
         }
+    }
+    
+    private func openTaskLink() {
+        let trimmed = task.linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed) else { return }
+        NSWorkspace.shared.open(url)
     }
     
     private func handleFocusButton() {

@@ -1,5 +1,37 @@
 import SwiftUI
 
+/// In-list refinement chips (orthogonal to sidebar smart lists).
+private enum TaskListChip: Hashable, Identifiable {
+    case all
+    case highPriority
+    case pinned
+    case hasNotes
+    case hasLink
+    case category(TaskCategory)
+    
+    var id: String {
+        switch self {
+        case .all: return "all"
+        case .highPriority: return "high"
+        case .pinned: return "pinned"
+        case .hasNotes: return "notes"
+        case .hasLink: return "link"
+        case .category(let c): return "cat-\(c.rawValue)"
+        }
+    }
+    
+    var title: String {
+        switch self {
+        case .all: return "全部"
+        case .highPriority: return "高优"
+        case .pinned: return "置顶"
+        case .hasNotes: return "有备注"
+        case .hasLink: return "有链接"
+        case .category(let c): return c.rawValue
+        }
+    }
+}
+
 struct TaskListView: View {
     @EnvironmentObject var taskStore: TaskStore
     @EnvironmentObject var settings: SettingsStore
@@ -10,6 +42,7 @@ struct TaskListView: View {
     @State private var editSession: EditTaskSession? = nil
     @State private var isSelecting = false
     @State private var selectedIDs: Set<UUID> = []
+    @State private var activeChip: TaskListChip = .all
     
     private func filter(for screen: AppScreen) -> TaskStore.TaskFilter {
         switch screen {
@@ -74,9 +107,14 @@ struct TaskListView: View {
         }
     }
     
-    private var currentTasks: [FocusTask] {
+    private var baseTasks: [FocusTask] {
         taskStore.tasks(for: currentFilter)
     }
+    
+    private var currentTasks: [FocusTask] {
+        baseTasks.filter { matchesChip($0) }
+    }
+    
     private var incompleteFiltered: [FocusTask] {
         currentTasks.filter { !$0.isCompleted }
     }
@@ -99,6 +137,45 @@ struct TaskListView: View {
     }
     private var totalFocusMinutes: Int {
         currentTasks.reduce(0) { $0 + $1.timeSpentMinutes }
+    }
+    
+    private var availableChips: [TaskListChip] {
+        var chips: [TaskListChip] = [.all, .highPriority, .pinned, .hasNotes, .hasLink]
+        let cats = Set(baseTasks.map(\.category))
+        for cat in TaskCategory.allCases where cats.contains(cat) {
+            chips.append(.category(cat))
+        }
+        return chips
+    }
+    
+    private func matchesChip(_ task: FocusTask) -> Bool {
+        switch activeChip {
+        case .all:
+            return true
+        case .highPriority:
+            return task.priority <= 2
+        case .pinned:
+            return task.isPinned
+        case .hasNotes:
+            return !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .hasLink:
+            return task.hasLink
+        case .category(let cat):
+            return task.category == cat
+        }
+    }
+    
+    private func chipCount(_ chip: TaskListChip) -> Int {
+        baseTasks.filter { task in
+            switch chip {
+            case .all: return true
+            case .highPriority: return task.priority <= 2
+            case .pinned: return task.isPinned
+            case .hasNotes: return !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .hasLink: return task.hasLink
+            case .category(let cat): return task.category == cat
+            }
+        }.count
     }
     
     var body: some View {
@@ -137,7 +214,12 @@ struct TaskListView: View {
 
                     statsBar
                         .padding(.top, 18)
-                        .padding(.bottom, 20)
+                        .padding(.bottom, 14)
+                    
+                    if !baseTasks.isEmpty {
+                        filterChipsBar
+                            .padding(.bottom, 16)
+                    }
                     
                     if isSelecting {
                         batchToolbar
@@ -158,11 +240,12 @@ struct TaskListView: View {
         .onChange(of: viewState.selectedScreen) { _ in
             isSelecting = false
             selectedIDs.removeAll()
+            activeChip = .all
         }
         // Snapshot identity (`EditTaskSession`) — never `sheet(item:)` a live FocusTask
         // that mutates while the timer is running.
         .sheet(item: $editSession) { session in
-            EditTaskView(session: session) { title, category, priority, pomodoros, due, recurrence in
+            EditTaskView(session: session) { title, category, priority, pomodoros, due, recurrence, notes, linkURL in
                 taskStore.updateTask(
                     id: session.id,
                     title: title,
@@ -170,10 +253,58 @@ struct TaskListView: View {
                     priority: priority,
                     estimatedPomodoros: pomodoros,
                     dueDate: due,
-                    recurrence: recurrence
+                    recurrence: recurrence,
+                    notes: notes,
+                    linkURL: linkURL
                 )
             }
             .id(session.id)
+        }
+    }
+    
+    private var filterChipsBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(availableChips) { chip in
+                    let selected = activeChip == chip
+                    let count = chipCount(chip)
+                    Button {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            activeChip = chip
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(chip.title)
+                                .font(.caption.weight(.semibold))
+                            if chip != .all, count > 0 {
+                                Text("\(count)")
+                                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                                    .opacity(0.85)
+                            }
+                        }
+                        .foregroundColor(selected ? .white : AppTheme.primaryText(for: colorScheme).opacity(0.85))
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(selected
+                                      ? AppTheme.accent
+                                      : AppTheme.cardBackground(for: colorScheme))
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(
+                                    selected
+                                    ? Color.clear
+                                    : AppTheme.separatorLow(for: colorScheme),
+                                    lineWidth: 1
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.vertical, 2)
         }
     }
     
@@ -492,12 +623,19 @@ struct TaskListView: View {
     
     private var emptyState: some View {
         let isCompletedList = viewState.selectedScreen == .completedTask
+        let filteredEmpty = !baseTasks.isEmpty && currentTasks.isEmpty
         return AppEmptyState(
-            systemImage: isCompletedList ? "archivebox" : "tray",
-            title: isCompletedList ? "暂无已完成任务" : "这里还是空的",
-            subtitle: isCompletedList ? "完成任务后会出现在这里" : "在上方添加一条，或去专注钟自由开始",
-            actionTitle: isCompletedList ? nil : "去专注钟",
-            action: isCompletedList ? nil : { viewState.selectedScreen = .timer }
+            systemImage: filteredEmpty ? "line.3.horizontal.decrease.circle" : (isCompletedList ? "archivebox" : "tray"),
+            title: filteredEmpty
+                ? "没有匹配的任务"
+                : (isCompletedList ? "暂无已完成任务" : "这里还是空的"),
+            subtitle: filteredEmpty
+                ? "换一个筛选条件，或点「全部」查看整表"
+                : (isCompletedList ? "完成任务后会出现在这里" : "在上方添加一条，或去专注钟自由开始"),
+            actionTitle: filteredEmpty ? "显示全部" : (isCompletedList ? nil : "去专注钟"),
+            action: filteredEmpty
+                ? { activeChip = .all }
+                : (isCompletedList ? nil : { viewState.selectedScreen = .timer })
         )
         .padding(.vertical, 28)
         .background(SoftCardBackground(cornerRadius: 18))

@@ -60,6 +60,10 @@ class TimerStore: ObservableObject {
     @Published var notificationFeedback: String?
     /// Brief toast after a segment completes (UI clears it).
     @Published var celebrationMessage: String?
+    /// Full-screen overlay when daily pomodoro goal is first crossed today.
+    @Published var showDailyGoalCelebration: Bool = false
+    /// Unclean-exit snapshot waiting for user to resume or discard (set at launch).
+    @Published var pendingResumeSnapshot: TimerSessionSnapshot?
     /// True when paused mid-session longer than the reminder threshold.
     @Published var isPauseIdleTooLong: Bool = false
     /// Whole minutes already spent paused (for UI copy).
@@ -80,6 +84,8 @@ class TimerStore: ObservableObject {
     
     var settings: SettingsStore
     var taskStore: TaskStore?
+    /// Optional override for tests (defaults to Application Support).
+    var sessionStorageDirectory: URL?
     private var timer: Timer?
     private var pauseWatchTimer: Timer?
     private var pauseStartedAt: Date?
@@ -94,15 +100,20 @@ class TimerStore: ObservableObject {
     private var workSessionContext: WorkSessionContext?
     private var isCompleting = false
     private var lifecycleObservers: [NSObjectProtocol] = []
+    /// Throttle dirty disk writes while the timer is running.
+    private var lastDirtySnapshotAt: Date?
+    private let dirtySnapshotInterval: TimeInterval = 12
     
-    init(settings: SettingsStore, taskStore: TaskStore? = nil) {
+    init(settings: SettingsStore, taskStore: TaskStore? = nil, sessionStorageDirectory: URL? = nil) {
         self.settings = settings
         self.taskStore = taskStore
+        self.sessionStorageDirectory = sessionStorageDirectory
         self.timeRemaining = TimeInterval(settings.workMinutes * 60)
         observeLifecycleEvents()
         if let store = taskStore {
             updateStatsFromHistory(taskStore: store)
         }
+        loadPendingResumeIfNeeded()
         
         // Defer UserNotifications until after launch — early access can crash when
         // the process is not yet a full app bundle session.
@@ -335,6 +346,7 @@ class TimerStore: ObservableObject {
         updateTimerTick()
         updateDockBadge()
         emitClockTick()
+        persistDirtySnapshot(force: true)
     }
     
     func pause() {
@@ -356,6 +368,7 @@ class TimerStore: ObservableObject {
         }
         updateDockBadge()
         emitClockTick()
+        persistDirtySnapshot(force: true)
     }
     
     func reset() {
@@ -371,6 +384,7 @@ class TimerStore: ObservableObject {
         refreshStatsFromHistory()
         updateDockBadge()
         emitClockTick()
+        clearSessionSnapshot()
     }
     
     private func clearPauseIdleState() {
@@ -460,6 +474,155 @@ class TimerStore: ObservableObject {
         timeRemaining = next.duration(settings: settings)
         updateDockBadge()
         emitClockTick()
+        clearSessionSnapshot()
+    }
+    
+    // MARK: - Session snapshot (crash / force-quit resume)
+    
+    private func sessionDirectory() -> URL? {
+        sessionStorageDirectory
+    }
+    
+    private func loadPendingResumeIfNeeded() {
+        guard let snap = TimerSessionPersistence.load(from: sessionDirectory()),
+              snap.shouldOfferResume else {
+            // Stale clean or empty — drop file so we start fresh.
+            if let snap = TimerSessionPersistence.load(from: sessionDirectory()), snap.cleanExit {
+                TimerSessionPersistence.clear(in: sessionDirectory())
+            }
+            return
+        }
+        pendingResumeSnapshot = snap
+    }
+    
+    /// Build current session state for disk (always dirty while process is alive).
+    func makeSessionSnapshot(cleanExit: Bool) -> TimerSessionSnapshot {
+        // Prefer wall-clock remaining when running so resume is accurate after kill.
+        var remaining = timeRemaining
+        if isRunning, let targetEndDate {
+            remaining = max(0, targetEndDate.timeIntervalSinceNow)
+        }
+        var elapsed = elapsedBeforePause
+        if isRunning, let segmentStartedAt {
+            elapsed += Date().timeIntervalSince(segmentStartedAt)
+        }
+        return TimerSessionSnapshot(
+            mode: mode.rawValue,
+            timeRemaining: remaining,
+            isRunning: isRunning,
+            elapsedBeforePause: elapsed,
+            sessionPlannedDuration: sessionPlannedDuration,
+            activeTaskId: taskStore?.activeTaskId ?? workSessionContext?.taskId,
+            workTaskTitle: workSessionContext?.taskTitle ?? taskStore?.activeTask?.title,
+            workTaskCategory: (workSessionContext?.taskCategory ?? taskStore?.activeTask?.category)?.rawValue,
+            cleanExit: cleanExit,
+            savedAt: Date()
+        )
+    }
+    
+    private func persistDirtySnapshot(force: Bool = false) {
+        guard isSessionInProgress else {
+            // No mid-session — avoid leaving a stale dirty file.
+            if force { clearSessionSnapshot() }
+            return
+        }
+        if !force, let last = lastDirtySnapshotAt,
+           Date().timeIntervalSince(last) < dirtySnapshotInterval {
+            return
+        }
+        lastDirtySnapshotAt = Date()
+        TimerSessionPersistence.save(makeSessionSnapshot(cleanExit: false), to: sessionDirectory())
+    }
+    
+    private func clearSessionSnapshot() {
+        lastDirtySnapshotAt = nil
+        TimerSessionPersistence.clear(in: sessionDirectory())
+    }
+    
+    /// Call on clean process exit so next launch does not prompt.
+    func markCleanExit() {
+        if isSessionInProgress {
+            // Persist remaining time but mark clean — user intentionally quit mid-session.
+            TimerSessionPersistence.save(makeSessionSnapshot(cleanExit: true), to: sessionDirectory())
+        } else {
+            clearSessionSnapshot()
+        }
+    }
+    
+    /// Apply a pending unclean-exit snapshot (paused). User taps continue to start.
+    @discardableResult
+    func resumeFromPendingSnapshot() -> Bool {
+        guard let snap = pendingResumeSnapshot else { return false }
+        guard let restoredMode = snap.timerMode else {
+            discardPendingResume()
+            return false
+        }
+        // Stop any current clocks first.
+        timer?.invalidate()
+        timer = nil
+        pauseWatchTimer?.invalidate()
+        pauseWatchTimer = nil
+        targetEndDate = nil
+        segmentStartedAt = nil
+        clearPauseIdleState()
+        
+        mode = restoredMode
+        isRunning = false
+        timeRemaining = max(0, snap.timeRemaining)
+        elapsedBeforePause = max(0, snap.elapsedBeforePause)
+        sessionPlannedDuration = snap.sessionPlannedDuration
+        if let taskId = snap.activeTaskId {
+            taskStore?.activeTaskId = taskId
+        }
+        if restoredMode == .work {
+            let category = snap.workTaskCategory.flatMap { raw in
+                TaskCategory.allCases.first { $0.rawValue == raw }
+            }
+            workSessionContext = WorkSessionContext(
+                taskId: snap.activeTaskId,
+                taskTitle: snap.workTaskTitle ?? "自由专注",
+                taskCategory: category
+            )
+        } else {
+            workSessionContext = nil
+        }
+        pendingResumeSnapshot = nil
+        // Keep a dirty snapshot now that we're alive with mid-session state.
+        persistDirtySnapshot(force: true)
+        updateDockBadge()
+        emitClockTick()
+        objectWillChange.send()
+        return true
+    }
+    
+    func discardPendingResume() {
+        pendingResumeSnapshot = nil
+        clearSessionSnapshot()
+    }
+    
+    func dismissDailyGoalCelebration() {
+        showDailyGoalCelebration = false
+    }
+    
+    /// YYYY-MM-dd key for once-per-day goal celebration.
+    private static let goalCelebratedDayKey = "dailyGoalCelebratedDay"
+    
+    private func maybeTriggerDailyGoalCelebration(previousCount: Int, newCount: Int) {
+        let goal = settings.dailyGoal
+        guard goal > 0, newCount >= goal, previousCount < goal else { return }
+        let day = Self.dayKey(for: Date())
+        let defaults = UserDefaults.standard
+        if defaults.string(forKey: Self.goalCelebratedDayKey) == day { return }
+        defaults.set(day, forKey: Self.goalCelebratedDayKey)
+        showDailyGoalCelebration = true
+    }
+    
+    private static func dayKey(for date: Date) -> String {
+        let c = Calendar.current
+        let y = c.component(.year, from: date)
+        let m = c.component(.month, from: date)
+        let d = c.component(.day, from: date)
+        return String(format: "%04d-%02d-%02d", y, m, d)
     }
     
     /// Elapsed seconds in the current work segment (including pause/resume).
@@ -512,6 +675,7 @@ class TimerStore: ObservableObject {
         updateRemainingFromTarget()
         emitClockTick()
         updateDockBadge()
+        persistDirtySnapshot(force: false)
         guard timeRemaining <= 0 else { return }
         complete()
     }
@@ -552,6 +716,7 @@ class TimerStore: ObservableObject {
         elapsedBeforePause = 0
         segmentStartedAt = nil
         
+        let previousPomodoros = completedPomodoros
         var loggedMinutes: Int?
         if wasWork, let minutes = TimerFormatting.logMinutes(
             elapsedSeconds: elapsedSeconds,
@@ -576,6 +741,10 @@ class TimerStore: ObservableObject {
             if let store = taskStore {
                 updateStatsFromHistory(taskStore: store)
             }
+            maybeTriggerDailyGoalCelebration(
+                previousCount: previousPomodoros,
+                newCount: completedPomodoros
+            )
         }
         
         // Restore mode for notification copy (pause does not change mode).
@@ -618,6 +787,7 @@ class TimerStore: ObservableObject {
         } else {
             mode = nextMode
             timeRemaining = nextMode.duration(settings: settings)
+            clearSessionSnapshot()
         }
         updateDockBadge()
         emitClockTick()
