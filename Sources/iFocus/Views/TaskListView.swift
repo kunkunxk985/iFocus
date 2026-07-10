@@ -43,6 +43,8 @@ struct TaskListView: View {
     @State private var isSelecting = false
     @State private var selectedIDs: Set<UUID> = []
     @State private var activeChip: TaskListChip = .all
+    /// nil = follow current list defaults; else force today / tomorrow / inbox.
+    @State private var dueOverride: TaskStore.DueOverride? = nil
     
     private func filter(for screen: AppScreen) -> TaskStore.TaskFilter {
         switch screen {
@@ -237,10 +239,24 @@ struct TaskListView: View {
             }
             .softScroll()
         }
+        .overlay(alignment: .bottom) {
+            if let banner = taskStore.undoDeletionBanner {
+                UndoDeletionToast(
+                    message: banner.message,
+                    onUndo: { taskStore.undoLastDeletion() },
+                    onDismiss: { taskStore.dismissUndoDeletionBanner() }
+                )
+                .padding(.bottom, 20)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(20)
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.86), value: taskStore.undoDeletionBanner?.token)
         .onChange(of: viewState.selectedScreen) { _ in
             isSelecting = false
             selectedIDs.removeAll()
             activeChip = .all
+            dueOverride = nil
         }
         // Snapshot identity (`EditTaskSession`) — never `sheet(item:)` a live FocusTask
         // that mutates while the timer is running.
@@ -416,76 +432,140 @@ struct TaskListView: View {
     }
     
     private var addTaskSection: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "plus")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                .padding(.leading, 4)
-            
-            TextField(placeholderText, text: $taskStore.newTaskTitle)
-                .textFieldStyle(.plain)
-                .font(.body)
-                .onSubmit { addTask() }
-            
-            HStack(spacing: 6) {
-                compactMenu(help: "番茄") {
-                    Picker("预估番茄", selection: $taskStore.newTaskPomodoros) {
-                        ForEach(1...8, id: \.self) { n in
-                            Text("\(n) 番茄").tag(n)
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "timer")
-                        Text("\(taskStore.newTaskPomodoros)")
-                            .fontWeight(.bold)
-                    }
-                    .foregroundColor(AppTheme.accent)
-                }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "plus")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    .padding(.leading, 4)
                 
-                compactMenu(help: "优先级") {
-                    Picker("优先级", selection: $taskStore.newTaskPriority) {
-                        ForEach(1...4, id: \.self) { n in
-                            Text("\(n) 级").tag(n)
-                        }
-                    }
-                } label: {
-                    Image(systemName: priorityIcon(taskStore.newTaskPriority))
-                        .foregroundColor(priorityColor(taskStore.newTaskPriority))
-                }
+                TextField(placeholderText, text: $taskStore.newTaskTitle)
+                    .textFieldStyle(.plain)
+                    .font(.body)
+                    .onSubmit { addTask(openEditor: false) }
                 
-                compactMenu(help: "分类") {
-                    Picker("分类", selection: $taskStore.newTaskCategory) {
-                        ForEach(TaskCategory.allCases) { cat in
-                            Text(cat.rawValue).tag(cat)
+                HStack(spacing: 6) {
+                    compactMenu(help: "番茄") {
+                        Picker("预估番茄", selection: $taskStore.newTaskPomodoros) {
+                            ForEach(1...8, id: \.self) { n in
+                                Text("\(n) 番茄").tag(n)
+                            }
                         }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "timer")
+                            Text("\(taskStore.newTaskPomodoros)")
+                                .fontWeight(.bold)
+                        }
+                        .foregroundColor(AppTheme.accent)
                     }
-                } label: {
-                    Image(systemName: taskStore.newTaskCategory.icon)
-                        .foregroundColor(taskStore.newTaskCategory.color)
-                }
-                
-                Button(action: addTask) {
-                    Text("添加")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(
-                            Capsule().fill(
-                                taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                ? AppTheme.accent.opacity(0.35)
-                                : AppTheme.accent
+                    
+                    compactMenu(help: "优先级") {
+                        Picker("优先级", selection: $taskStore.newTaskPriority) {
+                            ForEach(1...4, id: \.self) { n in
+                                Text("\(n) 级").tag(n)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: priorityIcon(taskStore.newTaskPriority))
+                            .foregroundColor(priorityColor(taskStore.newTaskPriority))
+                    }
+                    
+                    compactMenu(help: "分类") {
+                        Picker("分类", selection: $taskStore.newTaskCategory) {
+                            ForEach(TaskCategory.allCases) { cat in
+                                Text(cat.rawValue).tag(cat)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: taskStore.newTaskCategory.icon)
+                            .foregroundColor(taskStore.newTaskCategory.color)
+                    }
+                    
+                    compactMenu(help: "重复") {
+                        Picker("重复", selection: $taskStore.newTaskRecurrence) {
+                            ForEach(TaskRecurrence.allCases) { r in
+                                Text(r.rawValue).tag(r)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: taskStore.newTaskRecurrence == .none ? "repeat" : "repeat.circle.fill")
+                            .foregroundColor(
+                                taskStore.newTaskRecurrence == .none
+                                ? AppTheme.secondaryText(for: colorScheme)
+                                : Color(hex: "#8B5CF6")
                             )
-                        )
+                    }
+                    
+                    Button(action: { addTask(openEditor: false) }) {
+                        Text("添加")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(
+                                Capsule().fill(
+                                    taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    ? AppTheme.accent.opacity(0.35)
+                                    : AppTheme.accent
+                                )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .help("回车添加")
+                    
+                    Button(action: { addTask(openEditor: true) }) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(AppTheme.accent)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(AppTheme.elevatedBackground(for: colorScheme))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .help("添加并编辑备注 / 链接")
                 }
-                .buttonStyle(.plain)
-                .disabled(taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
+            
+            // Due override chips — skip list default without opening the editor.
+            HStack(spacing: 6) {
+                Text("排期")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.8))
+                dueChip(title: "跟随列表", override: nil)
+                dueChip(title: "今天", override: .today)
+                dueChip(title: "明天", override: .tomorrow)
+                dueChip(title: "收集箱", override: .inbox)
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 4)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(SoftCardBackground(cornerRadius: 14, elevated: true))
+    }
+    
+    private func dueChip(title: String, override: TaskStore.DueOverride?) -> some View {
+        let selected = dueOverride == override
+        return Button {
+            withAnimation(.easeOut(duration: 0.12)) {
+                dueOverride = override
+            }
+        } label: {
+            Text(title)
+                .font(.caption2.weight(.bold))
+                .foregroundColor(selected ? .white : AppTheme.primaryText(for: colorScheme).opacity(0.8))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule().fill(selected ? AppTheme.accent : AppTheme.elevatedBackground(for: colorScheme))
+                )
+        }
+        .buttonStyle(.plain)
     }
     
     private func compactMenu<Label: View, Content: View>(
@@ -507,9 +587,12 @@ struct TaskListView: View {
         .help(help)
     }
     
-    private func addTask() {
+    private func addTask(openEditor: Bool) {
         guard !taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        taskStore.addTask(for: currentFilter)
+        guard let id = taskStore.addTask(for: currentFilter, dueOverride: dueOverride) else { return }
+        if openEditor, let task = taskStore.tasks.first(where: { $0.id == id }) {
+            editSession = EditTaskSession(task: task)
+        }
     }
     
     private var taskListSection: some View {
@@ -639,5 +722,49 @@ struct TaskListView: View {
         )
         .padding(.vertical, 28)
         .background(SoftCardBackground(cornerRadius: 18))
+    }
+}
+
+// MARK: - Undo toast
+
+private struct UndoDeletionToast: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let message: String
+    let onUndo: () -> Void
+    let onDismiss: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "trash")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            Text(message)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+            Spacer(minLength: 8)
+            Button("撤销", action: onUndo)
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.accent)
+                .controlSize(.small)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            }
+            .buttonStyle(.plain)
+            .help("关闭")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: 420)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AppTheme.cardBackground(for: colorScheme))
+                .shadow(color: AppTheme.softShadow(for: colorScheme), radius: 18, y: 8)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(AppTheme.separator(for: colorScheme), lineWidth: 1)
+        )
     }
 }

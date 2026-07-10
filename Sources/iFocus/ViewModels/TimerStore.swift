@@ -485,15 +485,13 @@ class TimerStore: ObservableObject {
     }
     
     private func loadPendingResumeIfNeeded() {
-        guard let snap = TimerSessionPersistence.load(from: sessionDirectory()),
-              snap.shouldOfferResume else {
-            // Stale clean or empty — drop file so we start fresh.
-            if let snap = TimerSessionPersistence.load(from: sessionDirectory()), snap.cleanExit {
-                TimerSessionPersistence.clear(in: sessionDirectory())
-            }
+        guard let snap = TimerSessionPersistence.load(from: sessionDirectory()) else { return }
+        if snap.shouldOfferResume {
+            pendingResumeSnapshot = snap
             return
         }
-        pendingResumeSnapshot = snap
+        // Idle / empty snapshot left on disk — drop so we start fresh.
+        TimerSessionPersistence.clear(in: sessionDirectory())
     }
     
     /// Build current session state for disk (always dirty while process is alive).
@@ -540,10 +538,10 @@ class TimerStore: ObservableObject {
         TimerSessionPersistence.clear(in: sessionDirectory())
     }
     
-    /// Call on clean process exit so next launch does not prompt.
+    /// Call on clean process exit. Mid-session state is kept so next launch can resume.
     func markCleanExit() {
         if isSessionInProgress {
-            // Persist remaining time but mark clean — user intentionally quit mid-session.
+            // Intentional quit mid-session — still recoverable (cleanExit flag for copy only).
             TimerSessionPersistence.save(makeSessionSnapshot(cleanExit: true), to: sessionDirectory())
         } else {
             clearSessionSnapshot()

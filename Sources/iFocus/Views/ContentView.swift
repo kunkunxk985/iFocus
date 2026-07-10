@@ -199,9 +199,7 @@ struct ContentView: View {
                 timerStore.discardPendingResume()
             }
             Button("稍后", role: .cancel) {
-                // Keep pending so user can still resume this launch via alert again if needed.
-                // Re-show only if they navigate away and back is awkward — leave pending in store
-                // until resume/discard; next launch will re-offer if still dirty.
+                // Keep pending — banner stays until resume / discard.
             }
         } message: {
             Text(resumeAlertMessage)
@@ -213,17 +211,18 @@ struct ContentView: View {
     
     private var resumeAlertMessage: String {
         guard let snap = timerStore.pendingResumeSnapshot else {
-            return "上次异常退出时有未完成的计时。"
+            return "有未完成的计时可以恢复。"
         }
         let modeName = snap.timerMode?.rawValue ?? "计时"
         let remaining = Int(snap.timeRemaining.rounded())
         let m = remaining / 60
         let s = remaining % 60
         let timePart = String(format: "%d:%02d", m, s)
+        let prefix = snap.resumeReasonLabel
         if let title = snap.workTaskTitle, !title.isEmpty, snap.timerMode == .work {
-            return "「\(title)」· \(modeName) 还剩 \(timePart)。恢复后处于暂停，可点继续。"
+            return "\(prefix)「\(title)」· \(modeName) 还剩 \(timePart)。恢复后处于暂停，可点继续。选「稍后」可在顶部横幅再处理。"
         }
-        return "\(modeName) 还剩 \(timePart)。恢复后处于暂停，可点继续。"
+        return "\(prefix)\(modeName) 还剩 \(timePart)。恢复后处于暂停。选「稍后」可在顶部横幅再处理。"
     }
     
     private var brandHeader: some View {
@@ -484,7 +483,7 @@ struct ContentView: View {
     }
 
     private var detailPane: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             Group {
                 switch viewState.selectedScreen {
                 case .timer:
@@ -513,13 +512,53 @@ struct ContentView: View {
             .id(viewState.selectedScreen)
             .animation(.easeInOut(duration: 0.22), value: viewState.selectedScreen)
 
+            // Top: recoverable session after quit / crash (survives "稍后").
+            if timerStore.pendingResumeSnapshot != nil {
+                VStack {
+                    PendingResumeBanner(
+                        message: resumeBannerShortMessage,
+                        onResume: {
+                            if timerStore.resumeFromPendingSnapshot() {
+                                viewState.selectedScreen = .timer
+                            }
+                        },
+                        onDiscard: {
+                            timerStore.discardPendingResume()
+                        }
+                    )
+                    Spacer(minLength: 0)
+                }
+                .padding(.top, AppTheme.detailTopInset - 12)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(12)
+            }
+            
+            // Bottom: leave-timer floating pill.
             if shouldShowFloatingPill {
-                FloatingFocusPill()
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(10)
+                VStack {
+                    Spacer(minLength: 0)
+                    FloatingFocusPill()
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(10)
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.82), value: shouldShowFloatingPill)
+        .animation(.spring(response: 0.35, dampingFraction: 0.82), value: timerStore.pendingResumeSnapshot != nil)
+    }
+    
+    private var resumeBannerShortMessage: String {
+        guard let snap = timerStore.pendingResumeSnapshot else { return "有未完成的专注会话" }
+        let modeName = snap.timerMode?.rawValue ?? "计时"
+        let remaining = Int(snap.timeRemaining.rounded())
+        let m = remaining / 60
+        let s = remaining % 60
+        let timePart = String(format: "%d:%02d", m, s)
+        let reason = snap.resumeReasonLabel
+        if let title = snap.workTaskTitle, !title.isEmpty, snap.timerMode == .work {
+            return "\(reason) · 「\(title)」还剩 \(timePart)"
+        }
+        return "\(reason) · \(modeName) 还剩 \(timePart)"
     }
     
     private var pageTransition: AnyTransition {
@@ -836,6 +875,52 @@ private struct FloatingFocusPill: View {
             return taskStore.activeTask?.title ?? "自由专注"
         }
         return timerStore.mode.rawValue
+    }
+}
+
+// MARK: - Pending session resume banner
+
+private struct PendingResumeBanner: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let message: String
+    let onResume: () -> Void
+    let onDiscard: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "arrow.counterclockwise.circle.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(AppTheme.accent)
+            
+            Text(message)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            Button("恢复", action: onResume)
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.accent)
+                .controlSize(.small)
+            
+            Button("丢弃", role: .destructive, action: onDiscard)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.97))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppTheme.accent.opacity(0.28), lineWidth: 1)
+                )
+                .shadow(color: AppTheme.softShadow(for: colorScheme), radius: 16, y: 6)
+        )
+        .padding(.horizontal, 28)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
     }
 }
 

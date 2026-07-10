@@ -46,6 +46,39 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertTrue(store.tasks.isEmpty)
     }
     
+    func testAddTaskDueOverrideAndRecurrence() {
+        let store = TaskStore(storageDirectory: tempDir)
+        store.newTaskTitle = "覆盖到明天"
+        store.newTaskRecurrence = .daily
+        let id = store.addTask(for: .inboxTask, dueOverride: .tomorrow)
+        XCTAssertNotNil(id)
+        let task = store.tasks[0]
+        XCTAssertNotNil(task.dueDate)
+        XCTAssertTrue(Calendar.current.isDateInTomorrow(task.dueDate!))
+        XCTAssertEqual(task.recurrence, .daily)
+        // Composer recurrence resets after add.
+        XCTAssertEqual(store.newTaskRecurrence, .none)
+    }
+    
+    func testDeleteTasksCanUndo() {
+        let store = TaskStore(storageDirectory: tempDir)
+        store.newTaskTitle = "可撤销"
+        store.addTask(for: .todayTask)
+        let id = store.tasks[0].id
+        store.activeTaskId = id
+        
+        store.deleteTask(store.tasks[0])
+        XCTAssertTrue(store.tasks.isEmpty)
+        XCTAssertNil(store.activeTaskId)
+        XCTAssertNotNil(store.undoDeletionBanner)
+        
+        XCTAssertTrue(store.undoLastDeletion())
+        XCTAssertEqual(store.tasks.count, 1)
+        XCTAssertEqual(store.tasks[0].id, id)
+        XCTAssertEqual(store.activeTaskId, id)
+        XCTAssertNil(store.undoDeletionBanner)
+    }
+    
     func testUpdateTask() {
         let store = TaskStore(storageDirectory: tempDir)
         store.newTaskTitle = "旧标题"

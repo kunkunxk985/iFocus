@@ -240,7 +240,8 @@ final class TimerStoreTests: XCTestCase {
         XCTAssertEqual(timer2.mode, .work)
     }
     
-    func testCleanExitDoesNotOfferResume() {
+    func testCleanExitStillOffersResume() {
+        // Intentional quit mid-session should still be recoverable next launch.
         let (_, _, timer) = makeStores()
         timer.start()
         timer.pause()
@@ -253,7 +254,9 @@ final class TimerStoreTests: XCTestCase {
             taskStore: tasks2,
             sessionStorageDirectory: tempDir
         )
-        XCTAssertNil(timer2.pendingResumeSnapshot)
+        XCTAssertNotNil(timer2.pendingResumeSnapshot)
+        XCTAssertTrue(timer2.pendingResumeSnapshot?.cleanExit == true)
+        XCTAssertTrue(timer2.pendingResumeSnapshot?.shouldOfferResume == true)
     }
     
     func testDiscardPendingResumeClearsFile() {

@@ -19,9 +19,14 @@ struct TimerSessionSnapshot: Codable, Equatable {
         sessionPlannedDuration != nil || elapsedBeforePause > 0.5
     }
     
-    /// True when the previous process likely crashed / force-quit mid-session.
+    /// Offer resume after crash **or** intentional quit mid-session.
+    /// (`cleanExit` is retained for analytics copy; both paths are recoverable.)
     var shouldOfferResume: Bool {
-        !cleanExit && hasResumableSession
+        hasResumableSession
+    }
+    
+    var resumeReasonLabel: String {
+        cleanExit ? "上次退出时" : "上次异常退出时"
     }
     
     var timerMode: TimerMode? {

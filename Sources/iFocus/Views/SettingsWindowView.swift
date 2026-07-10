@@ -635,12 +635,12 @@ enum AppWindowMetrics {
 }
 
 enum AppVersion {
-    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.10 / 70).
+    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.11 / 71).
     static var short: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.10"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.11"
     }
     static var build: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "70"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "71"
     }
 }
 

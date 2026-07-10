@@ -180,6 +180,10 @@ class TaskStore: ObservableObject {
     private var saveTasksWorkItem: DispatchWorkItem?
     private var saveSessionsWorkItem: DispatchWorkItem?
     private var saveStateWorkItem: DispatchWorkItem?
+    private var undoDeletionWorkItem: DispatchWorkItem?
+    /// Tasks removed by the latest delete — restored by `undoLastDeletion()`.
+    private var pendingDeletedTasks: [FocusTask] = []
+    private var pendingDeletedActiveTaskId: UUID?
     
     @Published var tasks: [FocusTask] = [] {
         didSet {
@@ -198,11 +202,28 @@ class TaskStore: ObservableObject {
     @Published var newTaskCategory: TaskCategory = .study
     @Published var newTaskPriority: Int = 2
     @Published var newTaskPomodoros: Int = 1
+    /// Optional recurrence applied on next quick-add (reset after add).
+    @Published var newTaskRecurrence: TaskRecurrence = .none
     @Published var activeTaskId: UUID? = nil {
         didSet {
             guard !isLoadingFromDisk, oldValue != activeTaskId else { return }
             scheduleSaveState()
         }
+    }
+    
+    /// Toast payload after delete — UI shows 「撤销」 until dismissed / expired.
+    @Published private(set) var undoDeletionBanner: UndoDeletionBanner?
+    
+    struct UndoDeletionBanner: Equatable {
+        let token: UUID
+        let message: String
+    }
+    
+    /// Override due date when quick-adding (nil = follow list filter defaults).
+    enum DueOverride: Equatable {
+        case today
+        case tomorrow
+        case inbox
     }
     
     var activeTask: FocusTask? {
@@ -289,41 +310,55 @@ class TaskStore: ObservableObject {
         }
     }
     
-    func addTask(for filter: TaskFilter) {
+    /// Add a task for the given list. Returns the new id, or nil if title blank.
+    @discardableResult
+    func addTask(for filter: TaskFilter, dueOverride: DueOverride? = nil) -> UUID? {
         let trimmedTitle = newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTitle.isEmpty else { return }
+        guard !trimmedTitle.isEmpty else { return nil }
         
         let category = newTaskCategory
-        var dueDate: Date? = nil
         let today = Calendar.current.startOfDay(for: Date())
         let dayAfterTomorrow = Calendar.current.date(byAdding: .day, value: 2, to: today)
         
-        switch filter {
-        case .todayTask:
-            dueDate = today
-        case .tomorrowTask:
-            dueDate = Calendar.current.date(byAdding: .day, value: 1, to: today)
-        case .weekTask:
-            dueDate = dayAfterTomorrow
-        case .plannedTask:
-            dueDate = today
-        case .inboxTask:
-            dueDate = nil
-        case .completedTask:
-            break
+        let dueDate: Date?
+        if let dueOverride {
+            switch dueOverride {
+            case .today: dueDate = today
+            case .tomorrow: dueDate = Calendar.current.date(byAdding: .day, value: 1, to: today)
+            case .inbox: dueDate = nil
+            }
+        } else {
+            switch filter {
+            case .todayTask:
+                dueDate = today
+            case .tomorrowTask:
+                dueDate = Calendar.current.date(byAdding: .day, value: 1, to: today)
+            case .weekTask:
+                dueDate = dayAfterTomorrow
+            case .plannedTask:
+                dueDate = today
+            case .inboxTask:
+                dueDate = nil
+            case .completedTask:
+                dueDate = nil
+            }
         }
         
         let nextIndex = (tasks.map(\.sortIndex).max() ?? -1) + 1
+        let recurrence = newTaskRecurrence
         let task = FocusTask(
             title: trimmedTitle,
             category: category,
             priority: min(4, max(1, newTaskPriority)),
             estimatedPomodoros: min(20, max(1, newTaskPomodoros)),
             dueDate: dueDate,
-            sortIndex: nextIndex
+            sortIndex: nextIndex,
+            recurrence: recurrence
         )
         tasks.append(task)
         newTaskTitle = ""
+        newTaskRecurrence = .none
+        return task.id
     }
     
     func toggleCompletion(for task: FocusTask) {
@@ -646,17 +681,69 @@ class TaskStore: ObservableObject {
     }
     
     func deleteTasks(ids: Set<UUID>) {
+        let removed = tasks.filter { ids.contains($0.id) }
+        guard !removed.isEmpty else { return }
+        // Stash for undo before mutating.
+        pendingDeletedTasks = removed
+        pendingDeletedActiveTaskId = activeTaskId
         tasks.removeAll { ids.contains($0.id) }
         if let active = activeTaskId, ids.contains(active) {
             activeTaskId = nil
         }
+        presentUndoDeletionBanner(count: removed.count)
     }
     
     func deleteTask(_ task: FocusTask) {
-        tasks.removeAll { $0.id == task.id }
-        if activeTaskId == task.id {
-            activeTaskId = nil
+        deleteTasks(ids: [task.id])
+    }
+    
+    /// Restore the last soft-deleted batch (if still within the undo window).
+    @discardableResult
+    func undoLastDeletion() -> Bool {
+        guard !pendingDeletedTasks.isEmpty else { return false }
+        let restore = pendingDeletedTasks
+        let priorActive = pendingDeletedActiveTaskId
+        pendingDeletedTasks = []
+        pendingDeletedActiveTaskId = nil
+        undoDeletionWorkItem?.cancel()
+        undoDeletionWorkItem = nil
+        undoDeletionBanner = nil
+        
+        // Avoid id collisions if something was re-created (rare).
+        let existing = Set(tasks.map(\.id))
+        let toInsert = restore.filter { !existing.contains($0.id) }
+        tasks.append(contentsOf: toInsert)
+        if let priorActive, tasks.contains(where: { $0.id == priorActive }) {
+            activeTaskId = priorActive
         }
+        return !toInsert.isEmpty
+    }
+    
+    func dismissUndoDeletionBanner() {
+        // Expire undo window without restoring.
+        pendingDeletedTasks = []
+        pendingDeletedActiveTaskId = nil
+        undoDeletionWorkItem?.cancel()
+        undoDeletionWorkItem = nil
+        undoDeletionBanner = nil
+    }
+    
+    private func presentUndoDeletionBanner(count: Int) {
+        let token = UUID()
+        let message = count == 1 ? "已删除 1 项任务" : "已删除 \(count) 项任务"
+        undoDeletionBanner = UndoDeletionBanner(token: token, message: message)
+        undoDeletionWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            // Only clear if this is still the same banner generation.
+            if self.undoDeletionBanner?.token == token {
+                self.pendingDeletedTasks = []
+                self.pendingDeletedActiveTaskId = nil
+                self.undoDeletionBanner = nil
+            }
+        }
+        undoDeletionWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6.5, execute: work)
     }
     
     func togglePin(for task: FocusTask) {
