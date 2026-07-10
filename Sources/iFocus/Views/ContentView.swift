@@ -332,48 +332,52 @@ struct ContentView: View {
         }
     }
     
+    private func toggleSidebarCollapsed() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            sidebarCollapsed.toggle()
+            WindowLayoutStore.isSidebarCollapsed = sidebarCollapsed
+        }
+        // Re-center traffic lights for the new rail width after the width animates.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            WindowChrome.layoutMainWindowTrafficLights()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            WindowChrome.layoutMainWindowTrafficLights()
+        }
+    }
+    
+    /// Final chrome: chevron rail control (not dual-pane SF Symbol).
+    /// Collapsed → › expand; expanded → ‹ 收起侧栏.
     private var sidebarCollapseButton: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                sidebarCollapsed.toggle()
-                WindowLayoutStore.isSidebarCollapsed = sidebarCollapsed
-            }
-            // Re-center traffic lights for the new rail width after the width animates.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                WindowChrome.layoutMainWindowTrafficLights()
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                WindowChrome.layoutMainWindowTrafficLights()
-            }
-        } label: {
+        Button(action: toggleSidebarCollapsed) {
             if sidebarCollapsed {
-                // Chevron = “push rail open” — clearer than the dual-pane SF Symbol.
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                    .frame(width: 28, height: 28)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.9))
+                    .frame(width: 30, height: 30)
                     .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
                             .fill(AppTheme.elevatedBackground(for: colorScheme))
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
                             .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
                     )
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 6)
             } else {
                 HStack(spacing: 8) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 10, weight: .bold))
                     Text("收起侧栏")
                         .font(.caption.weight(.semibold))
-                    Spacer()
+                    Spacer(minLength: 0)
                 }
                 .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
         }
         .buttonStyle(SoftScaleButtonStyle())
@@ -568,39 +572,57 @@ struct ContentView: View {
                     .frame(height: 1)
                     .opacity(0.45)
 
-                HStack(spacing: 10) {
+                if sidebarCollapsed {
+                    // Avatar only — keeps rail clean under the › expand chip.
                     UnifiedAvatarView(
                         path: settings.avatarPath,
                         colorIndex: settings.avatarColorIndex,
                         username: settings.username.isEmpty ? "小番茄" : settings.username,
-                        size: 34
+                        size: 30
                     )
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        Circle()
+                            .fill(isAccountMenuPresented
+                                  ? AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.16)
+                                  : Color.clear)
+                            .frame(width: 40, height: 40)
+                    )
+                } else {
+                    HStack(spacing: 10) {
+                        UnifiedAvatarView(
+                            path: settings.avatarPath,
+                            colorIndex: settings.avatarColorIndex,
+                            username: settings.username.isEmpty ? "小番茄" : settings.username,
+                            size: 34
+                        )
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(settings.username.isEmpty ? "小番茄" : settings.username)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                            .lineLimit(1)
-                        // Leaf clock — must not live on ContentView root.
-                        SidebarAccountStatusLine()
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(settings.username.isEmpty ? "小番茄" : settings.username)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                                .lineLimit(1)
+                            // Leaf clock — must not live on ContentView root.
+                            SidebarAccountStatusLine()
+                        }
+                        .layoutPriority(1)
+
+                        Spacer(minLength: 4)
                     }
-                    .layoutPriority(1)
-
-                    Spacer(minLength: 4)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(isAccountMenuPresented
+                                  ? AppTheme.accent.opacity(colorScheme == .light ? 0.07 : 0.12)
+                                  : Color.clear)
+                    )
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(
-                    // Subtle press-in highlight when menu is open (replaces the lone chevron)
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(isAccountMenuPresented
-                              ? AppTheme.accent.opacity(colorScheme == .light ? 0.07 : 0.12)
-                              : Color.clear)
-                )
-                .padding(.horizontal, 6)
-                .padding(.vertical, 4)
-                .contentShape(Rectangle())
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(isAccountMenuPresented ? "关闭菜单" : "账号与设置")
