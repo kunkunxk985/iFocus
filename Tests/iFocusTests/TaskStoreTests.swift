@@ -133,6 +133,29 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertEqual(store.tasks[0].title, "保留")
     }
     
+    func testRapidDoubleDeleteUndoRestoresBoth() {
+        let store = TaskStore(storageDirectory: tempDir)
+        store.newTaskTitle = "A"
+        store.addTask(for: .inboxTask)
+        store.newTaskTitle = "B"
+        store.addTask(for: .inboxTask)
+        store.deleteTask(store.tasks[0])
+        store.deleteTask(store.tasks[0])
+        XCTAssertTrue(store.tasks.isEmpty)
+        XCTAssertTrue(store.undoLastDeletion())
+        XCTAssertEqual(store.tasks.count, 2)
+    }
+    
+    func testCorruptLoadDoesNotOverwriteFile() throws {
+        let url = tempDir.appendingPathComponent("tasks.json")
+        try "NOT_JSON".write(to: url, atomically: true, encoding: .utf8)
+        let store = TaskStore(storageDirectory: tempDir)
+        XCTAssertNotNil(store.dataLoadErrorMessage)
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "NOT_JSON")
+        store.acknowledgeCorruptLoadAndStartFresh()
+        XCTAssertNil(store.dataLoadErrorMessage)
+    }
+    
     func testDeleteTaskByValue() {
         let store = TaskStore(storageDirectory: tempDir)
         store.newTaskTitle = "A"
