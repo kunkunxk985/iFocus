@@ -16,8 +16,12 @@ struct TaskRowView: View {
     let onToggleTimer: () -> Void
     let onStartFocus: () -> Void
     
+    @EnvironmentObject private var settings: SettingsStore
+    
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        let density = settings.uiDensity
+        let completedFade = task.isCompleted
+        HStack(alignment: .center, spacing: 10 * density.scale) {
             if isSelecting {
                 Button {
                     onToggleSelect?()
@@ -31,7 +35,7 @@ struct TaskRowView: View {
                 Button { taskStore.toggleCompletion(for: task) } label: {
                     Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 20, weight: .regular))
-                        .foregroundColor(task.isCompleted ? Color(hex: "#10B981") : AppTheme.secondaryText(for: colorScheme).opacity(0.55))
+                        .foregroundColor(task.isCompleted ? Color(hex: "#10B981") : AppTheme.secondaryText(for: colorScheme).opacity(0.45))
                 }
                 .buttonStyle(.plain)
                 .help(task.isCompleted ? "标为未完成" : "标为完成")
@@ -41,7 +45,7 @@ struct TaskRowView: View {
                         Image(systemName: focusButtonIcon)
                             .font(.system(size: 11, weight: .bold))
                             .foregroundColor(isActive ? .white : AppTheme.primaryText(for: colorScheme))
-                            .frame(width: 28, height: 28)
+                            .frame(width: 26 * density.scale, height: 26 * density.scale)
                             .background(
                                 Circle().fill(
                                     isActive
@@ -61,95 +65,85 @@ struct TaskRowView: View {
                 }
             }
             
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: density == .compact ? 3 : 5) {
+                // Primary line: title + only critical badges
+                HStack(spacing: 6) {
                     if task.isPinned {
                         Image(systemName: "pin.fill")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(AppTheme.accent)
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(AppTheme.accent.opacity(0.9))
                             .help("已置顶")
                     }
                     
                     Text(task.title)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(task.isCompleted
-                                         ? AppTheme.secondaryText(for: colorScheme)
+                        .font(.system(size: density == .compact ? 14 : 15.5, weight: .semibold))
+                        .foregroundColor(completedFade
+                                         ? AppTheme.secondaryText(for: colorScheme).opacity(0.72)
                                          : AppTheme.primaryText(for: colorScheme))
-                        .strikethrough(task.isCompleted, color: AppTheme.secondaryText(for: colorScheme))
+                        .strikethrough(task.isCompleted, color: AppTheme.secondaryText(for: colorScheme).opacity(0.5))
                         .lineLimit(2)
                     
-                    if isActive {
-                        Text(isRunning ? "专注中" : "当前")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(AppTheme.accent)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(AppTheme.accent.opacity(0.12)))
+                    if isActive && !completedFade {
+                        statusPill(isRunning ? "专注中" : "当前", color: AppTheme.accent)
                     }
                     
                     if task.isOverdue && !task.isCompleted {
-                        Text("逾期")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(Color(hex: "#EF4444"))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color(hex: "#EF4444").opacity(0.12)))
+                        statusPill("逾期", color: Color(hex: "#EF4444"))
                     }
                     
-                    if task.recurrence != .none {
-                        Text(task.recurrence.rawValue)
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(Color(hex: "#8B5CF6"))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color(hex: "#8B5CF6").opacity(0.12)))
-                    }
+                    Spacer(minLength: 0)
                 }
                 
-                HStack(spacing: 8) {
+                // Secondary line: quieter meta
+                HStack(spacing: 6) {
                     pomodoroProgress
                     
-                    metaChip(task.category.rawValue, color: task.category.color)
+                    metaChip(task.category.rawValue, color: task.category.color.opacity(completedFade ? 0.55 : 0.85))
+                    
+                    if task.recurrence != .none {
+                        metaChip(task.recurrence.rawValue, color: Color(hex: "#8B5CF6").opacity(0.75))
+                    }
                     
                     if let due = task.dueDate {
                         Text(dueLabel(for: due))
-                            .font(.caption2.weight(.medium))
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundColor(
                                 task.isOverdue && !task.isCompleted
-                                ? Color(hex: "#EF4444")
-                                : AppTheme.secondaryText(for: colorScheme)
+                                ? Color(hex: "#EF4444").opacity(0.9)
+                                : AppTheme.secondaryText(for: colorScheme).opacity(0.75)
                             )
                     }
                     
                     Spacer(minLength: 0)
                     
-                    if !task.isCompleted {
+                    if !task.isCompleted && !isSelecting {
                         Button {
                             taskStore.togglePin(for: task)
                         } label: {
                             Image(systemName: task.isPinned ? "pin.fill" : "pin")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(task.isPinned ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme).opacity(0.45))
-                                .frame(width: 24, height: 24)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(task.isPinned ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme).opacity(0.35))
+                                .frame(width: 22, height: 22)
                         }
                         .buttonStyle(.plain)
                         .help(task.isPinned ? "取消置顶" : "置顶")
+                        
+                        Button(action: onEdit) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.4))
+                                .frame(width: 22, height: 22)
+                        }
+                        .buttonStyle(.plain)
+                        .help("编辑（也可双击）")
                     }
-                    
-                    Button(action: onEdit) {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.55))
-                            .frame(width: 24, height: 24)
-                    }
-                    .buttonStyle(.plain)
-                    .help("编辑（也可双击）")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .opacity(completedFade ? 0.78 : 1)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, density == .compact ? 12 : 14)
+        .padding(.vertical, density.rowVerticalPadding)
         .background(rowBackground)
         .contentShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadiusRow, style: .continuous))
         .onTapGesture(count: 2) {
@@ -162,13 +156,22 @@ struct TaskRowView: View {
         .opacity(isSelecting && !isSelected ? 0.85 : 1)
     }
     
-    private func metaChip(_ text: String, color: Color) -> some View {
+    private func statusPill(_ text: String, color: Color) -> some View {
         Text(text)
-            .font(.caption2.weight(.semibold))
+            .font(.system(size: 9, weight: .bold))
             .foregroundColor(color)
-            .padding(.horizontal, 7)
+            .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .background(Capsule().fill(color.opacity(0.12)))
+    }
+    
+    private func metaChip(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .medium))
+            .foregroundColor(color.opacity(0.9))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(color.opacity(0.08)))
     }
     
     private var focusButtonIcon: String {

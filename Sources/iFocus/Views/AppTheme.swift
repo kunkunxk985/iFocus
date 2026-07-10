@@ -68,6 +68,56 @@ enum MenuBarDisplayStyle: String, CaseIterable, Identifiable {
     }
 }
 
+enum UIDensity: String, CaseIterable, Identifiable {
+    case comfortable
+    case compact
+    
+    var id: String { rawValue }
+    
+    var label: String {
+        switch self {
+        case .comfortable: return "舒适"
+        case .compact: return "紧凑"
+        }
+    }
+    
+    /// Multiplier for paddings / fonts that opt in.
+    var scale: CGFloat {
+        switch self {
+        case .comfortable: return 1.0
+        case .compact: return 0.88
+        }
+    }
+    
+    var sectionSpacing: CGFloat {
+        switch self {
+        case .comfortable: return 16
+        case .compact: return 10
+        }
+    }
+    
+    var cardPadding: CGFloat {
+        switch self {
+        case .comfortable: return 16
+        case .compact: return 12
+        }
+    }
+    
+    var rowVerticalPadding: CGFloat {
+        switch self {
+        case .comfortable: return 12
+        case .compact: return 8
+        }
+    }
+    
+    var titleFontSize: CGFloat {
+        switch self {
+        case .comfortable: return 28
+        case .compact: return 24
+        }
+    }
+}
+
 // MARK: - Theme
 enum AppTheme {
     private static let accentDefaultsKey = "accentPreset"
@@ -303,18 +353,20 @@ struct AppEmptyState: View {
 
 struct PageTitle: View {
     @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var settings: SettingsStore
     let title: String
     var subtitle: String? = nil
     var systemImage: String? = nil
     var tint: Color = AppTheme.accent
     
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
+        let density = settings.uiDensity
+        HStack(alignment: .center, spacing: 14 * density.scale) {
             if let systemImage {
                 Image(systemName: systemImage)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 18 * density.scale, weight: .semibold))
                     .foregroundColor(tint)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 40 * density.scale, height: 40 * density.scale)
                     .background(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .fill(tint.opacity(0.12))
@@ -322,11 +374,11 @@ struct PageTitle: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(.system(size: density.titleFontSize, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.subheadline)
+                        .font(density == .compact ? .caption : .subheadline)
                         .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                 }
             }

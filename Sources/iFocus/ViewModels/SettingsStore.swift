@@ -74,6 +74,8 @@ class SettingsStore: ObservableObject {
         static let pauseReminderMinutes = "pauseReminderMinutes"
         static let accentPreset = "accentPreset"
         static let menuBarDisplayStyle = "menuBarDisplayStyle"
+        static let uiDensity = "uiDensity"
+        static let dockBounceOnComplete = "dockBounceOnComplete"
     }
     
     private let defaults: UserDefaults
@@ -197,6 +199,15 @@ class SettingsStore: ObservableObject {
     
     @Published var menuBarDisplayStyle: MenuBarDisplayStyle {
         didSet { defaults.set(menuBarDisplayStyle.rawValue, forKey: Key.menuBarDisplayStyle) }
+    }
+    
+    @Published var uiDensity: UIDensity {
+        didSet { defaults.set(uiDensity.rawValue, forKey: Key.uiDensity) }
+    }
+    
+    /// Bounce Dock icon once when a timer segment completes.
+    @Published var dockBounceOnComplete: Bool {
+        didSet { defaults.set(dockBounceOnComplete, forKey: Key.dockBounceOnComplete) }
     }
     
     /// Reflect OS login-item state in the toggle (read-only sync).
@@ -332,6 +343,9 @@ class SettingsStore: ObservableObject {
         defaults.set(resolvedAccent.rawValue, forKey: "accentPreset")
         let menuStyleRaw = defaults.string(forKey: Key.menuBarDisplayStyle) ?? MenuBarDisplayStyle.iconTime.rawValue
         self.menuBarDisplayStyle = MenuBarDisplayStyle(rawValue: menuStyleRaw) ?? .iconTime
+        let densityRaw = defaults.string(forKey: Key.uiDensity) ?? UIDensity.comfortable.rawValue
+        self.uiDensity = UIDensity(rawValue: densityRaw) ?? .comfortable
+        self.dockBounceOnComplete = defaults.object(forKey: Key.dockBounceOnComplete) as? Bool ?? true
         
         // Drop legacy keys that used to persist transient UI/runtime state.
         defaults.removeObject(forKey: "isLocked")

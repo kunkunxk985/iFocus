@@ -21,6 +21,8 @@ struct AnalyticsView: View {
     /// Local only — do not put clock ticks on ContentView.
     @State private var clockVersion: UInt = 0
     @State private var range: AnalyticsRange = .days7
+    @AppStorage("analyticsShowInsights") private var showInsights = true
+    @AppStorage("analyticsShowRecent") private var showRecent = true
 
     // MARK: - Derived metrics
 
@@ -173,7 +175,8 @@ struct AnalyticsView: View {
             let recentMinHeight = min(160, max(104, contentH * 0.14))
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                let density = settings.uiDensity
+                VStack(alignment: .leading, spacing: density.sectionSpacing) {
                     HStack(alignment: .top) {
                         PageTitle(
                             title: "数据统计",
@@ -209,13 +212,13 @@ struct AnalyticsView: View {
                         weeklyCard
                             .frame(maxWidth: .infinity)
                     }
-                    .frame(height: primaryRowHeight)
+                    .frame(height: primaryRowHeight * density.scale)
                     
                     if range == .today {
                         todayTimelineCard
-                            .frame(height: min(200, max(140, contentH * 0.18)))
+                            .frame(height: min(200, max(140, contentH * 0.18)) * density.scale)
                         todayHourCard
-                            .frame(height: min(160, max(120, contentH * 0.14)))
+                            .frame(height: min(160, max(120, contentH * 0.14)) * density.scale)
                     }
 
                     HStack(alignment: .top, spacing: 16) {
@@ -223,19 +226,33 @@ struct AnalyticsView: View {
                             .frame(maxWidth: contentW * 0.34)
                         freeFocusCard
                             .frame(maxWidth: contentW * 0.28)
-                        insightsCard
-                            .frame(maxWidth: .infinity)
+                        collapsibleAnalyticsCard(
+                            title: "智能建议",
+                            icon: "lightbulb.fill",
+                            isExpanded: $showInsights
+                        ) {
+                            insightsCardBody
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    .frame(height: secondaryRowHeight)
+                    .frame(minHeight: secondaryRowHeight * 0.55 * density.scale)
 
-                    recentSessionsCard
-                        .frame(minHeight: recentMinHeight)
-                        .padding(.bottom, 28)
+                    collapsibleAnalyticsCard(
+                        title: "最近专注记录",
+                        icon: "clock.arrow.circlepath",
+                        isExpanded: $showRecent
+                    ) {
+                        recentSessionsBody
+                    }
+                    .frame(minHeight: showRecent ? recentMinHeight * density.scale : 44)
+                    .padding(.bottom, 28)
                 }
                 .frame(width: contentW, alignment: .topLeading)
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, pad)
+                .padding(.horizontal, pad * density.scale)
                 .padding(.top, topInset)
+                .animation(.easeInOut(duration: 0.2), value: showInsights)
+                .animation(.easeInOut(duration: 0.2), value: showRecent)
             }
             .softScroll()
             .frame(width: geo.size.width, height: contentH + topInset, alignment: .top)
@@ -523,21 +540,19 @@ struct AnalyticsView: View {
         }
     }
 
-    private var insightsCard: some View {
-        AnalyticsCard(title: "智能建议", icon: "lightbulb.fill") {
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(Array(insights.enumerated()), id: \.offset) { _, text in
-                    TipRow(text: text)
-                }
-                Spacer(minLength: 0)
+    private var insightsCardBody: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(insights.enumerated()), id: \.offset) { _, text in
+                TipRow(text: text)
             }
+            Spacer(minLength: 0)
         }
     }
 
     // MARK: - Recent
 
-    private var recentSessionsCard: some View {
-        AnalyticsCard(title: "最近专注记录", icon: "clock.arrow.circlepath") {
+    private var recentSessionsBody: some View {
+        Group {
             if recentSessions.isEmpty {
                 EmptyStateView(systemImage: "tray", title: "暂无专注记录")
                     .frame(maxWidth: .infinity)
@@ -553,6 +568,44 @@ struct AnalyticsView: View {
                 }
             }
         }
+    }
+    
+    private func collapsibleAnalyticsCard<Content: View>(
+        title: String,
+        icon: String,
+        isExpanded: Binding<Bool>,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.wrappedValue.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(AppTheme.accent)
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                    Spacer()
+                    Image(systemName: isExpanded.wrappedValue ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            
+            if isExpanded.wrappedValue {
+                content()
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(settings.uiDensity.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(SoftCardBackground(cornerRadius: 16))
     }
 
     private func sessionRow(_ session: FocusSession) -> some View {

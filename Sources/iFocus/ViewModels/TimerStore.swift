@@ -592,7 +592,7 @@ class TimerStore: ObservableObject {
             completedPomodorosToday: completedPomodoros,
             dailyGoal: settings.dailyGoal
         )
-        playSound()
+        playCompletionRitual()
         sendNotification(
             completed: previousMode,
             next: nextMode,
@@ -623,9 +623,17 @@ class TimerStore: ObservableObject {
         emitClockTick()
     }
     
-    private func playSound() {
-        guard settings.soundEnabled else { return }
-        NSSound(named: settings.soundName)?.play()
+    /// Sound + optional Dock bounce when a segment finishes.
+    private func playCompletionRitual() {
+        if settings.soundEnabled {
+            NSSound(named: settings.soundName)?.play()
+        }
+        if settings.dockBounceOnComplete {
+            DispatchQueue.main.async {
+                // Single bounce; clears when user activates the app.
+                NSApp.requestUserAttention(.informationalRequest)
+            }
+        }
     }
     
     func requestNotificationPermission() {

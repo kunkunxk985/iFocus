@@ -14,6 +14,7 @@ struct TimerView: View {
     @State private var showResetConfirm = false
     @State private var showFocusModeHint = false
     @State private var celebratePulse = false
+    @AppStorage("timerImmersiveMode") private var immersiveMode = false
     
     private var modeColor: Color {
         // Prefer product accent for work; keep break colors distinct.
@@ -22,6 +23,8 @@ struct TimerView: View {
         case .shortBreak, .longBreak: return timerStore.mode.accent
         }
     }
+    
+    private var density: UIDensity { settings.uiDensity }
     
     private var longBreakProgress: (done: Int, total: Int) {
         let until = timerStore.workSessionsUntilLongBreak
@@ -68,34 +71,77 @@ struct TimerView: View {
                 ? 1
                 : min(1.5, max(1, min(w / 1200, h / 820)))
             
+            let d = density.scale
             // Reserve vertical space for fixed chrome so the ring absorbs the rest.
             let reserved: CGFloat =
                 topChrome
-                + (compact ? 8 : 14)   // after top chrome
-                + (compact ? 64 : 78)  // status + goal
-                + (compact ? 14 : 18)  // gap
-                + (compact ? 68 : 78)  // task block
-                + (compact ? 10 : 14)  // gap
-                + (compact ? 56 : 72)  // mode chips
-                + (compact ? 10 : 14)  // gap
-                + (compact ? 72 : 88)  // controls
-                + (compact ? 20 : 28)  // hint + bottom
+                + (compact ? 8 : 14) * d
+                + (immersiveMode ? 36 : (compact ? 64 : 78)) * d  // status (+ goal when not immersive)
+                + (immersiveMode ? 0 : (compact ? 14 : 18) * d)
+                + (immersiveMode ? 0 : (compact ? 68 : 78) * d)  // task block
+                + (immersiveMode ? 0 : (compact ? 10 : 14) * d)
+                + (immersiveMode ? 0 : (compact ? 56 : 72) * d)  // mode chips
+                + (compact ? 10 : 14) * d
+                + (compact ? 72 : 88) * d  // controls
+                + (compact ? 20 : 28) * d
             
             let ringBudget = max(160, h - reserved)
             let ringSize = min(
-                compact ? 240 : 300 * stageScale,
-                min(ringBudget, w * 0.48)
+                (compact ? 240 : 300 * stageScale) * (immersiveMode ? 1.12 : 1),
+                min(ringBudget, w * (immersiveMode ? 0.55 : 0.48))
             )
             
             ZStack {
                 ambientBackground
                 
-                VStack(spacing: compact ? 12 : 16) {
-                    topMeta(compact: compact, scale: stageScale)
-                        .padding(.top, topChrome + (compact ? 6 : 10))
+                VStack(spacing: (compact ? 12 : 16) * d) {
+                    HStack {
+                        Spacer()
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.22)) {
+                                immersiveMode.toggle()
+                            }
+                        } label: {
+                            Label(
+                                immersiveMode ? "退出沉浸" : "沉浸模式",
+                                systemImage: immersiveMode ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
+                            )
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule().fill(AppTheme.cardBackground(for: colorScheme).opacity(0.75))
+                                    .overlay(Capsule().stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1))
+                            )
+                        }
+                        .buttonStyle(SoftScaleButtonStyle())
+                        .help(immersiveMode ? "显示任务与模式" : "只保留环与控制")
+                    }
+                    .padding(.top, topChrome + (compact ? 4 : 6))
                     
-                    taskFocusBlock(compact: compact)
-                        .frame(maxWidth: min(480 * stageScale, w - 40))
+                    if !immersiveMode {
+                        topMeta(compact: compact, scale: stageScale)
+                        
+                        taskFocusBlock(compact: compact)
+                            .frame(maxWidth: min(480 * stageScale, w - 40))
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    } else {
+                        // Minimal status pill only
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(timerStore.isRunning ? modeColor : AppTheme.secondaryText(for: colorScheme).opacity(0.35))
+                                .frame(width: 7, height: 7)
+                            Text(statusLabel)
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .foregroundColor(timerStore.isRunning ? modeColor : AppTheme.secondaryText(for: colorScheme))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule().fill(AppTheme.cardBackground(for: colorScheme).opacity(0.7))
+                        )
+                    }
                     
                     Spacer(minLength: 4)
                     
@@ -105,16 +151,24 @@ struct TimerView: View {
                     
                     Spacer(minLength: 4)
                     
-                    modeSwitcher(compact: compact)
-                        .frame(maxWidth: min(400 * stageScale, w - 48))
+                    if !immersiveMode {
+                        modeSwitcher(compact: compact)
+                            .frame(maxWidth: min(400 * stageScale, w - 48))
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    }
                     
                     controlButtons(compact: compact, scale: stageScale)
                     
-                    sessionHint
-                        .padding(.bottom, compact ? 12 : 18)
+                    if !immersiveMode {
+                        sessionHint
+                            .padding(.bottom, compact ? 12 : 18)
+                    } else {
+                        Color.clear.frame(height: compact ? 12 : 18)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.horizontal, compact ? 20 : 28)
+                .padding(.horizontal, (compact ? 20 : 28) * d)
+                .animation(.easeInOut(duration: 0.22), value: immersiveMode)
             }
             .frame(width: w, height: h)
         }

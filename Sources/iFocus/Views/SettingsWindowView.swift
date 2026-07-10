@@ -370,6 +370,19 @@ struct SettingsWindowView: View {
                     .font(.caption)
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
+            
+            settingsCard("显示密度", icon: "rectangle.compress.vertical") {
+                Picker("", selection: $settings.uiDensity) {
+                    ForEach(UIDensity.allCases) { d in
+                        Text(d.label).tag(d)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                Text("紧凑模式缩小间距与标题，小窗可看更多内容。")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            }
 
             settingsCard("界面预览", icon: "eye.fill") {
                 AppearanceLivePreview(
@@ -525,7 +538,7 @@ struct SettingsWindowView: View {
                         Spacer()
                         Picker("", selection: $settings.soundName) {
                             ForEach(SettingsStore.availableSounds, id: \.self) { name in
-                                Text(name).tag(name)
+                                Text(name as String).tag(name)
                             }
                         }
                         .labelsHidden()
@@ -535,6 +548,17 @@ struct SettingsWindowView: View {
                         }
                     }
                 }
+                
+                Toggle(isOn: $settings.dockBounceOnComplete) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("完成时 Dock 弹跳")
+                            .font(.subheadline.weight(.medium))
+                        Text("番茄结束时 Dock 图标轻跳一次，可与提示音同时关闭。")
+                            .font(.caption)
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    }
+                }
+                .toggleStyle(.switch)
             }
         }
     }
@@ -561,12 +585,12 @@ enum AppWindowMetrics {
 }
 
 enum AppVersion {
-    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.5 / 65).
+    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.6 / 66).
     static var short: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.5"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.6"
     }
     static var build: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "65"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "66"
     }
 }
 
