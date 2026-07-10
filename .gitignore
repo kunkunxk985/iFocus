@@ -1,0 +1,29 @@
+# SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode / derived
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+
+# Packaged app (rebuild with Scripts/package_app.sh)
+Build/
+Distribution/
+
+# OS / IDE
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# Local / agent caches
+.clang-module-cache/
+**/clang-module-cache/
+
+# Crash / temp
+*.ipa
+*.dSYM/
