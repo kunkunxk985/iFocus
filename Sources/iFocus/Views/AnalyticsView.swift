@@ -279,7 +279,8 @@ struct WeeklyFocusChart: View {
     @Environment(\.colorScheme) private var colorScheme
     
     struct DayFocus: Identifiable {
-        let id = UUID()
+        /// Stable id from the day label — random UUID every body pass made the chart flicker.
+        var id: String { label }
         let label: String
         let minutes: Int
     }

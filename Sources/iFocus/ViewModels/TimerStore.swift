@@ -141,7 +141,15 @@ class TimerStore: ObservableObject {
         ) { [weak self] _ in
             self?.resyncFromWallClock()
         }
-        lifecycleObservers = [wake, active]
+        // Midnight: reset "today" pomodoro / focus-minute counters without restarting the app.
+        let dayChanged = NotificationCenter.default.addObserver(
+            forName: .NSCalendarDayChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshStatsFromHistory()
+        }
+        lifecycleObservers = [wake, active, dayChanged]
     }
     
     private func resyncFromWallClock() {

@@ -131,8 +131,18 @@ class TaskStore: ObservableObject {
         }
         
         let orderedIDs = TaskFiltering.filter(tasks.map(\.snapshot), as: kind).map(\.id)
-        let byID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        // Prefer first occurrence if corrupt data ever duplicates ids (never crash).
+        var byID: [UUID: FocusTask] = [:]
+        byID.reserveCapacity(tasks.count)
+        for task in tasks where byID[task.id] == nil {
+            byID[task.id] = task
+        }
         return orderedIDs.compactMap { byID[$0] }
+    }
+    
+    /// Sidebar badges in one pass (no six sorted filters).
+    func sidebarBadgeCounts() -> TaskFiltering.SidebarBadgeCounts {
+        TaskFiltering.sidebarBadgeCounts(tasks.map(\.snapshot))
     }
     
     func addFocusTime(to taskId: UUID, minutes: Int) {
@@ -140,6 +150,9 @@ class TaskStore: ObservableObject {
         guard let index = tasks.firstIndex(where: { $0.id == taskId }) else { return }
         tasks[index].completedPomodoros += 1
         tasks[index].timeSpentMinutes += minutes
+        // Pomodoro attribution is high-value — flush tasks promptly (don't wait 0.35s debounce).
+        saveTasksWorkItem?.cancel()
+        saveTasks()
     }
     
     var incompleteTasks: [FocusTask] {
@@ -452,5 +465,8 @@ class TaskStore: ObservableObject {
             timestamp: Date()
         )
         focusSessions.append(session)
+        // Completing a pomodoro must survive force-quit — write sessions immediately.
+        saveSessionsWorkItem?.cancel()
+        saveSessions()
     }
 }

@@ -34,21 +34,20 @@ struct ContentView: View {
     private let titlebarContentInset: CGFloat = AppTheme.detailTopInset
 
     private var smartItems: [SidebarItem] {
-        let todayCount = taskStore.tasks(for: .todayTask).count
-        let overdueCount = taskStore.tasks(for: .todayTask).filter(\.isOverdue).count
+        // Single O(n) scan — previously six filter+sorts on every sidebar body pass.
+        let counts = taskStore.sidebarBadgeCounts()
         let todayBadge: String? = {
-            if overdueCount > 0 { return "\(overdueCount)" }
-            if todayCount > 0 { return "\(todayCount)" }
+            if counts.overdue > 0 { return "\(counts.overdue)" }
+            if counts.today > 0 { return "\(counts.today)" }
             return nil
         }()
-        let inboxCount = taskStore.tasks(for: .inboxTask).count
         return [
             SidebarItem(title: "今天", screen: .todayTask, badge: todayBadge, icon: "sun.max.fill", tint: Color(hex: "#F59E0B")),
-            SidebarItem(title: "明天", screen: .tomorrowTask, badge: badgeIfPositive(taskStore.tasks(for: .tomorrowTask).count), icon: "sunrise.fill", tint: Color(hex: "#EC4899")),
-            SidebarItem(title: "本周", screen: .weekTask, badge: badgeIfPositive(taskStore.tasks(for: .weekTask).count), icon: "calendar", tint: Color(hex: "#EF4444")),
-            SidebarItem(title: "已计划", screen: .plannedTask, badge: badgeIfPositive(taskStore.tasks(for: .plannedTask).count), icon: "calendar.badge.clock", tint: Color(hex: "#8B5CF6")),
+            SidebarItem(title: "明天", screen: .tomorrowTask, badge: badgeIfPositive(counts.tomorrow), icon: "sunrise.fill", tint: Color(hex: "#EC4899")),
+            SidebarItem(title: "本周", screen: .weekTask, badge: badgeIfPositive(counts.week), icon: "calendar", tint: Color(hex: "#EF4444")),
+            SidebarItem(title: "已计划", screen: .plannedTask, badge: badgeIfPositive(counts.planned), icon: "calendar.badge.clock", tint: Color(hex: "#8B5CF6")),
             SidebarItem(title: "已完成", screen: .completedTask, badge: nil, icon: "checkmark.circle.fill", tint: Color(hex: "#10B981")),
-            SidebarItem(title: "收集箱", screen: .inboxTask, badge: badgeIfPositive(inboxCount), icon: "tray.fill", tint: Color(hex: "#3B82F6"))
+            SidebarItem(title: "收集箱", screen: .inboxTask, badge: badgeIfPositive(counts.inbox), icon: "tray.fill", tint: Color(hex: "#3B82F6"))
         ]
     }
     

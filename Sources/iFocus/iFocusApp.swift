@@ -159,6 +159,8 @@ struct iFocusApp: App {
                 Button("开始 / 暂停") {
                     NotificationCenter.default.post(name: AppNavigation.toggleTimer, object: nil)
                 }
+                // Shift+Cmd+Space — available from any screen (plain Space only works on 专注钟页).
+                .keyboardShortcut(.space, modifiers: [.command, .shift])
                 Button("重置计时") {
                     NotificationCenter.default.post(name: AppNavigation.resetTimer, object: nil)
                 }

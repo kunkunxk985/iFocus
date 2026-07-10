@@ -109,6 +109,39 @@ final class DeepLogicTests: XCTestCase {
         XCTAssertEqual(utcCalendar.component(.day, from: result[0].dueDate!), 17)
     }
     
+    func testSidebarBadgeCountsMatchFilterLengths() {
+        let tasks = [
+            snap(due: day(2026, 3, 10)),                 // today
+            snap(due: day(2026, 3, 8)),                  // today + overdue
+            snap(due: day(2026, 3, 11)),                 // tomorrow
+            snap(due: day(2026, 3, 14)),                 // week
+            snap(due: nil),                              // inbox
+            snap(completed: true, due: day(2026, 3, 1)), // completed only
+        ]
+        let counts = TaskFiltering.sidebarBadgeCounts(tasks, relativeTo: filterNow, calendar: utcCalendar)
+        XCTAssertEqual(counts.today, TaskFiltering.filter(tasks, as: .today, relativeTo: filterNow, calendar: utcCalendar).count)
+        XCTAssertEqual(counts.overdue, 1)
+        XCTAssertEqual(counts.tomorrow, TaskFiltering.filter(tasks, as: .tomorrow, relativeTo: filterNow, calendar: utcCalendar).count)
+        XCTAssertEqual(counts.week, TaskFiltering.filter(tasks, as: .week, relativeTo: filterNow, calendar: utcCalendar).count)
+        XCTAssertEqual(counts.planned, TaskFiltering.filter(tasks, as: .planned, relativeTo: filterNow, calendar: utcCalendar).count)
+        XCTAssertEqual(counts.inbox, TaskFiltering.filter(tasks, as: .inbox, relativeTo: filterNow, calendar: utcCalendar).count)
+    }
+    
+    func testMatchesAgreesWithFilterMembership() {
+        let tasks = [
+            snap(due: day(2026, 3, 10)),
+            snap(due: nil),
+            snap(completed: true, due: day(2026, 3, 10)),
+        ]
+        for list in [TaskListFilter.today, .inbox, .completed, .planned] {
+            let filtered = Set(TaskFiltering.filter(tasks, as: list, relativeTo: filterNow, calendar: utcCalendar).map(\.id))
+            for task in tasks {
+                let m = TaskFiltering.matches(task, list: list, relativeTo: filterNow, calendar: utcCalendar)
+                XCTAssertEqual(m, filtered.contains(task.id), "list \(list) task \(task.id)")
+            }
+        }
+    }
+    
     func testSortStableByCreatedAtWhenPriorityAndDueEqual() {
         let earlier = snap(due: day(2026, 3, 10), priority: 2, created: day(2026, 3, 1))
         let later = snap(due: day(2026, 3, 10), priority: 2, created: day(2026, 3, 5))

@@ -193,6 +193,30 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.focusSessions[0].durationMinutes, 25)
     }
     
+    /// Completing a pomodoro must hit disk immediately (no 0.35s debounce window).
+    func testLogFocusSessionPersistsImmediatelyWithoutFlush() {
+        let store = TaskStore(storageDirectory: tempDir)
+        store.logFocusSession(taskId: nil, taskTitle: "即时落盘", minutes: 25)
+        
+        // Do not call flushPendingSaves — reload should already see the session.
+        let reloaded = TaskStore(storageDirectory: tempDir)
+        XCTAssertEqual(reloaded.focusSessions.count, 1)
+        XCTAssertEqual(reloaded.focusSessions[0].taskTitle, "即时落盘")
+    }
+    
+    func testAddFocusTimePersistsImmediatelyWithoutFlush() {
+        let store = TaskStore(storageDirectory: tempDir)
+        store.newTaskTitle = "番茄任务"
+        store.addTask(for: .inboxTask)
+        let id = store.tasks[0].id
+        store.flushPendingSaves() // baseline task on disk
+        
+        store.addFocusTime(to: id, minutes: 25)
+        let reloaded = TaskStore(storageDirectory: tempDir)
+        XCTAssertEqual(reloaded.tasks[0].completedPomodoros, 1)
+        XCTAssertEqual(reloaded.tasks[0].timeSpentMinutes, 25)
+    }
+    
     func testLoadsLegacySessionsWithoutCategory() throws {
         let legacyJSON = """
         [

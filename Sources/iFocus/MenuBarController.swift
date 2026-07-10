@@ -187,12 +187,12 @@ final class MenuBarController: NSObject, ObservableObject {
         statusItem.button?.title = title
         
         let taskTitle = timerStore.taskStore?.activeTask?.title
-        var tooltip = "iFocus · \(timerStore.mode.rawValue) \(timerStore.timeString)"
-        if timerStore.isRunning {
-            tooltip += " · 进行中"
-        } else {
-            tooltip += " · 已暂停"
-        }
+        let runStateLabel: String = {
+            if timerStore.isRunning { return "进行中" }
+            if timerStore.isSessionInProgress { return "已暂停" }
+            return "待开始"
+        }()
+        var tooltip = "iFocus · \(timerStore.mode.rawValue) \(timerStore.timeString) · \(runStateLabel)"
         if let taskTitle, !taskTitle.isEmpty {
             tooltip += "\n当前任务：\(taskTitle)"
         }
@@ -201,8 +201,7 @@ final class MenuBarController: NSObject, ObservableObject {
         guard let menu = statusItem.menu else { return }
         
         menu.item(withTag: MenuTag.status.rawValue)?.title =
-            "\(timerStore.mode.rawValue)  \(timerStore.timeString)"
-            + (timerStore.isRunning ? "  · 进行中" : "  · 待开始")
+            "\(timerStore.mode.rawValue)  \(timerStore.timeString)  · \(runStateLabel)"
         
         if let taskTitle, !taskTitle.isEmpty {
             menu.item(withTag: MenuTag.task.rawValue)?.title = "任务：\(taskTitle)"

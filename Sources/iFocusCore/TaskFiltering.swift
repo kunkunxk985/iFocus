@@ -46,47 +46,85 @@ public enum TaskFiltering {
         return dueDay < today
     }
     
+    /// Whether a single task belongs in `list` (no sorting — for badges / counts).
+    public static func matches(
+        _ task: TaskSnapshot,
+        list: TaskListFilter,
+        relativeTo now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Bool {
+        let today = calendar.startOfDay(for: now)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) ?? today.addingTimeInterval(86_400)
+        let dayAfterTomorrow = calendar.date(byAdding: .day, value: 2, to: today) ?? today.addingTimeInterval(172_800)
+        let weekLater = calendar.date(byAdding: .day, value: 7, to: today) ?? today.addingTimeInterval(604_800)
+        
+        switch list {
+        case .today:
+            guard !task.isCompleted, let due = task.dueDate else { return false }
+            return calendar.startOfDay(for: due) <= today
+        case .tomorrow:
+            guard !task.isCompleted, let due = task.dueDate else { return false }
+            return calendar.isDate(due, inSameDayAs: tomorrow)
+        case .week:
+            guard !task.isCompleted, let due = task.dueDate else { return false }
+            let dueDay = calendar.startOfDay(for: due)
+            return dueDay >= dayAfterTomorrow && dueDay <= weekLater
+        case .planned:
+            return !task.isCompleted && task.dueDate != nil
+        case .completed:
+            return task.isCompleted
+        case .inbox:
+            return !task.isCompleted && task.dueDate == nil
+        }
+    }
+    
+    /// One O(n) pass for sidebar badges (avoids six full filter+sorts on every body).
+    public struct SidebarBadgeCounts: Equatable {
+        public var today: Int
+        public var overdue: Int
+        public var tomorrow: Int
+        public var week: Int
+        public var planned: Int
+        public var inbox: Int
+        
+        public init(today: Int = 0, overdue: Int = 0, tomorrow: Int = 0, week: Int = 0, planned: Int = 0, inbox: Int = 0) {
+            self.today = today
+            self.overdue = overdue
+            self.tomorrow = tomorrow
+            self.week = week
+            self.planned = planned
+            self.inbox = inbox
+        }
+    }
+    
+    public static func sidebarBadgeCounts(
+        _ tasks: [TaskSnapshot],
+        relativeTo now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> SidebarBadgeCounts {
+        var counts = SidebarBadgeCounts()
+        for task in tasks {
+            if matches(task, list: .today, relativeTo: now, calendar: calendar) {
+                counts.today += 1
+                if isOverdue(dueDate: task.dueDate, isCompleted: task.isCompleted, relativeTo: now, calendar: calendar) {
+                    counts.overdue += 1
+                }
+            }
+            if matches(task, list: .tomorrow, relativeTo: now, calendar: calendar) { counts.tomorrow += 1 }
+            if matches(task, list: .week, relativeTo: now, calendar: calendar) { counts.week += 1 }
+            if matches(task, list: .planned, relativeTo: now, calendar: calendar) { counts.planned += 1 }
+            if matches(task, list: .inbox, relativeTo: now, calendar: calendar) { counts.inbox += 1 }
+        }
+        return counts
+    }
+    
     public static func filter(
         _ tasks: [TaskSnapshot],
         as list: TaskListFilter,
         relativeTo now: Date = Date(),
         calendar: Calendar = .current
     ) -> [TaskSnapshot] {
-        let today = calendar.startOfDay(for: now)
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) ?? today.addingTimeInterval(86_400)
-        let dayAfterTomorrow = calendar.date(byAdding: .day, value: 2, to: today) ?? today.addingTimeInterval(172_800)
-        let weekLater = calendar.date(byAdding: .day, value: 7, to: today) ?? today.addingTimeInterval(604_800)
-        
-        let result: [TaskSnapshot]
-        switch list {
-        case .today:
-            result = tasks.filter { task in
-                guard !task.isCompleted, let due = task.dueDate else { return false }
-                let dueDay = calendar.startOfDay(for: due)
-                return dueDay <= today
-            }
-        case .tomorrow:
-            result = tasks.filter { task in
-                guard !task.isCompleted, let due = task.dueDate else { return false }
-                return calendar.isDate(due, inSameDayAs: tomorrow)
-            }
-        case .week:
-            result = tasks.filter { task in
-                guard !task.isCompleted, let due = task.dueDate else { return false }
-                let dueDay = calendar.startOfDay(for: due)
-                return dueDay >= dayAfterTomorrow && dueDay <= weekLater
-            }
-        case .planned:
-            result = tasks.filter { task in
-                !task.isCompleted && task.dueDate != nil
-            }
-        case .completed:
-            result = tasks.filter(\.isCompleted)
-        case .inbox:
-            result = tasks.filter { task in
-                !task.isCompleted && task.dueDate == nil
-            }
-        }
+        let result = tasks.filter { matches($0, list: list, relativeTo: now, calendar: calendar) }
         
         return result.sorted { lhs, rhs in
             switch (lhs.dueDate, rhs.dueDate) {
