@@ -177,8 +177,9 @@ class TaskStore: ObservableObject {
     }
 
     private var isLoadingFromDisk = false
-    /// When true, disk writes are blocked so a corrupt load cannot overwrite the original file.
-    private var blockPersistence = false
+    /// Block only the corrupt file's writes so the other channel can still persist.
+    private var blockTasksPersistence = false
+    private var blockSessionsPersistence = false
     private var saveTasksWorkItem: DispatchWorkItem?
     private var saveSessionsWorkItem: DispatchWorkItem?
     private var saveStateWorkItem: DispatchWorkItem?
@@ -468,7 +469,7 @@ class TaskStore: ObservableObject {
     }
     
     private func scheduleSaveTasks() {
-        guard !blockPersistence else { return }
+        guard !blockTasksPersistence else { return }
         saveTasksWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.saveTasks() }
         saveTasksWorkItem = work
@@ -476,7 +477,7 @@ class TaskStore: ObservableObject {
     }
     
     private func scheduleSaveSessions() {
-        guard !blockPersistence else { return }
+        guard !blockSessionsPersistence else { return }
         saveSessionsWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.saveSessions() }
         saveSessionsWorkItem = work
@@ -484,7 +485,6 @@ class TaskStore: ObservableObject {
     }
 
     private func scheduleSaveState() {
-        guard !blockPersistence else { return }
         saveStateWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.saveState() }
         saveStateWorkItem = work
@@ -501,35 +501,89 @@ class TaskStore: ObservableObject {
         saveState()
     }
     
-    /// User accepts empty state after corrupt load — re-enable writes.
+    /// User accepts empty state after corrupt load — re-enable writes for blocked files.
     func acknowledgeCorruptLoadAndStartFresh() {
-        blockPersistence = false
+        blockTasksPersistence = false
+        blockSessionsPersistence = false
         dataLoadErrorMessage = nil
         saveTasksImmediately()
         saveSessionsImmediately()
         saveStateImmediately()
     }
     
+    /// Re-read disk after user repairs files in Finder. Clears errors on success.
+    @discardableResult
+    func reloadFromDisk() -> Bool {
+        isLoadingFromDisk = true
+        var tasksOK = true
+        var sessionsOK = true
+        
+        if FileManager.default.fileExists(atPath: tasksFileURL.path) {
+            do {
+                let data = try Data(contentsOf: tasksFileURL)
+                tasks = try Self.decodeList([FocusTask].self, from: data)
+                blockTasksPersistence = false
+            } catch {
+                tasksOK = false
+                print("[TaskStore] reload tasks failed: \(error)")
+            }
+        } else {
+            tasks = []
+            blockTasksPersistence = false
+        }
+        
+        if FileManager.default.fileExists(atPath: sessionsFileURL.path) {
+            do {
+                let data = try Data(contentsOf: sessionsFileURL)
+                focusSessions = try Self.decodeList([FocusSession].self, from: data)
+                blockSessionsPersistence = false
+            } catch {
+                sessionsOK = false
+                print("[TaskStore] reload sessions failed: \(error)")
+            }
+        } else {
+            focusSessions = []
+            blockSessionsPersistence = false
+        }
+        
+        loadState()
+        isLoadingFromDisk = false
+        
+        if tasksOK && sessionsOK {
+            dataLoadErrorMessage = nil
+            return true
+        }
+        if !tasksOK && !sessionsOK {
+            dataLoadErrorMessage = "任务与专注记录仍无法读取。请检查数据文件夹中的备份，或从空白开始。"
+        } else if !tasksOK {
+            dataLoadErrorMessage = "任务数据仍无法读取。专注记录可正常写入；请修复 tasks.json 或从空白开始。"
+            blockTasksPersistence = true
+        } else {
+            dataLoadErrorMessage = "专注记录仍无法读取。任务可正常写入；请修复 focus_sessions.json 或从空白开始。"
+            blockSessionsPersistence = true
+        }
+        return false
+    }
+    
     private func saveTasksImmediately() {
-        guard !blockPersistence else { return }
+        guard !blockTasksPersistence else { return }
         saveTasksWorkItem?.cancel()
         saveTasks()
     }
     
     private func saveSessionsImmediately() {
-        guard !blockPersistence else { return }
+        guard !blockSessionsPersistence else { return }
         saveSessionsWorkItem?.cancel()
         saveSessions()
     }
     
     private func saveStateImmediately() {
-        guard !blockPersistence else { return }
         saveStateWorkItem?.cancel()
         saveState()
     }
     
     private func saveTasks() {
-        guard !blockPersistence else { return }
+        guard !blockTasksPersistence else { return }
         do {
             let data = try Self.makeEncoder().encode(tasks)
             try data.write(to: tasksFileURL, options: .atomic)
@@ -551,14 +605,14 @@ class TaskStore: ObservableObject {
             print("[TaskStore] loadTasks failed: \(error)")
             backupCorruptFile(at: fileURL)
             // Keep original file on disk — do not overwrite with empty until user confirms.
-            blockPersistence = true
-            dataLoadErrorMessage = "任务数据文件损坏，已备份到同目录。未写入空数据，避免覆盖。可打开数据文件夹找回备份，或确认后从空白开始。"
+            blockTasksPersistence = true
+            dataLoadErrorMessage = "任务数据文件损坏，已备份到同目录。未写入空数据。可打开数据文件夹、重新加载，或从空白开始。"
             self.tasks = []
         }
     }
     
     private func saveSessions() {
-        guard !blockPersistence else { return }
+        guard !blockSessionsPersistence else { return }
         do {
             let data = try Self.makeEncoder().encode(focusSessions)
             try data.write(to: sessionsFileURL, options: .atomic)
@@ -579,16 +633,15 @@ class TaskStore: ObservableObject {
         } catch {
             print("[TaskStore] loadSessions failed: \(error)")
             backupCorruptFile(at: fileURL)
-            blockPersistence = true
+            blockSessionsPersistence = true
             if dataLoadErrorMessage == nil {
-                dataLoadErrorMessage = "专注记录文件损坏，已备份。未覆盖原文件。可打开数据文件夹找回，或确认后从空白记录开始。"
+                dataLoadErrorMessage = "专注记录文件损坏，已备份。未覆盖原文件。可打开数据文件夹、重新加载，或从空白开始。"
             }
             self.focusSessions = []
         }
     }
 
     private func saveState() {
-        guard !blockPersistence else { return }
         do {
             let state = PersistedState(activeTaskId: activeTaskId)
             let data = try Self.makeEncoder().encode(state)

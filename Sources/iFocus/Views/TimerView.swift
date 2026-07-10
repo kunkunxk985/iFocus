@@ -571,7 +571,7 @@ struct TimerView: View {
         let items = taskStore.incompleteTasks
         
         Button {
-            timerStore.selectTask(nil)
+            timerStore.requestStartWorkFocus(taskId: nil)
         } label: {
             Label("自由专注（不关联任务）", systemImage: "sparkles")
         }
@@ -580,7 +580,7 @@ struct TimerView: View {
             Divider()
             ForEach(items) { task in
                 Button {
-                    timerStore.selectTask(task.id)
+                    timerStore.requestStartWorkFocus(taskId: task.id)
                 } label: {
                     Label {
                         Text("\(task.title)  ·  \(task.completedPomodoros)/\(task.estimatedPomodoros)")

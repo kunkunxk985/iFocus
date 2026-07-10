@@ -298,7 +298,11 @@ final class MenuBarController: NSObject, ObservableObject {
         menu.item(withTag: MenuTag.freeFocus.rawValue)?.isEnabled = true
         
         menu.item(withTag: MenuTag.nextMode.rawValue)?.isEnabled = true
-        menu.item(withTag: MenuTag.nextMode.rawValue)?.title = "切换到\(mode.next.rawValue)"
+        let skipTarget = TimerStore.nextMode(
+            after: mode,
+            workSessionsCompletedToday: mode == .work ? done : 0
+        )
+        menu.item(withTag: MenuTag.nextMode.rawValue)?.title = "切换到\(skipTarget.rawValue)"
         
         refreshTodayTaskSubmenu(menu)
     }
@@ -395,17 +399,18 @@ final class MenuBarController: NSObject, ObservableObject {
     }
     
     @objc private func startFreeFocus() {
-        if timerStore.isSessionInProgress {
+        let needsConfirm = timerStore.isRunning || timerStore.isSessionInProgress
+        if needsConfirm {
             let alert = NSAlert()
             alert.messageText = "丢弃当前时段？"
-            alert.informativeText = PendingSessionDiscard.freeFocus.message
+            alert.informativeText = PendingSessionDiscard.startWorkFocus(nil).message
             alert.alertStyle = .warning
             alert.addButton(withTitle: "继续")
             alert.addButton(withTitle: "取消")
             guard alert.runModal() == .alertFirstButtonReturn else { return }
-            timerStore.requestFreeFocus(force: true)
+            timerStore.requestStartWorkFocus(taskId: nil, force: true)
         } else {
-            timerStore.requestFreeFocus()
+            timerStore.requestStartWorkFocus(taskId: nil)
         }
         updateStatusItem()
     }
@@ -413,22 +418,21 @@ final class MenuBarController: NSObject, ObservableObject {
     @objc private func selectTodayTask(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String,
               let id = UUID(uuidString: raw) else { return }
-        if timerStore.isSessionInProgress,
-           timerStore.taskStore?.activeTaskId != id {
+        let switching = timerStore.taskStore?.activeTaskId != id
+            || timerStore.mode != .work
+            || timerStore.isRunning
+            || timerStore.isSessionInProgress
+        let needsConfirm = (timerStore.isRunning || timerStore.isSessionInProgress)
+            && !(timerStore.taskStore?.activeTaskId == id && timerStore.mode == .work && !timerStore.isRunning)
+        if needsConfirm && switching {
             let alert = NSAlert()
-            alert.messageText = "切换任务？"
-            alert.informativeText = PendingSessionDiscard.selectTask(id).message
+            alert.messageText = "开始专注？"
+            alert.informativeText = PendingSessionDiscard.startWorkFocus(id).message
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "切换")
+            alert.addButton(withTitle: "继续")
             alert.addButton(withTitle: "取消")
             guard alert.runModal() == .alertFirstButtonReturn else { return }
-            timerStore.requestSelectTask(id, force: true)
-            if timerStore.mode != .work {
-                timerStore.requestSetMode(.work)
-            }
-            if !timerStore.isRunning {
-                timerStore.start()
-            }
+            timerStore.requestStartWorkFocus(taskId: id, force: true)
         } else {
             timerStore.startFocus(on: id)
         }

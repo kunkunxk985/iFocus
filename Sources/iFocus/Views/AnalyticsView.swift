@@ -88,12 +88,29 @@ struct AnalyticsView: View {
     }
 
     private var rangeTotals: FocusStats.DayFocusTotals {
-        FocusStats.rangeTotals(
+        let base = FocusStats.rangeTotals(
             sessions: sessionPairs,
             from: rangeBounds.from,
             through: rangeBounds.through,
             calendar: calendar
         )
+        // Include live work segment minutes when the selected range covers today.
+        guard rangeBounds.through >= todayStart,
+              timerStore.mode == .work,
+              timerStore.isSessionInProgress || timerStore.isRunning else {
+            return base
+        }
+        let liveMinutes = max(0, (timerStore.totalSecondsToday / 60) - baseTodayHistoryMinutes)
+        guard liveMinutes > 0 else { return base }
+        return FocusStats.DayFocusTotals(
+            pomodoros: base.pomodoros,
+            minutes: base.minutes + liveMinutes
+        )
+    }
+    
+    /// Saved sessions only for today (no live segment).
+    private var baseTodayHistoryMinutes: Int {
+        FocusStats.dayTotals(sessions: sessionPairs, on: todayStart, calendar: calendar).minutes
     }
     
     private var weekTotals: FocusStats.DayFocusTotals { rangeTotals }
@@ -106,10 +123,15 @@ struct AnalyticsView: View {
         ).current
     }
 
+    /// Free-focus tip uses a stable 7-day window (not the chart range).
     private var freeShare: Double {
-        let total = sessionsInRange.count
-        let free = sessionsInRange.filter { $0.taskId == nil }.count
-        return FocusStats.freeFocusShare(freeCount: free, totalCount: total)
+        let from = calendar.date(byAdding: .day, value: -6, to: todayStart) ?? todayStart
+        let recent = taskStore.focusSessions.filter {
+            let day = calendar.startOfDay(for: $0.timestamp)
+            return day >= from && day <= todayStart
+        }
+        let free = recent.filter { $0.taskId == nil }.count
+        return FocusStats.freeFocusShare(freeCount: free, totalCount: recent.count)
     }
 
     private var dayOverDayLabel: String {

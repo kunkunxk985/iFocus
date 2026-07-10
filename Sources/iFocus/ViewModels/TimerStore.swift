@@ -51,6 +51,8 @@ enum PendingSessionDiscard: Equatable {
     case selectTask(UUID?)
     case freeFocus
     case setMode(TimerMode)
+    /// Stop current segment (work or break) and start work on this task (nil = free).
+    case startWorkFocus(UUID?)
     
     var message: String {
         switch self {
@@ -60,6 +62,8 @@ enum PendingSessionDiscard: Equatable {
             return "开始自由专注会丢弃当前进行中的时段（不记入记录）。确定继续？"
         case .setMode:
             return "切换模式会重置当前时段（不记入记录）。确定切换？"
+        case .startWorkFocus:
+            return "将结束当前时段（不记入记录）并开始专注。确定继续？"
         }
     }
 }
@@ -458,9 +462,11 @@ class TimerStore: ObservableObject {
     
     /// Request mode change; confirms if a mid-session would be wiped.
     func requestSetMode(_ newMode: TimerMode) {
-        guard !isRunning else { return }
         guard newMode != mode else { return }
+        // Cannot change mode chips while running — pause first (UI disables this).
+        guard !isRunning else { return }
         if isSessionInProgress {
+            if pendingSessionDiscard != nil { return }
             pendingSessionDiscard = .setMode(newMode)
             return
         }
@@ -468,6 +474,10 @@ class TimerStore: ObservableObject {
     }
     
     private func applySetMode(_ newMode: TimerMode) {
+        // Stop clocks if somehow still running (start-work force path).
+        if isRunning {
+            pause()
+        }
         mode = newMode
         reset()
         updateDockBadge()
@@ -482,6 +492,7 @@ class TimerStore: ObservableObject {
     func requestSelectTask(_ taskId: UUID?, force: Bool = false) {
         guard taskStore?.activeTaskId != taskId else { return }
         if !force && mode == .work && (isSessionInProgress || workSessionContext != nil) {
+            if pendingSessionDiscard != nil { return }
             pendingSessionDiscard = .selectTask(taskId)
             return
         }
@@ -502,40 +513,60 @@ class TimerStore: ObservableObject {
     
     /// Free focus entry (menu / deep link) with mid-session guard.
     func requestFreeFocus(force: Bool = false) {
-        if !force && (isSessionInProgress || workSessionContext != nil) {
-            pendingSessionDiscard = .freeFocus
+        requestStartWorkFocus(taskId: nil, force: force)
+    }
+    
+    /// Unified “start work focus” for task rows, deep links, menu bar.
+    /// Handles running break → switch to work, mid-session discard confirm, then start.
+    func requestStartWorkFocus(taskId: UUID?, force: Bool = false) {
+        let sameTask = taskStore?.activeTaskId == taskId
+        let needsDiscard = isRunning || isSessionInProgress || workSessionContext != nil
+        
+        if !force && needsDiscard {
+            // Resuming same work task while paused work — just start, no discard.
+            if sameTask, mode == .work, !isRunning, isSessionInProgress {
+                start()
+                return
+            }
+            // Pure toggle pause/resume on same running work task.
+            if sameTask, mode == .work, isRunning {
+                pause()
+                return
+            }
+            if pendingSessionDiscard != nil { return }
+            pendingSessionDiscard = .startWorkFocus(taskId)
             return
         }
         pendingSessionDiscard = nil
-        applyFreeFocus()
+        applyStartWorkFocus(taskId: taskId)
     }
     
-    private func applyFreeFocus() {
-        // Always discard mid-session when force-applying free focus.
-        if isSessionInProgress || workSessionContext != nil {
+    private func applyStartWorkFocus(taskId: UUID?) {
+        if isRunning || isSessionInProgress || workSessionContext != nil {
             reset()
         }
-        taskStore?.activeTaskId = nil
+        taskStore?.activeTaskId = taskId
         if mode != .work {
-            applySetMode(.work)
+            mode = .work
+            timeRemaining = mode.duration(settings: settings)
+            sessionPlannedDuration = nil
+            elapsedBeforePause = 0
         }
         if !isRunning {
             start()
         }
+        updateDockBadge()
+        emitClockTick()
     }
     
     func confirmPendingSessionDiscard() {
         guard let pending = pendingSessionDiscard else { return }
         pendingSessionDiscard = nil
         switch pending {
-        case .selectTask(let id):
-            applySelectTask(id)
-            if let id, !isRunning {
-                if mode != .work { applySetMode(.work) }
-                start()
-            }
+        case .selectTask(let id), .startWorkFocus(let id):
+            applyStartWorkFocus(taskId: id)
         case .freeFocus:
-            applyFreeFocus()
+            applyStartWorkFocus(taskId: nil)
         case .setMode(let mode):
             applySetMode(mode)
         }
@@ -545,28 +576,9 @@ class TimerStore: ObservableObject {
         pendingSessionDiscard = nil
     }
 
-    /// Start or resume focus for a task. Switching mid-session confirms first.
+    /// Start or resume focus for a task (unified work-intent path).
     func startFocus(on taskId: UUID) {
-        if taskStore?.activeTaskId == taskId {
-            if mode != .work {
-                requestSetMode(.work)
-                if mode == .work, !isRunning { start() }
-                return
-            }
-            if !isRunning { start() }
-            return
-        }
-        if mode == .work && (isSessionInProgress || workSessionContext != nil) {
-            pendingSessionDiscard = .selectTask(taskId)
-            return
-        }
-        applySelectTask(taskId)
-        if mode != .work {
-            applySetMode(.work)
-        }
-        if !isRunning {
-            start()
-        }
+        requestStartWorkFocus(taskId: taskId)
     }
     
     /// Skip the current segment without logging a completed pomodoro.
@@ -719,6 +731,11 @@ class TimerStore: ObservableObject {
             workSessionContext = nil
         }
         pendingResumeSnapshot = nil
+        // Restored as paused — arm pause-idle watch so long pause still nudges.
+        if isSessionInProgress {
+            pauseStartedAt = Date()
+            startPauseWatchIfNeeded()
+        }
         // Keep a dirty snapshot now that we're alive with mid-session state.
         persistDirtySnapshot(force: true)
         updateDockBadge()

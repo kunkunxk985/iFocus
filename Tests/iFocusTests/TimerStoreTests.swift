@@ -180,6 +180,38 @@ final class TimerStoreTests: XCTestCase {
         XCTAssertEqual(timer.mode, .work)
     }
     
+    func testStartWorkFocusFromRunningBreak() {
+        let (_, tasks, timer) = makeStores()
+        tasks.newTaskTitle = "作业"
+        tasks.addTask(for: .todayTask)
+        let id = tasks.tasks[0].id
+        timer.startFocus(on: id)
+        XCTAssertTrue(timer.isRunning)
+        // Force into a running break without completing.
+        timer.skipToNext()
+        XCTAssertEqual(timer.mode, .shortBreak)
+        timer.start()
+        XCTAssertTrue(timer.isRunning)
+        XCTAssertEqual(timer.mode, .shortBreak)
+        
+        // Start work on same task should confirm then switch to work.
+        timer.startFocus(on: id)
+        XCTAssertNotNil(timer.pendingSessionDiscard)
+        timer.confirmPendingSessionDiscard()
+        XCTAssertEqual(timer.mode, .work)
+        XCTAssertTrue(timer.isRunning)
+        XCTAssertEqual(tasks.activeTaskId, id)
+    }
+    
+    func testRequestStartWorkFocusForceFromBreak() {
+        let (_, _, timer) = makeStores()
+        timer.setMode(.shortBreak)
+        timer.start()
+        timer.requestStartWorkFocus(taskId: nil, force: true)
+        XCTAssertEqual(timer.mode, .work)
+        XCTAssertTrue(timer.isRunning)
+    }
+    
     func testSkipDoesNotLogSession() {
         let (_, tasks, timer) = makeStores()
         timer.start()

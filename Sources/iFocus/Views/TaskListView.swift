@@ -264,6 +264,12 @@ struct TaskListView: View {
             // Avoid deleting off-screen tasks that were selected under another chip.
             selectedIDs = selectedIDs.intersection(Set(currentTasks.map(\.id)))
         }
+        .onChange(of: baseTasks.map(\.id)) { _ in
+            // Category chip may disappear when no tasks left in that category.
+            if !availableChips.contains(activeChip) {
+                activeChip = .all
+            }
+        }
         // Snapshot identity (`EditTaskSession`) — never `sheet(item:)` a live FocusTask
         // that mutates while the timer is running.
         .sheet(item: $editSession) { session in
@@ -693,6 +699,8 @@ struct TaskListView: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
+                // Outer Page ScrollView owns scrolling — avoid nested scroll fight.
+                .scrollDisabled(true)
                 .frame(minHeight: CGFloat(incomplete.count) * (settings.uiDensity == .compact ? 64 : 74))
                 .environment(\.defaultMinListRowHeight, settings.uiDensity == .compact ? 52 : 60)
             }

@@ -236,6 +236,9 @@ struct ContentView: View {
             Button("打开数据文件夹") {
                 settings.openDataFolderInFinder()
             }
+            Button("重新加载") {
+                _ = taskStore.reloadFromDisk()
+            }
             Button("从空白开始", role: .destructive) {
                 taskStore.acknowledgeCorruptLoadAndStartFresh()
             }

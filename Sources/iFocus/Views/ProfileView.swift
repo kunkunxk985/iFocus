@@ -183,10 +183,20 @@ struct ProfileView: View {
         bodyText += "\n\n合理规划时间，保持高效专注！\n-- 来自 iFocus macOS 客户端"
         
         let subject = "iFocus 专注日报 - \(dateStr)"
-        let allowed = CharacterSet.urlQueryAllowed
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
         guard let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: allowed),
-              let encodedBody = bodyText.addingPercentEncoding(withAllowedCharacters: allowed),
-              let url = URL(string: "mailto:?subject=\(encodedSubject)&body=\(encodedBody)") else { return }
-        NSWorkspace.shared.open(url)
+              let encodedBody = bodyText.addingPercentEncoding(withAllowedCharacters: allowed) else {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString("\(subject)\n\n\(bodyText)", forType: .string)
+            return
+        }
+        let urlString = "mailto:?subject=\(encodedSubject)&body=\(encodedBody)"
+        if let url = URL(string: urlString), urlString.count < 7000 {
+            NSWorkspace.shared.open(url)
+        } else {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString("\(subject)\n\n\(bodyText)", forType: .string)
+        }
     }
 }

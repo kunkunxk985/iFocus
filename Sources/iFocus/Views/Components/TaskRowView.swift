@@ -345,12 +345,11 @@ struct TaskRowView: View {
     }
     
     private func handleFocusButton() {
+        // Always work-intent: if on break (or wrong mode), startFocus switches to work.
+        // Parent's onStartFocus / onToggleTimer should route through TimerStore.startFocus.
         if isActive {
-            let wasRunning = isRunning
-            onToggleTimer()
-            if !wasRunning {
-                viewState.selectedScreen = .timer
-            }
+            onStartFocus()
+            viewState.selectedScreen = .timer
             return
         }
         onStartFocus()
