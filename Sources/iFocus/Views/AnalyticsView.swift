@@ -165,6 +165,9 @@ struct AnalyticsView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .frame(height: primaryRowHeight)
+                    
+                    todayHourCard
+                        .frame(height: min(180, max(130, contentH * 0.16)))
 
                     HStack(alignment: .top, spacing: 16) {
                         categoryCard
@@ -199,6 +202,31 @@ struct AnalyticsView: View {
         let pomos = weekTotals.pomodoros
         let time = FocusStats.formatTotalMinutes(mins)
         return "近 7 天 · \(pomos) 个番茄 · \(time)  ·  \(dayOverDayLabel)"
+    }
+    
+    private var todayHourMinutes: [Int] {
+        FocusStats.minutesByHourOfDay(
+            sessions: sessionPairs,
+            on: todayStart,
+            calendar: calendar
+        )
+    }
+    
+    private var todayHourCard: some View {
+        let hours = todayHourMinutes
+        let peak = FocusStats.peakHourLabel(fromHourMinutes: hours)
+        return AnalyticsCard(
+            title: peak.map { "今日时段分布 · 高峰 \($0)" } ?? "今日时段分布",
+            icon: "clock.arrow.circlepath"
+        ) {
+            if hours.allSatisfy({ $0 == 0 }) {
+                EmptyStateView(systemImage: "clock", title: "今天还没有按时段记录")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                TodayHourChart(hourMinutes: hours)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
     }
 
     // MARK: - KPI row
@@ -634,6 +662,53 @@ private struct EmptyStateView: View {
                 .foregroundColor(AppTheme.secondaryText(for: colorScheme))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Today hour distribution
+
+private struct TodayHourChart: View {
+    let hourMinutes: [Int]
+    
+    private struct HourBar: Identifiable {
+        let id: Int
+        let label: String
+        let minutes: Int
+    }
+    
+    private var data: [HourBar] {
+        hourMinutes.enumerated().map { index, mins in
+            HourBar(
+                id: index,
+                label: index % 3 == 0 ? String(format: "%02d", index) : "",
+                minutes: mins
+            )
+        }
+    }
+    
+    var body: some View {
+        Chart(data) { item in
+            BarMark(
+                x: .value("时", item.id),
+                y: .value("分钟", item.minutes)
+            )
+            .foregroundStyle(AppTheme.accent.gradient)
+            .cornerRadius(2)
+        }
+        .chartXScale(domain: 0...23)
+        .chartXAxis {
+            AxisMarks(values: [0, 6, 12, 18, 23]) { value in
+                AxisValueLabel {
+                    if let h = value.as(Int.self) {
+                        Text(String(format: "%02d", h))
+                            .font(.caption2)
+                    }
+                }
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading)
+        }
     }
 }
 

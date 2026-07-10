@@ -73,6 +73,7 @@ struct SettingsWindowView: View {
         .background(Color.clear)
         .onAppear {
             timerStore.updateNotificationStatus()
+            settings.refreshLaunchAtLoginFromSystem()
         }
         .onDisappear {
             settings.sanitizeUsername()
@@ -202,12 +203,52 @@ struct SettingsWindowView: View {
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                     .padding(.top, 2)
             }
+            
+            settingsCard("登录时启动", icon: "power") {
+                Toggle(isOn: Binding(
+                    get: { settings.launchAtLogin },
+                    set: { newValue in
+                        settings.launchAtLogin = newValue
+                        settings.applyLaunchAtLoginPreference()
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("登录 Mac 时打开 iFocus")
+                            .font(.subheadline.weight(.medium))
+                        Text("建议把 App 放在「应用程序」文件夹。若系统要求批准，请到登录项中允许。")
+                            .font(.caption)
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    }
+                }
+                .toggleStyle(.switch)
+                
+                HStack(spacing: 10) {
+                    Button("打开系统登录项…") {
+                        LaunchAtLogin.openLoginItemsSettings()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    
+                    if let feedback = settings.launchAtLoginFeedback {
+                        Text(feedback)
+                            .font(.caption)
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                            .lineLimit(2)
+                    }
+                }
+            }
 
             settingsCard("数据", icon: "internaldrive.fill") {
-                SettingsLine(title: "存储位置", value: "本机 Application Support")
+                SettingsLine(title: "存储位置", value: "本机 Application Support/iFocus")
                 Text("任务与专注记录仅保存在本机，不会上传。")
                     .font(.caption)
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                Button("在 Finder 中显示数据文件夹") {
+                    settings.openDataFolderInFinder()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .padding(.top, 4)
             }
             
             settingsCard("新手引导", icon: "sparkles") {
@@ -431,12 +472,12 @@ enum AppWindowMetrics {
 }
 
 enum AppVersion {
-    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.0 / 60).
+    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.1 / 61).
     static var short: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.0"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.1"
     }
     static var build: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "60"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "61"
     }
 }
 

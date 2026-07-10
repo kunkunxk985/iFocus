@@ -31,6 +31,7 @@ class SettingsStore: ObservableObject {
         static let username = "username"
         static let avatarColorIndex = "avatarColorIndex"
         static let avatarPath = "avatarPath"
+        static let launchAtLogin = "launchAtLogin"
     }
     
     private let defaults: UserDefaults
@@ -106,6 +107,43 @@ class SettingsStore: ObservableObject {
                 defaults.removeObject(forKey: Key.avatarPath)
             }
         }
+    }
+    
+    /// Preference mirror; system registration is applied via `LaunchAtLogin`.
+    @Published var launchAtLogin: Bool {
+        didSet {
+            defaults.set(launchAtLogin, forKey: Key.launchAtLogin)
+        }
+    }
+    
+    /// Last human-readable feedback from login-item registration.
+    @Published var launchAtLoginFeedback: String?
+    
+    /// Sync toggle with `SMAppService` reality (user may have disabled in System Settings).
+    func refreshLaunchAtLoginFromSystem() {
+        let systemOn = LaunchAtLogin.isEnabled
+        if launchAtLogin != systemOn {
+            launchAtLogin = systemOn
+        }
+    }
+    
+    func applyLaunchAtLoginPreference() {
+        let result = LaunchAtLogin.setEnabled(launchAtLogin)
+        launchAtLoginFeedback = result.message
+        // Re-read system state after register/unregister.
+        let systemOn = LaunchAtLogin.isEnabled
+        if launchAtLogin != systemOn {
+            // Keep UI honest if registration failed or requires approval only.
+            if !result.ok {
+                launchAtLogin = systemOn
+            }
+        }
+    }
+    
+    func openDataFolderInFinder() {
+        let url = avatarStorageDirectory
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(url)
     }
     
     @discardableResult
@@ -189,6 +227,9 @@ class SettingsStore: ObservableObject {
         }
         self.avatarColorIndex  = defaults.integer(forKey: Key.avatarColorIndex)
         self.avatarPath        = defaults.string(forKey: Key.avatarPath)
+        // Prefer live system status when available; fall back to saved preference.
+        let savedLaunch = defaults.object(forKey: Key.launchAtLogin) as? Bool ?? false
+        self.launchAtLogin = LaunchAtLogin.isEnabled ? true : savedLaunch
         
         // Drop legacy keys that used to persist transient UI/runtime state.
         defaults.removeObject(forKey: "isLocked")

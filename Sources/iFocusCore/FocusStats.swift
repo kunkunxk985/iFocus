@@ -273,6 +273,31 @@ public enum FocusStats {
         return min(1, max(0, Double(max(0, freeCount)) / Double(totalCount)))
     }
     
+    /// 24 bins (hour 0...23) of focus minutes for a single calendar day.
+    /// Minutes are attributed to the session start hour (simple, stable model).
+    public static func minutesByHourOfDay(
+        sessions: [(timestamp: Date, minutes: Int)],
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> [Int] {
+        var bins = Array(repeating: 0, count: 24)
+        let dayStart = calendar.startOfDay(for: day)
+        for s in sessions {
+            guard calendar.isDate(s.timestamp, inSameDayAs: dayStart) else { continue }
+            let hour = calendar.component(.hour, from: s.timestamp)
+            guard (0..<24).contains(hour) else { continue }
+            bins[hour] += max(0, s.minutes)
+        }
+        return bins
+    }
+    
+    /// Peak hour label from a 24-bin minutes array, or nil if all zero.
+    public static func peakHourLabel(fromHourMinutes hours: [Int]) -> String? {
+        guard hours.count == 24, let maxVal = hours.max(), maxVal > 0,
+              let peak = hours.firstIndex(of: maxVal) else { return nil }
+        return String(format: "%02d:00–%02d:00", peak, (peak + 1) % 24 == 0 ? 24 : peak + 1)
+    }
+    
     /// Up to two data-driven tips for the analytics dashboard (Chinese, product tone).
     public static func smartInsights(
         todayPomodoros: Int,

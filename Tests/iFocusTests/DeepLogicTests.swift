@@ -127,6 +127,26 @@ final class DeepLogicTests: XCTestCase {
         )
     }
     
+    func testMinutesByHourOfDay() {
+        let sessions: [(Date, Int)] = [
+            (day(2026, 3, 10, hour: 9), 25),
+            (day(2026, 3, 10, hour: 9), 10),
+            (day(2026, 3, 10, hour: 14), 50),
+            (day(2026, 3, 9, hour: 9), 99), // other day
+        ]
+        let bins = FocusStats.minutesByHourOfDay(
+            sessions: sessions,
+            on: day(2026, 3, 10),
+            calendar: utcCalendar
+        )
+        XCTAssertEqual(bins.count, 24)
+        XCTAssertEqual(bins[9], 35)
+        XCTAssertEqual(bins[14], 50)
+        XCTAssertEqual(bins[0], 0)
+        XCTAssertEqual(FocusStats.peakHourLabel(fromHourMinutes: bins), "14:00–15:00")
+        XCTAssertNil(FocusStats.peakHourLabel(fromHourMinutes: Array(repeating: 0, count: 24)))
+    }
+    
     func testFreeFocusShareAndSmartInsights() {
         XCTAssertEqual(FocusStats.freeFocusShare(freeCount: 3, totalCount: 10), 0.3, accuracy: 0.001)
         XCTAssertEqual(FocusStats.freeFocusShare(freeCount: 0, totalCount: 0), 0, accuracy: 0.001)
