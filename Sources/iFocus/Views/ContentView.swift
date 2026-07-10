@@ -33,11 +33,13 @@ struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     /// Space under the transparent titlebar so sidebar content clears traffic lights.
-    private let titlebarContentInset: CGFloat = AppTheme.detailTopInset
-    private let collapsedSidebarWidth: CGFloat = 64
+    private var titlebarContentInset: CGFloat {
+        // Narrow rail: less dead air under the three window buttons.
+        sidebarCollapsed ? AppTheme.collapsedSidebarTopInset : AppTheme.detailTopInset
+    }
 
     private func sidebarWidth(for availableWidth: CGFloat) -> CGFloat {
-        if sidebarCollapsed { return collapsedSidebarWidth }
+        if sidebarCollapsed { return AppTheme.collapsedSidebarWidth }
         return min(252, max(216, availableWidth * 0.10))
     }
 
@@ -132,10 +134,17 @@ struct ContentView: View {
         .animation(.easeOut(duration: 0.25), value: hasCompletedOnboarding)
         .animation(.spring(response: 0.4, dampingFraction: 0.86), value: timerStore.showDailyGoalCelebration)
         .onAppear {
+            // Keep AppStorage sidebar flag in sync for traffic-light layout.
+            WindowLayoutStore.isSidebarCollapsed = sidebarCollapsed
+            WindowChrome.layoutMainWindowTrafficLights()
             // Offer resume after crash / force-quit (dirty snapshot from last run).
             if timerStore.pendingResumeSnapshot != nil {
                 showResumeSessionAlert = true
             }
+        }
+        .onChange(of: sidebarCollapsed) { collapsed in
+            WindowLayoutStore.isSidebarCollapsed = collapsed
+            WindowChrome.layoutMainWindowTrafficLights()
         }
         .onChange(of: viewState.selectedScreen) { _ in
             if isAccountMenuPresented {
@@ -267,9 +276,9 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 sidebarTopSpacer
                 
-                if sidebarCollapsed {
-                    collapsedSidebarHeader
-                } else {
+                // Collapsed: no leaf under the traffic lights — they already own the top
+                // corner; a second brand mark makes the rail feel cramped and odd.
+                if !sidebarCollapsed {
                     brandHeader
                 }
 
@@ -323,22 +332,18 @@ struct ContentView: View {
         }
     }
     
-    /// Compact mark only — avoid a second large accent tile next to PageTitle when collapsed.
-    private var collapsedSidebarHeader: some View {
-        Image(systemName: "leaf.fill")
-            .font(.system(size: 11, weight: .bold))
-            .foregroundColor(AppTheme.accent.opacity(0.85))
-            .frame(width: 22, height: 22)
-            .help("iFocus")
-            .frame(maxWidth: .infinity)
-            .padding(.bottom, 6)
-    }
-    
     private var sidebarCollapseButton: some View {
         Button {
             withAnimation(.easeInOut(duration: 0.2)) {
                 sidebarCollapsed.toggle()
                 WindowLayoutStore.isSidebarCollapsed = sidebarCollapsed
+            }
+            // Re-center traffic lights for the new rail width after the width animates.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                WindowChrome.layoutMainWindowTrafficLights()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                WindowChrome.layoutMainWindowTrafficLights()
             }
         } label: {
             HStack {

@@ -231,8 +231,14 @@ extension AppTheme {
     /// Tuned to sit under a Gemini / Electron `hiddenInset` traffic-light row.
     static let detailTopInset: CGFloat = 68
     
+    /// Narrow rail still needs room under the three window buttons (~14×3 + gaps).
+    static let collapsedSidebarTopInset: CGFloat = 52
+    
+    /// Must fit close + miniaturize + zoom with padding (was 64 → green sat past divider).
+    static let collapsedSidebarWidth: CGFloat = 80
+    
     /// Traffic-light inset matching Gemini / Electron `titleBarStyle: hiddenInset`
-    /// (comfortably clear of the rounded window corner).
+    /// (comfortably clear of the rounded window corner) when the sidebar is expanded.
     static let trafficLightLeading: CGFloat = 20
     static let trafficLightTop: CGFloat = 18
     static let trafficLightSpacing: CGFloat = 8

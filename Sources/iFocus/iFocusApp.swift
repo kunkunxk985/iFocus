@@ -332,9 +332,14 @@ enum WindowChrome {
         return window.title == "iFocus" || window.title == "设置"
     }
     
-    /// Match Gemini / Electron `hiddenInset`: ~20pt leading, ~18pt from the window top.
+    /// Position traffic lights for expanded vs collapsed sidebar.
+    ///
+    /// Collapsed rail is only ~80pt wide — a fixed 20pt leading inset makes the
+    /// three buttons spill into the detail pane and look “orphaned” on the divider.
+    /// When collapsed we center the group inside the rail instead.
     static func layoutTrafficLights(in window: NSWindow) {
         guard !window.styleMask.contains(.fullScreen) else { return }
+        guard window.title != "设置" else { return }
         guard let close = window.standardWindowButton(.closeButton),
               let mini = window.standardWindowButton(.miniaturizeButton),
               let zoom = window.standardWindowButton(.zoomButton),
@@ -343,38 +348,23 @@ enum WindowChrome {
         let btnW = close.frame.width
         let btnH = close.frame.height
         let gap = AppTheme.trafficLightSpacing
-        let leading = AppTheme.trafficLightLeading
         let top = AppTheme.trafficLightTop
+        let groupWidth = btnW * 3 + gap * 2
+        let collapsed = WindowLayoutStore.isSidebarCollapsed
         
-        // Anchor to the *window frame* top-leading edge (not the titlebar container’s
-        // internal origin), so insets match what you see in Gemini.
-        let windowTopLeftInContainer: NSPoint = {
-            // Window frame is in screen space; convert top-left of window content area.
-            // Titlebar buttons live in a view that spans the titlebar — use window
-            // coordinates via convert from a point at (leading, windowHeight - top - btnH).
-            let windowHeight = window.frame.height
-            // Point in window base coordinates (origin bottom-left of window frame).
-            let pointInWindow = NSPoint(
-                x: leading,
-                y: windowHeight - top - btnH
-            )
-            // Convert window → container. Use contentView if conversion through window works.
-            if let content = window.contentView {
-                let inContent = content.convert(pointInWindow, from: nil)
-                return container.convert(inContent, from: content)
+        // Horizontal: center in narrow rail, classic leading inset when expanded.
+        let leading: CGFloat = {
+            if collapsed {
+                let rail = AppTheme.collapsedSidebarWidth
+                return max(6, (rail - groupWidth) / 2)
             }
-            return NSPoint(
-                x: leading,
-                y: max(0, container.bounds.height - top - btnH)
-            )
+            return AppTheme.trafficLightLeading
         }()
         
-        var x = windowTopLeftInContainer.x
-        // Keep a sane vertical clamp inside the titlebar container.
-        let y = min(
-            max(0, windowTopLeftInContainer.y),
-            max(0, container.bounds.height - btnH)
-        )
+        // Prefer container-local coordinates — more stable than window↔content conversion
+        // which can drift after live resize / sidebar animation.
+        let y = max(0, container.bounds.height - top - btnH)
+        var x = leading
         
         for button in [close, mini, zoom] {
             let origin = NSPoint(x: round(x), y: round(y))
@@ -383,6 +373,17 @@ enum WindowChrome {
                 button.setFrameOrigin(origin)
             }
             x += btnW + gap
+        }
+    }
+    
+    /// Re-layout traffic lights on the main iFocus window (e.g. after sidebar toggle).
+    static func layoutMainWindowTrafficLights() {
+        for window in NSApplication.shared.windows where window.title == "iFocus" {
+            layoutTrafficLights(in: window)
+            // System may reset frames after layout animations.
+            DispatchQueue.main.async {
+                layoutTrafficLights(in: window)
+            }
         }
     }
     
