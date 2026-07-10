@@ -81,6 +81,93 @@ final class DeepLogicTests: XCTestCase {
         XCTAssertEqual(FocusStats.intensityLevel(minutes: 101), 4)
     }
     
+    // MARK: - Analytics A-tier helpers
+    
+    func testDayAndRangeTotals() {
+        let sessions: [(Date, Int)] = [
+            (day(2026, 3, 10, hour: 9), 25),
+            (day(2026, 3, 10, hour: 14), 25),
+            (day(2026, 3, 9, hour: 10), 50),
+            (day(2026, 3, 8, hour: 11), 10),
+        ]
+        let today = FocusStats.dayTotals(
+            sessions: sessions,
+            on: day(2026, 3, 10),
+            calendar: utcCalendar
+        )
+        XCTAssertEqual(today.pomodoros, 2)
+        XCTAssertEqual(today.minutes, 50)
+        
+        let week = FocusStats.rangeTotals(
+            sessions: sessions,
+            from: day(2026, 3, 8),
+            through: day(2026, 3, 10),
+            calendar: utcCalendar
+        )
+        XCTAssertEqual(week.pomodoros, 4)
+        XCTAssertEqual(week.minutes, 110)
+    }
+    
+    func testPercentChangeAndDayOverDayLabel() {
+        XCTAssertEqual(FocusStats.percentChange(from: 50, to: 75), 50)
+        XCTAssertEqual(FocusStats.percentChange(from: 50, to: 25), -50)
+        XCTAssertNil(FocusStats.percentChange(from: 0, to: 30))
+        
+        XCTAssertEqual(
+            FocusStats.dayOverDayMinutesLabel(todayMinutes: 30, yesterdayMinutes: 0),
+            "昨日无记录"
+        )
+        XCTAssertEqual(
+            FocusStats.dayOverDayMinutesLabel(todayMinutes: 50, yesterdayMinutes: 50),
+            "与昨日持平"
+        )
+        XCTAssertTrue(
+            FocusStats.dayOverDayMinutesLabel(todayMinutes: 75, yesterdayMinutes: 50)
+                .contains("+")
+        )
+    }
+    
+    func testFreeFocusShareAndSmartInsights() {
+        XCTAssertEqual(FocusStats.freeFocusShare(freeCount: 3, totalCount: 10), 0.3, accuracy: 0.001)
+        XCTAssertEqual(FocusStats.freeFocusShare(freeCount: 0, totalCount: 0), 0, accuracy: 0.001)
+        
+        let empty = FocusStats.smartInsights(
+            todayPomodoros: 0,
+            todayMinutes: 0,
+            yesterdayMinutes: 0,
+            dailyGoal: 8,
+            currentStreak: 0,
+            freeFocusShare: 0,
+            hasAnyHistory: false
+        )
+        XCTAssertEqual(empty.count, 1)
+        XCTAssertTrue(empty[0].contains("还没有"))
+        
+        let goalMet = FocusStats.smartInsights(
+            todayPomodoros: 8,
+            todayMinutes: 200,
+            yesterdayMinutes: 100,
+            dailyGoal: 8,
+            currentStreak: 4,
+            freeFocusShare: 0.2,
+            hasAnyHistory: true
+        )
+        XCTAssertFalse(goalMet.isEmpty)
+        XCTAssertTrue(goalMet[0].contains("已达成") || goalMet[0].contains("连续"))
+        XCTAssertLessThanOrEqual(goalMet.count, 2)
+        
+        let freeHeavy = FocusStats.smartInsights(
+            todayPomodoros: 1,
+            todayMinutes: 25,
+            yesterdayMinutes: 25,
+            dailyGoal: 8,
+            currentStreak: 0,
+            freeFocusShare: 0.8,
+            hasAnyHistory: true
+        )
+        XCTAssertTrue(freeHeavy.contains(where: { $0.contains("自由专注") || $0.contains("还差") }))
+    }
+    
     // MARK: - TaskFiltering edges
     
     private var filterNow: Date { day(2026, 3, 10, hour: 12) }

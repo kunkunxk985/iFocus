@@ -196,4 +196,128 @@ public enum FocusStats {
         if minutes <= 100 { return 3 }
         return 4
     }
+    
+    // MARK: - Analytics dashboard helpers
+    
+    public struct DayFocusTotals: Equatable {
+        public let pomodoros: Int
+        public let minutes: Int
+        
+        public init(pomodoros: Int = 0, minutes: Int = 0) {
+            self.pomodoros = max(0, pomodoros)
+            self.minutes = max(0, minutes)
+        }
+    }
+    
+    /// Aggregate pomodoros + minutes for a single calendar day.
+    public static func dayTotals(
+        sessions: [(timestamp: Date, minutes: Int)],
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> DayFocusTotals {
+        let dayStart = calendar.startOfDay(for: day)
+        var pomos = 0
+        var mins = 0
+        for s in sessions {
+            guard calendar.isDate(s.timestamp, inSameDayAs: dayStart) else { continue }
+            pomos += 1
+            mins += max(0, s.minutes)
+        }
+        return DayFocusTotals(pomodoros: pomos, minutes: mins)
+    }
+    
+    /// Inclusive range of calendar days: `[fromDay, throughDay]`.
+    public static func rangeTotals(
+        sessions: [(timestamp: Date, minutes: Int)],
+        from fromDay: Date,
+        through throughDay: Date,
+        calendar: Calendar = .current
+    ) -> DayFocusTotals {
+        let start = calendar.startOfDay(for: fromDay)
+        let end = calendar.startOfDay(for: throughDay)
+        let lo = min(start, end)
+        let hi = max(start, end)
+        var pomos = 0
+        var mins = 0
+        for s in sessions {
+            let d = calendar.startOfDay(for: s.timestamp)
+            guard d >= lo && d <= hi else { continue }
+            pomos += 1
+            mins += max(0, s.minutes)
+        }
+        return DayFocusTotals(pomodoros: pomos, minutes: mins)
+    }
+    
+    /// Integer percent change. `nil` when baseline is 0 (undefined / avoid fake ∞).
+    public static func percentChange(from previous: Int, to current: Int) -> Int? {
+        guard previous > 0 else { return nil }
+        return Int(((Double(current - previous) / Double(previous)) * 100.0).rounded())
+    }
+    
+    /// Human label for day-over-day minutes, e.g. "较昨日 +20%" / "与昨日持平" / "昨日无记录".
+    public static func dayOverDayMinutesLabel(todayMinutes: Int, yesterdayMinutes: Int) -> String {
+        if yesterdayMinutes <= 0 {
+            return todayMinutes > 0 ? "昨日无记录" : "暂无对比"
+        }
+        guard let pct = percentChange(from: yesterdayMinutes, to: todayMinutes) else {
+            return "暂无对比"
+        }
+        if pct == 0 { return "与昨日持平" }
+        if pct > 0 { return "较昨日 +\(pct)%" }
+        return "较昨日 \(pct)%"
+    }
+    
+    /// Free-focus share of sessions in `0...1`.
+    public static func freeFocusShare(freeCount: Int, totalCount: Int) -> Double {
+        guard totalCount > 0 else { return 0 }
+        return min(1, max(0, Double(max(0, freeCount)) / Double(totalCount)))
+    }
+    
+    /// Up to two data-driven tips for the analytics dashboard (Chinese, product tone).
+    public static func smartInsights(
+        todayPomodoros: Int,
+        todayMinutes: Int,
+        yesterdayMinutes: Int,
+        dailyGoal: Int,
+        currentStreak: Int,
+        freeFocusShare: Double,
+        hasAnyHistory: Bool
+    ) -> [String] {
+        var tips: [String] = []
+        
+        if !hasAnyHistory {
+            tips.append("还没有专注记录。从清单选一个小任务，或直接开始自由专注。")
+            return tips
+        }
+        
+        if todayPomodoros == 0 && todayMinutes == 0 {
+            tips.append("今天还没开始。挑一个最小任务，先完成 1 个番茄。")
+        } else if dailyGoal > 0, todayPomodoros >= dailyGoal {
+            tips.append("今日目标已达成（\(todayPomodoros)/\(dailyGoal)）。可以收工，或做些轻松任务。")
+        } else if dailyGoal > 0 {
+            let left = dailyGoal - todayPomodoros
+            tips.append("距离今日目标还差 \(left) 个番茄，保持节奏即可。")
+        }
+        
+        if freeFocusShare >= 0.6, tips.count < 2 {
+            tips.append("近期自由专注偏多。绑定任务后，分类统计会更有意义。")
+        }
+        
+        if currentStreak >= 3, tips.count < 2 {
+            tips.append("已连续专注 \(currentStreak) 天，习惯正在成形，继续保持。")
+        }
+        
+        if let pct = percentChange(from: yesterdayMinutes, to: todayMinutes),
+           pct <= -30,
+           yesterdayMinutes >= 25,
+           tips.count < 2 {
+            tips.append("今日专注时长明显低于昨天。若太累，不妨把目标调低一点。")
+        }
+        
+        if tips.isEmpty {
+            tips.append("专注前先选定任务，统计会更清晰；每 4 个番茄安排一次长休息。")
+        }
+        
+        return Array(tips.prefix(2))
+    }
 }
