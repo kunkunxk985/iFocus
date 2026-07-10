@@ -9,6 +9,7 @@ struct EditTaskSession: Identifiable, Equatable {
     let priority: Int
     let estimatedPomodoros: Int
     let dueDate: Date?
+    let recurrence: TaskRecurrence
     
     init(task: FocusTask) {
         self.id = task.id
@@ -17,6 +18,7 @@ struct EditTaskSession: Identifiable, Equatable {
         self.priority = task.priority
         self.estimatedPomodoros = task.estimatedPomodoros
         self.dueDate = task.dueDate
+        self.recurrence = task.recurrence
     }
 }
 
@@ -27,7 +29,7 @@ struct EditTaskView: View {
     @Environment(\.colorScheme) private var colorScheme
     
     let session: EditTaskSession
-    var onSave: (_ title: String, _ category: TaskCategory, _ priority: Int, _ estimatedPomodoros: Int, _ dueDate: Date?) -> Void
+    var onSave: (_ title: String, _ category: TaskCategory, _ priority: Int, _ estimatedPomodoros: Int, _ dueDate: Date?, _ recurrence: TaskRecurrence) -> Void
     
     @State private var title: String
     @State private var category: TaskCategory
@@ -35,14 +37,19 @@ struct EditTaskView: View {
     @State private var estimatedPomodoros: Int
     @State private var dueDate: Date
     @State private var hasDueDate: Bool
+    @State private var recurrence: TaskRecurrence
     
-    init(session: EditTaskSession, onSave: @escaping (String, TaskCategory, Int, Int, Date?) -> Void) {
+    init(
+        session: EditTaskSession,
+        onSave: @escaping (String, TaskCategory, Int, Int, Date?, TaskRecurrence) -> Void
+    ) {
         self.session = session
         self.onSave = onSave
         _title = State(initialValue: session.title)
         _category = State(initialValue: session.category)
         _priority = State(initialValue: session.priority)
         _estimatedPomodoros = State(initialValue: session.estimatedPomodoros)
+        _recurrence = State(initialValue: session.recurrence)
         if let due = session.dueDate {
             _dueDate = State(initialValue: due)
             _hasDueDate = State(initialValue: true)
@@ -102,6 +109,29 @@ struct EditTaskView: View {
                 
                 Divider().opacity(0.5)
                 
+                fieldRow("重复") {
+                    Picker("", selection: $recurrence) {
+                        ForEach(TaskRecurrence.allCases) { r in
+                            Text(r.rawValue).tag(r)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 120)
+                }
+                
+                if recurrence != .none {
+                    Text(recurrence == .daily
+                         ? "完成后会生成下一天的同名任务"
+                         : "完成后会生成一周后的同名任务")
+                        .font(.caption2)
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 6)
+                }
+                
+                Divider().opacity(0.5)
+                
                 fieldRow("截止日期") {
                     Toggle("", isOn: $hasDueDate)
                         .labelsHidden()
@@ -111,8 +141,6 @@ struct EditTaskView: View {
                 if hasDueDate {
                     Divider().opacity(0.5)
                     fieldRow("日期") {
-                        // Prefer compact over `.field` — field style re-layout fights parent
-                        // invalidation and was a known freeze path on macOS.
                         DatePicker(
                             "",
                             selection: $dueDate,
@@ -150,7 +178,8 @@ struct EditTaskView: View {
                         category,
                         priority,
                         estimatedPomodoros,
-                        hasDueDate ? Calendar.current.startOfDay(for: dueDate) : nil
+                        hasDueDate ? Calendar.current.startOfDay(for: dueDate) : nil,
+                        recurrence
                     )
                     dismiss()
                 }
@@ -164,10 +193,6 @@ struct EditTaskView: View {
             .padding(.bottom, 16)
         }
         .frame(width: 400)
-        // Isolation contract:
-        // - no EnvironmentObject / ObservedObject
-        // - only local @State mutations
-        // - parent must not re-present this sheet on timer ticks
     }
     
     private func fieldRow<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {

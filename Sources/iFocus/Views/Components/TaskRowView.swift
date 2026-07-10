@@ -9,42 +9,56 @@ struct TaskRowView: View {
     let isActive: Bool
     /// Snapshot of running state — do NOT pass full TimerStore (avoids per-second re-renders).
     let isRunning: Bool
+    var isSelecting: Bool = false
+    var isSelected: Bool = false
+    var onToggleSelect: (() -> Void)? = nil
     let onEdit: () -> Void
     let onToggleTimer: () -> Void
     let onStartFocus: () -> Void
     
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            Button { taskStore.toggleCompletion(for: task) } label: {
-                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20, weight: .regular))
-                    .foregroundColor(task.isCompleted ? Color(hex: "#10B981") : AppTheme.secondaryText(for: colorScheme).opacity(0.55))
-            }
-            .buttonStyle(.plain)
-            .help(task.isCompleted ? "标为未完成" : "标为完成")
-            
-            if !task.isCompleted {
-                Button(action: handleFocusButton) {
-                    Image(systemName: focusButtonIcon)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(isActive ? .white : AppTheme.primaryText(for: colorScheme))
-                        .frame(width: 28, height: 28)
-                        .background(
-                            Circle().fill(
-                                isActive
-                                ? AppTheme.accent
-                                : AppTheme.elevatedBackground(for: colorScheme)
-                            )
-                        )
-                        .overlay(
-                            Circle().stroke(
-                                isActive ? Color.clear : AppTheme.separator(for: colorScheme),
-                                lineWidth: 1
-                            )
-                        )
+            if isSelecting {
+                Button {
+                    onToggleSelect?()
+                } label: {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 20, weight: .regular))
+                        .foregroundColor(isSelected ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme).opacity(0.55))
                 }
                 .buttonStyle(.plain)
-                .help(focusButtonHelp)
+            } else {
+                Button { taskStore.toggleCompletion(for: task) } label: {
+                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 20, weight: .regular))
+                        .foregroundColor(task.isCompleted ? Color(hex: "#10B981") : AppTheme.secondaryText(for: colorScheme).opacity(0.55))
+                }
+                .buttonStyle(.plain)
+                .help(task.isCompleted ? "标为未完成" : "标为完成")
+                
+                if !task.isCompleted {
+                    Button(action: handleFocusButton) {
+                        Image(systemName: focusButtonIcon)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(isActive ? .white : AppTheme.primaryText(for: colorScheme))
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle().fill(
+                                    isActive
+                                    ? AppTheme.accent
+                                    : AppTheme.elevatedBackground(for: colorScheme)
+                                )
+                            )
+                            .overlay(
+                                Circle().stroke(
+                                    isActive ? Color.clear : AppTheme.separator(for: colorScheme),
+                                    lineWidth: 1
+                                )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help(focusButtonHelp)
+                }
             }
             
             VStack(alignment: .leading, spacing: 6) {
@@ -80,6 +94,15 @@ struct TaskRowView: View {
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(Color(hex: "#EF4444").opacity(0.12)))
+                    }
+                    
+                    if task.recurrence != .none {
+                        Text(task.recurrence.rawValue)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(Color(hex: "#8B5CF6"))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color(hex: "#8B5CF6").opacity(0.12)))
                     }
                 }
                 
@@ -129,8 +152,14 @@ struct TaskRowView: View {
         .padding(.vertical, 12)
         .background(rowBackground)
         .contentShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadiusRow, style: .continuous))
-        .onTapGesture(count: 2, perform: onEdit)
-        .contextMenu { contextMenuContent }
+        .onTapGesture(count: 2) {
+            if !isSelecting { onEdit() }
+        }
+        .simultaneousGesture(TapGesture().onEnded {
+            if isSelecting { onToggleSelect?() }
+        })
+        .contextMenu { if !isSelecting { contextMenuContent } }
+        .opacity(isSelecting && !isSelected ? 0.85 : 1)
     }
     
     private func metaChip(_ text: String, color: Color) -> some View {

@@ -8,6 +8,8 @@ struct TaskListView: View {
     @Environment(\.colorScheme) private var colorScheme
     /// Stable sheet identity — never bind sheet(item:) to a live mutating task value.
     @State private var editSession: EditTaskSession? = nil
+    @State private var isSelecting = false
+    @State private var selectedIDs: Set<UUID> = []
     
     private func filter(for screen: AppScreen) -> TaskStore.TaskFilter {
         switch screen {
@@ -110,22 +112,39 @@ struct TaskListView: View {
                         tint: AppTheme.accent
                     )
                     .overlay(alignment: .trailing) {
-                        if !incompleteFiltered.isEmpty {
-                            Text("\(incompleteFiltered.count) 项")
-                                .font(.caption.weight(.bold))
-                                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(Capsule().fill(AppTheme.cardBackground(for: colorScheme)))
-                                .overlay(Capsule().stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1))
+                        HStack(spacing: 8) {
+                            if !incompleteFiltered.isEmpty {
+                                Text("\(incompleteFiltered.count) 项")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Capsule().fill(AppTheme.cardBackground(for: colorScheme)))
+                                    .overlay(Capsule().stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1))
+                            }
+                            if !currentTasks.isEmpty {
+                                Button(isSelecting ? "完成选择" : "批量") {
+                                    withAnimation {
+                                        isSelecting.toggle()
+                                        if !isSelecting { selectedIDs.removeAll() }
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
                         }
                     }
 
                     statsBar
                         .padding(.top, 18)
                         .padding(.bottom, 20)
+                    
+                    if isSelecting {
+                        batchToolbar
+                            .padding(.bottom, 16)
+                    }
 
-                    if viewState.selectedScreen != .completedTask {
+                    if viewState.selectedScreen != .completedTask, !isSelecting {
                         addTaskSection
                             .padding(.bottom, 20)
                     }
@@ -136,21 +155,83 @@ struct TaskListView: View {
             }
             .softScroll()
         }
+        .onChange(of: viewState.selectedScreen) { _ in
+            isSelecting = false
+            selectedIDs.removeAll()
+        }
         // Snapshot identity (`EditTaskSession`) — never `sheet(item:)` a live FocusTask
         // that mutates while the timer is running.
         .sheet(item: $editSession) { session in
-            EditTaskView(session: session) { title, category, priority, pomodoros, due in
+            EditTaskView(session: session) { title, category, priority, pomodoros, due, recurrence in
                 taskStore.updateTask(
                     id: session.id,
                     title: title,
                     category: category,
                     priority: priority,
                     estimatedPomodoros: pomodoros,
-                    dueDate: due
+                    dueDate: due,
+                    recurrence: recurrence
                 )
             }
             .id(session.id)
         }
+    }
+    
+    private var batchToolbar: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(selectedIDs.isEmpty ? "点选任务进行批量操作" : "已选 \(selectedIDs.count) 项")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            
+            HStack(spacing: 8) {
+                batchButton("全选") {
+                    selectedIDs = Set(currentTasks.map(\.id))
+                }
+                batchButton("完成") {
+                    taskStore.completeTasks(ids: selectedIDs)
+                    selectedIDs.removeAll()
+                }
+                .disabled(selectedIDs.isEmpty)
+                batchButton("今天") {
+                    taskStore.setDueDate(ids: selectedIDs, to: Calendar.current.startOfDay(for: Date()))
+                    selectedIDs.removeAll()
+                }
+                .disabled(selectedIDs.isEmpty)
+                batchButton("明天") {
+                    let t = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: Date()))
+                    taskStore.setDueDate(ids: selectedIDs, to: t)
+                    selectedIDs.removeAll()
+                }
+                .disabled(selectedIDs.isEmpty)
+                batchButton("收集箱") {
+                    taskStore.moveToInbox(ids: selectedIDs)
+                    selectedIDs.removeAll()
+                }
+                .disabled(selectedIDs.isEmpty)
+                batchButton("删除", destructive: true) {
+                    taskStore.deleteTasks(ids: selectedIDs)
+                    selectedIDs.removeAll()
+                }
+                .disabled(selectedIDs.isEmpty)
+                Spacer()
+            }
+        }
+        .padding(14)
+        .background(SoftCardBackground(cornerRadius: 14))
+    }
+    
+    private func batchButton(
+        _ title: String,
+        destructive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption.weight(.bold))
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .tint(destructive ? .red : AppTheme.accent)
     }
     
     private var statsBar: some View {
@@ -392,6 +473,15 @@ struct TaskListView: View {
             task: task,
             isActive: taskStore.activeTaskId == task.id,
             isRunning: timerStore.isRunning,
+            isSelecting: isSelecting,
+            isSelected: selectedIDs.contains(task.id),
+            onToggleSelect: {
+                if selectedIDs.contains(task.id) {
+                    selectedIDs.remove(task.id)
+                } else {
+                    selectedIDs.insert(task.id)
+                }
+            },
             onEdit: { editSession = EditTaskSession(task: task) },
             onToggleTimer: { timerStore.toggle() },
             onStartFocus: {

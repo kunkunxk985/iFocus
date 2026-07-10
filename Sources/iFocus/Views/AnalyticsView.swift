@@ -3,7 +3,16 @@ import Charts
 import AppKit
 import iFocusCore
 
-/// Stats dashboard — today / week operations board (A-tier insights).
+enum AnalyticsRange: String, CaseIterable, Identifiable {
+    case today = "今日"
+    case days7 = "近7天"
+    case days30 = "近30天"
+    case month = "本月"
+    
+    var id: String { rawValue }
+}
+
+/// Stats dashboard — selectable time range + A-tier insights.
 struct AnalyticsView: View {
     @EnvironmentObject var timerStore: TimerStore
     @EnvironmentObject var settings: SettingsStore
@@ -11,11 +20,24 @@ struct AnalyticsView: View {
     @Environment(\.colorScheme) private var colorScheme
     /// Local only — do not put clock ticks on ContentView.
     @State private var clockVersion: UInt = 0
+    @State private var range: AnalyticsRange = .days7
 
     // MARK: - Derived metrics
 
     private var sessionPairs: [(timestamp: Date, minutes: Int)] {
         taskStore.focusSessions.map { ($0.timestamp, $0.durationMinutes) }
+    }
+    
+    private var sessionsInRange: [FocusSession] {
+        let bounds = rangeBounds
+        return taskStore.focusSessions.filter { session in
+            let day = calendar.startOfDay(for: session.timestamp)
+            return day >= bounds.from && day <= bounds.through
+        }
+    }
+    
+    private var pairsInRange: [(timestamp: Date, minutes: Int)] {
+        sessionsInRange.map { ($0.timestamp, $0.durationMinutes) }
     }
 
     private var calendar: Calendar { .current }
@@ -30,6 +52,22 @@ struct AnalyticsView: View {
 
     private var weekStart: Date {
         calendar.date(byAdding: .day, value: -6, to: todayStart) ?? todayStart
+    }
+    
+    private var rangeBounds: (from: Date, through: Date) {
+        switch range {
+        case .today:
+            return (todayStart, todayStart)
+        case .days7:
+            return (weekStart, todayStart)
+        case .days30:
+            let from = calendar.date(byAdding: .day, value: -29, to: todayStart) ?? todayStart
+            return (from, todayStart)
+        case .month:
+            let comps = calendar.dateComponents([.year, .month], from: todayStart)
+            let start = calendar.date(from: comps) ?? todayStart
+            return (start, todayStart)
+        }
     }
 
     private var goalProgress: Double {
@@ -47,14 +85,16 @@ struct AnalyticsView: View {
         FocusStats.dayTotals(sessions: sessionPairs, on: yesterdayStart, calendar: calendar)
     }
 
-    private var weekTotals: FocusStats.DayFocusTotals {
+    private var rangeTotals: FocusStats.DayFocusTotals {
         FocusStats.rangeTotals(
             sessions: sessionPairs,
-            from: weekStart,
-            through: todayStart,
+            from: rangeBounds.from,
+            through: rangeBounds.through,
             calendar: calendar
         )
     }
+    
+    private var weekTotals: FocusStats.DayFocusTotals { rangeTotals }
 
     private var streakCurrent: Int {
         FocusStats.streaks(
@@ -65,8 +105,8 @@ struct AnalyticsView: View {
     }
 
     private var freeShare: Double {
-        let total = taskStore.focusSessions.count
-        let free = taskStore.focusSessions.filter { $0.taskId == nil }.count
+        let total = sessionsInRange.count
+        let free = sessionsInRange.filter { $0.taskId == nil }.count
         return FocusStats.freeFocusShare(freeCount: free, totalCount: total)
     }
 
@@ -95,10 +135,7 @@ struct AnalyticsView: View {
 
     private var categoryTop: [(name: String, icon: String, color: Color, minutes: Int)] {
         var minutesStats = [TaskCategory: Int]()
-        for session in taskStore.focusSessions {
-            // Prefer sessions in the rolling week for analytics relevance.
-            let day = calendar.startOfDay(for: session.timestamp)
-            guard day >= weekStart else { continue }
+        for session in sessionsInRange {
             let cat: TaskCategory
             if let c = session.taskCategory {
                 cat = c
@@ -119,7 +156,7 @@ struct AnalyticsView: View {
     }
 
     private var recentSessions: [FocusSession] {
-        Array(taskStore.focusSessions.sorted(by: { $0.timestamp > $1.timestamp }).prefix(8))
+        Array(sessionsInRange.sorted(by: { $0.timestamp > $1.timestamp }).prefix(8))
     }
 
     // MARK: - Body
@@ -140,21 +177,29 @@ struct AnalyticsView: View {
                     HStack(alignment: .top) {
                         PageTitle(
                             title: "数据统计",
-                            subtitle: weekSubtitle,
+                            subtitle: rangeSubtitle,
                             systemImage: "chart.bar.fill"
                         )
                         Spacer(minLength: 12)
                         Button {
                             shareWeeklyReport()
                         } label: {
-                            Label("导出周报", systemImage: "square.and.arrow.up")
+                            Label("导出摘要", systemImage: "square.and.arrow.up")
                                 .font(.caption.weight(.semibold))
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                        .help("用邮件草稿生成近 7 天专注摘要")
+                        .help("用邮件草稿导出当前时间范围摘要")
                         .padding(.top, 8)
                     }
+                    
+                    Picker("范围", selection: $range) {
+                        ForEach(AnalyticsRange.allCases) { r in
+                            Text(r.rawValue).tag(r)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 420)
 
                     summaryGrid
 
@@ -166,8 +211,10 @@ struct AnalyticsView: View {
                     }
                     .frame(height: primaryRowHeight)
                     
-                    todayHourCard
-                        .frame(height: min(180, max(130, contentH * 0.16)))
+                    if range == .today {
+                        todayHourCard
+                            .frame(height: min(180, max(130, contentH * 0.16)))
+                    }
 
                     HStack(alignment: .top, spacing: 16) {
                         categoryCard
@@ -197,11 +244,14 @@ struct AnalyticsView: View {
         }
     }
 
-    private var weekSubtitle: String {
-        let mins = weekTotals.minutes
-        let pomos = weekTotals.pomodoros
+    private var rangeSubtitle: String {
+        let mins = rangeTotals.minutes
+        let pomos = rangeTotals.pomodoros
         let time = FocusStats.formatTotalMinutes(mins)
-        return "近 7 天 · \(pomos) 个番茄 · \(time)  ·  \(dayOverDayLabel)"
+        if range == .today {
+            return "\(range.rawValue) · \(pomos) 个番茄 · \(time)  ·  \(dayOverDayLabel)"
+        }
+        return "\(range.rawValue) · \(pomos) 个番茄 · \(time)"
     }
     
     private var todayHourMinutes: [Int] {
@@ -340,15 +390,36 @@ struct AnalyticsView: View {
     }
 
     private var weeklyCard: some View {
-        AnalyticsCard(title: "近 7 天趋势", icon: "calendar") {
+        let chartSessions: [FocusSession] = {
+            switch range {
+            case .today: return sessionsInRange
+            case .days7, .days30, .month: return sessionsInRange
+            }
+        }()
+        let dayCount: Int = {
+            switch range {
+            case .today: return 1
+            case .days7: return 7
+            case .days30: return 30
+            case .month:
+                let days = calendar.dateComponents([.day], from: rangeBounds.from, to: rangeBounds.through).day ?? 0
+                return max(1, days + 1)
+            }
+        }()
+        return AnalyticsCard(title: "\(range.rawValue)趋势", icon: "calendar") {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 16) {
-                    weekMeta(label: "本周番茄", value: "\(weekTotals.pomodoros)")
-                    weekMeta(label: "本周专注", value: FocusStats.formatTotalMinutes(weekTotals.minutes))
+                    weekMeta(label: "番茄", value: "\(rangeTotals.pomodoros)")
+                    weekMeta(label: "专注", value: FocusStats.formatTotalMinutes(rangeTotals.minutes))
                     Spacer()
                 }
-                WeeklyFocusChart(sessions: taskStore.focusSessions)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if range == .today {
+                    TodayHourChart(hourMinutes: todayHourMinutes)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    WeeklyFocusChart(sessions: chartSessions, dayCount: dayCount)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }
     }
@@ -367,7 +438,7 @@ struct AnalyticsView: View {
     // MARK: - Category / free / insights
 
     private var categoryCard: some View {
-        AnalyticsCard(title: "本周分类 Top", icon: "square.grid.2x2.fill") {
+        AnalyticsCard(title: "\(range.rawValue)分类 Top", icon: "square.grid.2x2.fill") {
             if categoryTop.isEmpty {
                 EmptyStateView(systemImage: "tray", title: "暂无分类数据")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -516,19 +587,19 @@ struct AnalyticsView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy年M月d日"
         formatter.locale = Locale(identifier: "zh_CN")
-        let end = formatter.string(from: Date())
-        let start = formatter.string(from: weekStart)
+        let end = formatter.string(from: rangeBounds.through)
+        let start = formatter.string(from: rangeBounds.from)
         
         var lines: [String] = [
-            "\(who) 的 iFocus 近 7 天专注周报（\(start) – \(end)）",
+            "\(who) 的 iFocus 专注摘要 · \(range.rawValue)（\(start) – \(end)）",
             "",
-            "· 番茄：\(weekTotals.pomodoros) 个",
-            "· 专注：\(FocusStats.formatTotalMinutes(weekTotals.minutes))",
+            "· 番茄：\(rangeTotals.pomodoros) 个",
+            "· 专注：\(FocusStats.formatTotalMinutes(rangeTotals.minutes))",
             "· 今日：\(timerStore.completedPomodoros) 个 / \(FocusStats.formatTotalMinutes(totalMinutesToday))",
             "· 连续天数：\(streakCurrent) 天",
             "· 任务绑定率：\(Int(((1 - freeShare) * 100).rounded()))%",
             "",
-            "本周分类："
+            "分类："
         ]
         
         if categoryTop.isEmpty {
@@ -667,7 +738,7 @@ private struct EmptyStateView: View {
 
 // MARK: - Today hour distribution
 
-private struct TodayHourChart: View {
+struct TodayHourChart: View {
     let hourMinutes: [Int]
     
     private struct HourBar: Identifiable {
@@ -716,6 +787,7 @@ private struct TodayHourChart: View {
 
 struct WeeklyFocusChart: View {
     let sessions: [FocusSession]
+    var dayCount: Int = 7
     @Environment(\.colorScheme) private var colorScheme
 
     struct DayFocus: Identifiable {
@@ -728,12 +800,13 @@ struct WeeklyFocusChart: View {
         let calendar = Calendar.current
         var data: [DayFocus] = []
         let today = calendar.startOfDay(for: Date())
+        let days = max(1, min(dayCount, 62))
 
         let formatter = DateFormatter()
-        formatter.dateFormat = "MM-dd"
+        formatter.dateFormat = days > 14 ? "M/d" : "MM-dd"
         formatter.locale = Locale(identifier: "zh_CN")
 
-        for i in (0..<7).reversed() {
+        for i in (0..<days).reversed() {
             guard let day = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
             let daySessions = sessions.filter { calendar.isDate($0.timestamp, inSameDayAs: day) }
             let mins = daySessions.reduce(0) { $0 + $1.durationMinutes }

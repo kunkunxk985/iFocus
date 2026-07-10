@@ -217,6 +217,47 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.tasks[0].timeSpentMinutes, 25)
     }
     
+    func testRecurrenceSpawnsNextOnComplete() {
+        let store = TaskStore(storageDirectory: tempDir)
+        store.newTaskTitle = "每日复盘"
+        store.addTask(for: .todayTask)
+        let id = store.tasks[0].id
+        store.updateTask(
+            id: id,
+            title: "每日复盘",
+            category: .study,
+            priority: 2,
+            estimatedPomodoros: 1,
+            dueDate: Calendar.current.startOfDay(for: Date()),
+            recurrence: .daily
+        )
+        store.toggleCompletion(for: store.tasks[0])
+        XCTAssertEqual(store.tasks.count, 2)
+        XCTAssertTrue(store.tasks.contains { $0.isCompleted && $0.title == "每日复盘" })
+        let next = store.tasks.first { !$0.isCompleted && $0.title == "每日复盘" }
+        XCTAssertNotNil(next)
+        XCTAssertEqual(next?.recurrence, .daily)
+        if let due = next?.dueDate {
+            XCTAssertTrue(due > Calendar.current.startOfDay(for: Date()) || Calendar.current.isDateInTomorrow(due))
+        }
+    }
+    
+    func testBatchCompleteAndInbox() {
+        let store = TaskStore(storageDirectory: tempDir)
+        store.newTaskTitle = "X"
+        store.addTask(for: .todayTask)
+        store.newTaskTitle = "Y"
+        store.addTask(for: .todayTask)
+        let ids = Set(store.tasks.map(\.id))
+        store.completeTasks(ids: ids)
+        XCTAssertTrue(store.tasks.allSatisfy(\.isCompleted))
+        
+        store.tasks[0].isCompleted = false
+        store.tasks[1].isCompleted = false
+        store.moveToInbox(ids: ids)
+        XCTAssertTrue(store.tasks.allSatisfy { $0.dueDate == nil })
+    }
+    
     func testPinAndReorderWithinFilter() {
         let store = TaskStore(storageDirectory: tempDir)
         store.newTaskTitle = "A"

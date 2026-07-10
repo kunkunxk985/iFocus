@@ -35,6 +35,15 @@ enum TaskCategory: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+/// How a task repeats after completion (or rolls forward when overdue).
+enum TaskRecurrence: String, CaseIterable, Identifiable, Codable {
+    case none = "不重复"
+    case daily = "每天"
+    case weekly = "每周"
+    
+    var id: String { rawValue }
+}
+
 struct FocusTask: Identifiable, Equatable, Codable {
     var id = UUID()
     var title: String
@@ -50,6 +59,7 @@ struct FocusTask: Identifiable, Equatable, Codable {
     var isPinned: Bool = false
     /// Lower = higher in list after pin. User drag-reorder updates this.
     var sortIndex: Int = 0
+    var recurrence: TaskRecurrence = .none
     
     var isOverdue: Bool {
         TaskFiltering.isOverdue(dueDate: dueDate, isCompleted: isCompleted)
@@ -68,7 +78,7 @@ struct FocusTask: Identifiable, Equatable, Codable {
     enum CodingKeys: String, CodingKey {
         case id, title, category, isCompleted, priority
         case estimatedPomodoros, completedPomodoros, dueDate, createdAt, timeSpentMinutes
-        case isPinned, sortIndex
+        case isPinned, sortIndex, recurrence
     }
     
     init(
@@ -83,7 +93,8 @@ struct FocusTask: Identifiable, Equatable, Codable {
         createdAt: Date = Date(),
         timeSpentMinutes: Int = 0,
         isPinned: Bool = false,
-        sortIndex: Int = 0
+        sortIndex: Int = 0,
+        recurrence: TaskRecurrence = .none
     ) {
         self.id = id
         self.title = title
@@ -97,6 +108,7 @@ struct FocusTask: Identifiable, Equatable, Codable {
         self.timeSpentMinutes = timeSpentMinutes
         self.isPinned = isPinned
         self.sortIndex = sortIndex
+        self.recurrence = recurrence
     }
     
     init(from decoder: Decoder) throws {
@@ -113,6 +125,24 @@ struct FocusTask: Identifiable, Equatable, Codable {
         timeSpentMinutes = try c.decodeIfPresent(Int.self, forKey: .timeSpentMinutes) ?? 0
         isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
         sortIndex = try c.decodeIfPresent(Int.self, forKey: .sortIndex) ?? 0
+        recurrence = try c.decodeIfPresent(TaskRecurrence.self, forKey: .recurrence) ?? .none
+    }
+    
+    /// Next due date after completing (or rolling) a recurring task.
+    static func nextDueDate(
+        after due: Date?,
+        recurrence: TaskRecurrence,
+        calendar: Calendar = .current
+    ) -> Date? {
+        guard recurrence != .none else { return nil }
+        let base = calendar.startOfDay(for: due ?? Date())
+        switch recurrence {
+        case .none: return nil
+        case .daily:
+            return calendar.date(byAdding: .day, value: 1, to: base)
+        case .weekly:
+            return calendar.date(byAdding: .day, value: 7, to: base)
+        }
     }
 }
 
@@ -282,10 +312,57 @@ class TaskStore: ObservableObject {
     
     func toggleCompletion(for task: FocusTask) {
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+            let wasCompleted = tasks[index].isCompleted
             tasks[index].isCompleted.toggle()
             if tasks[index].isCompleted && activeTaskId == task.id {
                 activeTaskId = nil
             }
+            // Completing a recurring task spawns the next occurrence.
+            if !wasCompleted, tasks[index].isCompleted, tasks[index].recurrence != .none {
+                spawnNextRecurrence(from: tasks[index])
+            }
+        }
+    }
+    
+    /// Create the next incomplete instance after completing a recurring task.
+    private func spawnNextRecurrence(from completed: FocusTask) {
+        guard completed.recurrence != .none else { return }
+        let nextDue = FocusTask.nextDueDate(after: completed.dueDate, recurrence: completed.recurrence)
+        let nextIndex = (tasks.map(\.sortIndex).max() ?? -1) + 1
+        let next = FocusTask(
+            title: completed.title,
+            category: completed.category,
+            priority: completed.priority,
+            estimatedPomodoros: completed.estimatedPomodoros,
+            dueDate: nextDue,
+            sortIndex: nextIndex,
+            recurrence: completed.recurrence
+        )
+        tasks.append(next)
+    }
+    
+    /// Incomplete recurring tasks with past due dates roll to the next cycle (keeps lists current).
+    func rollForwardOverdueRecurringTasks(relativeTo now: Date = Date(), calendar: Calendar = .current) {
+        let today = calendar.startOfDay(for: now)
+        var changed = false
+        for index in tasks.indices {
+            guard !tasks[index].isCompleted, tasks[index].recurrence != .none else { continue }
+            guard let due = tasks[index].dueDate else { continue }
+            var cursor = calendar.startOfDay(for: due)
+            var guardCount = 0
+            while cursor < today, guardCount < 400 {
+                guard let next = FocusTask.nextDueDate(after: cursor, recurrence: tasks[index].recurrence, calendar: calendar) else { break }
+                cursor = calendar.startOfDay(for: next)
+                guardCount += 1
+            }
+            if cursor != calendar.startOfDay(for: due) {
+                tasks[index].dueDate = cursor
+                changed = true
+            }
+        }
+        if changed {
+            saveTasksWorkItem?.cancel()
+            saveTasks()
         }
     }
     
@@ -462,6 +539,8 @@ class TaskStore: ObservableObject {
         loadSessions()
         loadState()
         isLoadingFromDisk = false
+        // Roll incomplete recurring tasks whose due date is already past.
+        rollForwardOverdueRecurringTasks()
     }
     
     private func backupCorruptFile(at url: URL) {
@@ -490,7 +569,15 @@ class TaskStore: ObservableObject {
         }
     }
     
-    func updateTask(id: UUID, title: String, category: TaskCategory, priority: Int, estimatedPomodoros: Int, dueDate: Date?) {
+    func updateTask(
+        id: UUID,
+        title: String,
+        category: TaskCategory,
+        priority: Int,
+        estimatedPomodoros: Int,
+        dueDate: Date?,
+        recurrence: TaskRecurrence = .none
+    ) {
         if let index = tasks.firstIndex(where: { $0.id == id }) {
             let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
             // Keep previous title if the editor submitted blanks.
@@ -500,12 +587,46 @@ class TaskStore: ObservableObject {
             tasks[index].category = category
             tasks[index].priority = min(4, max(1, priority))
             tasks[index].estimatedPomodoros = min(20, max(1, estimatedPomodoros))
+            tasks[index].recurrence = recurrence
             // Normalize to start-of-day so list filters stay consistent.
             if let dueDate {
                 tasks[index].dueDate = Calendar.current.startOfDay(for: dueDate)
             } else {
                 tasks[index].dueDate = nil
             }
+        }
+    }
+    
+    // MARK: - Batch operations
+    
+    func completeTasks(ids: Set<UUID>) {
+        for id in ids {
+            guard let index = tasks.firstIndex(where: { $0.id == id }), !tasks[index].isCompleted else { continue }
+            tasks[index].isCompleted = true
+            if activeTaskId == id { activeTaskId = nil }
+            if tasks[index].recurrence != .none {
+                spawnNextRecurrence(from: tasks[index])
+            }
+        }
+    }
+    
+    func setDueDate(ids: Set<UUID>, to date: Date?) {
+        let normalized = date.map { Calendar.current.startOfDay(for: $0) }
+        for id in ids {
+            if let index = tasks.firstIndex(where: { $0.id == id }) {
+                tasks[index].dueDate = normalized
+            }
+        }
+    }
+    
+    func moveToInbox(ids: Set<UUID>) {
+        setDueDate(ids: ids, to: nil)
+    }
+    
+    func deleteTasks(ids: Set<UUID>) {
+        tasks.removeAll { ids.contains($0.id) }
+        if let active = activeTaskId, ids.contains(active) {
+            activeTaskId = nil
         }
     }
     

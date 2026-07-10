@@ -4,7 +4,7 @@ macOS 专注 / 番茄钟应用（SwiftUI + AppKit，Swift Package Manager）。
 
 | 项 | 值 |
 |----|-----|
-| 版本 | **1.6.2**（build **62**） |
+| 版本 | **1.6.3**（build **63**） |
 | 平台 | macOS 13+ |
 | 工具链 | Swift tools 5.8+（见 `Package.swift`） |
 | Bundle ID | `com.kun.ifocus` |
@@ -29,7 +29,7 @@ CLANG_MODULE_CACHE_PATH="$(pwd)/.build/clang-module-cache" \
 ## 打包与运行
 
 ```bash
-# 生成 Build/iFocus.app（含 Info.plist 版本 1.6.2 / 62）
+# 生成 Build/iFocus.app（含 Info.plist 版本 1.6.3 / 63）
 bash Scripts/package_app.sh
 
 # 生成 Build/iFocus.dmg（默认会先重新打包 .app）
@@ -91,4 +91,4 @@ Scripts/
 ## 版本一致性
 
 打包版本以 `Scripts/package_app.sh` 中的 `CFBundleShortVersionString` / `CFBundleVersion` 为准。  
-`AppVersion` 的 fallback 应与之保持一致（当前 1.6.2 / 62）。
+`AppVersion` 的 fallback 应与之保持一致（当前 1.6.3 / 63）。
