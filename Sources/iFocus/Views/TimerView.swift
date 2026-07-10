@@ -13,8 +13,15 @@ struct TimerView: View {
     @State private var clockVersion: UInt = 0
     @State private var showResetConfirm = false
     @State private var showFocusModeHint = false
+    @State private var celebratePulse = false
     
-    private var modeColor: Color { timerStore.mode.accent }
+    private var modeColor: Color {
+        // Prefer product accent for work; keep break colors distinct.
+        switch timerStore.mode {
+        case .work: return AppTheme.accent
+        case .shortBreak, .longBreak: return timerStore.mode.accent
+        }
+    }
     
     private var longBreakProgress: (done: Int, total: Int) {
         let until = timerStore.workSessionsUntilLongBreak
@@ -93,6 +100,8 @@ struct TimerView: View {
                     Spacer(minLength: 4)
                     
                     timerRing(size: ringSize)
+                        .scaleEffect(celebratePulse ? 1.045 : 1)
+                        .animation(.spring(response: 0.38, dampingFraction: 0.62), value: celebratePulse)
                     
                     Spacer(minLength: 4)
                     
@@ -320,6 +329,13 @@ struct TimerView: View {
         }
         .animation(.easeOut(duration: 0.25), value: timerStore.celebrationMessage)
         .animation(.easeOut(duration: 0.25), value: timerStore.isPauseIdleTooLong)
+        .onChange(of: timerStore.celebrationMessage) { message in
+            guard message != nil else { return }
+            celebratePulse = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                celebratePulse = false
+            }
+        }
     }
     
     private var longBreakHintText: String {

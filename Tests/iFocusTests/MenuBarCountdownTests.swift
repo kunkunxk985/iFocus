@@ -21,7 +21,26 @@ final class MenuBarCountdownTests: XCTestCase {
             goal: 8
         )
         XCTAssertTrue(running.contains("24:59"))
-        XCTAssertTrue(running.contains("3/8"))
+        
+        let progress = MenuBarController.barTitle(
+            timeString: "24:59",
+            mode: .work,
+            isRunning: true,
+            isSessionInProgress: true,
+            completed: 3,
+            goal: 8,
+            displayStyle: .iconProgress
+        )
+        XCTAssertTrue(progress.contains("3/8"))
+        
+        let iconOnly = MenuBarController.barTitle(
+            timeString: "25:00",
+            mode: .work,
+            isRunning: false,
+            isSessionInProgress: false,
+            displayStyle: .iconOnly
+        )
+        XCTAssertEqual(iconOnly, "")
         
         let paused = MenuBarController.barTitle(
             timeString: "12:34",

@@ -200,6 +200,7 @@ final class MenuBarController: NSObject, ObservableObject {
         let done = timerStore.completedPomodoros
         
         let idleTooLong = timerStore.isPauseIdleTooLong
+        let displayStyle = timerStore.settings.menuBarDisplayStyle
         let barText = Self.barTitle(
             timeString: time,
             mode: mode,
@@ -207,16 +208,22 @@ final class MenuBarController: NSObject, ObservableObject {
             isSessionInProgress: inProgress,
             completed: done,
             goal: goal,
-            pauseIdleTooLong: idleTooLong
+            pauseIdleTooLong: idleTooLong,
+            displayStyle: displayStyle
         )
         if let button = statusItem.button {
-            button.attributedTitle = Self.attributedBarTitle(
-                barText,
-                mode: mode,
-                isRunning: isRunning,
-                isSessionInProgress: inProgress,
-                pauseIdleTooLong: idleTooLong
-            )
+            if displayStyle == .iconOnly && !idleTooLong {
+                button.attributedTitle = NSAttributedString(string: "")
+                button.title = ""
+            } else {
+                button.attributedTitle = Self.attributedBarTitle(
+                    barText,
+                    mode: mode,
+                    isRunning: isRunning,
+                    isSessionInProgress: inProgress,
+                    pauseIdleTooLong: idleTooLong
+                )
+            }
             button.setAccessibilityLabel("iFocus \(time) 今日 \(done)/\(goal)")
         }
         
@@ -320,22 +327,25 @@ final class MenuBarController: NSObject, ObservableObject {
         isSessionInProgress: Bool,
         completed: Int = 0,
         goal: Int = 0,
-        pauseIdleTooLong: Bool = false
+        pauseIdleTooLong: Bool = false,
+        displayStyle: MenuBarDisplayStyle = .iconTime
     ) -> String {
-        let progress: String = {
-            guard goal > 0 else { return "" }
-            return " \(completed)/\(goal)"
-        }()
-        if isRunning {
-            return " \(timeString)\(progress)"
-        }
+        let progressLabel = goal > 0 ? "\(completed)/\(goal)" : timeString
         if pauseIdleTooLong {
-            return " ⚠\(timeString)\(progress)"
+            return " ⚠\(timeString)" + (goal > 0 ? " \(completed)/\(goal)" : "")
         }
-        if isSessionInProgress {
-            return " ⏸\(timeString)\(progress)"
+        switch displayStyle {
+        case .iconOnly:
+            return ""
+        case .iconTime:
+            if isRunning { return " \(timeString)" }
+            if isSessionInProgress { return " ⏸\(timeString)" }
+            return " \(timeString)"
+        case .iconProgress:
+            if isRunning { return " \(progressLabel)" }
+            if isSessionInProgress { return " ⏸\(progressLabel)" }
+            return " \(progressLabel)"
         }
-        return " \(timeString)\(progress)"
     }
     
     static func attributedBarTitle(
@@ -362,7 +372,7 @@ final class MenuBarController: NSObject, ObservableObject {
         guard emphasized else { return .labelColor }
         switch mode {
         case .work:
-            return NSColor(calibratedRed: 0.90, green: 0.36, blue: 0.25, alpha: 1)
+            return AppTheme.accentNSColor
         case .shortBreak:
             return NSColor(calibratedRed: 0.06, green: 0.73, blue: 0.51, alpha: 1)
         case .longBreak:

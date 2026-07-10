@@ -492,51 +492,14 @@ struct TaskListView: View {
     
     private var emptyState: some View {
         let isCompletedList = viewState.selectedScreen == .completedTask
-        return VStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(AppTheme.accent.opacity(0.10))
-                    .frame(width: 72, height: 72)
-                Image(systemName: isCompletedList ? "archivebox" : "tray")
-                    .font(.system(size: 28, weight: .light))
-                    .foregroundColor(AppTheme.accent)
-            }
-            VStack(spacing: 6) {
-                Text(isCompletedList ? "暂无已完成任务" : "这里还是空的")
-                    .font(.headline)
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                Text(isCompletedList ? "完成任务后会出现在这里" : "在上方添加一条，或去专注钟自由开始")
-                    .font(.subheadline)
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                    .multilineTextAlignment(.center)
-            }
-            
-            if !isCompletedList {
-                HStack(spacing: 10) {
-                    Button {
-                        viewState.selectedScreen = .timer
-                    } label: {
-                        Label("去专注钟", systemImage: "timer")
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AppTheme.accent)
-                    
-                    if viewState.selectedScreen != .inboxTask {
-                        Button {
-                            viewState.selectedScreen = .inboxTask
-                        } label: {
-                            Label("去收集箱", systemImage: "tray")
-                                .font(.subheadline.weight(.semibold))
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                }
-                .padding(.top, 2)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 56)
+        return AppEmptyState(
+            systemImage: isCompletedList ? "archivebox" : "tray",
+            title: isCompletedList ? "暂无已完成任务" : "这里还是空的",
+            subtitle: isCompletedList ? "完成任务后会出现在这里" : "在上方添加一条，或去专注钟自由开始",
+            actionTitle: isCompletedList ? nil : "去专注钟",
+            action: isCompletedList ? nil : { viewState.selectedScreen = .timer }
+        )
+        .padding(.vertical, 28)
         .background(SoftCardBackground(cornerRadius: 18))
     }
 }

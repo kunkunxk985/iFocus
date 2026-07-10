@@ -388,7 +388,7 @@ struct ContentView: View {
             }
             .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SoftHoverButtonStyle())
     }
     
     private func badgeForeground(isSelected: Bool, emphasizeRunning: Bool, badge: String) -> Color {
@@ -411,21 +411,29 @@ struct ContentView: View {
                 switch viewState.selectedScreen {
                 case .timer:
                     TimerView()
+                        .transition(pageTransition)
                 case .todayTask, .tomorrowTask, .weekTask, .plannedTask, .completedTask, .inboxTask:
                     TaskListView()
+                        .transition(pageTransition)
                 case .analytics:
                     AnalyticsView()
+                        .transition(pageTransition)
                 case .profile:
                     ProfileView()
+                        .transition(pageTransition)
                 case nil:
-                    Text("选择一个功能开始")
-                        .font(.title2)
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    AppEmptyState(
+                        systemImage: "sidebar.left",
+                        title: "选择一个功能开始",
+                        subtitle: "从左侧打开专注钟、清单或数据统计"
+                    )
+                    .transition(pageTransition)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(AppTheme.contentBackground(for: colorScheme).ignoresSafeArea())
-            .animation(.easeInOut(duration: 0.18), value: viewState.selectedScreen)
+            .id(viewState.selectedScreen)
+            .animation(.easeInOut(duration: 0.22), value: viewState.selectedScreen)
 
             if shouldShowFloatingPill {
                 FloatingFocusPill()
@@ -434,6 +442,13 @@ struct ContentView: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.82), value: shouldShowFloatingPill)
+    }
+    
+    private var pageTransition: AnyTransition {
+        .asymmetric(
+            insertion: .opacity.combined(with: .offset(y: 8)),
+            removal: .opacity.combined(with: .offset(y: -4))
+        )
     }
 
     /// Soft ease — less bouncy than a snappy spring so the menu doesn’t feel stiff.

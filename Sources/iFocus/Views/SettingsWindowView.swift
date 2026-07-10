@@ -189,19 +189,24 @@ struct SettingsWindowView: View {
 
     private var generalPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
-            settingsCard("关于 iFocus", icon: "info.circle.fill") {
-                SettingsLine(title: "版本", value: AppVersion.short)
-                SettingsLine(title: "构建号", value: AppVersion.build)
-                SettingsLine(title: "平台", value: "macOS 13+")
-            }
-
-            settingsCard("窗口", icon: "macwindow") {
-                SettingsLine(title: "最小尺寸", value: "\(Int(AppWindowMetrics.minimum.width)) × \(Int(AppWindowMetrics.minimum.height))")
-                SettingsLine(title: "默认尺寸", value: "\(Int(AppWindowMetrics.defaultSize.width)) × \(Int(AppWindowMetrics.defaultSize.height))")
-                Text("关闭主窗口会隐藏到菜单栏，计时继续运行。")
+            settingsCard("常用", icon: "star.fill") {
+                SettingsLine(title: "版本", value: "\(AppVersion.short) (\(AppVersion.build))")
+                Text("关闭主窗口会隐藏到菜单栏，计时继续运行。数据仅保存在本机。")
                     .font(.caption)
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                    .padding(.top, 2)
+                HStack(spacing: 10) {
+                    Button("显示数据文件夹") {
+                        settings.openDataFolderInFinder()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    Button("重新显示引导") {
+                        UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .padding(.top, 4)
             }
             
             settingsCard("登录时启动", icon: "power") {
@@ -242,27 +247,24 @@ struct SettingsWindowView: View {
                 }
             }
 
-            settingsCard("数据", icon: "internaldrive.fill") {
-                SettingsLine(title: "存储位置", value: "本机 Application Support/iFocus")
-                Text("任务与专注记录仅保存在本机，不会上传。")
-                    .font(.caption)
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                Button("在 Finder 中显示数据文件夹") {
-                    settings.openDataFolderInFinder()
+            DisclosureGroup {
+                VStack(alignment: .leading, spacing: 14) {
+                    settingsCard("窗口", icon: "macwindow") {
+                        SettingsLine(title: "最小尺寸", value: "\(Int(AppWindowMetrics.minimum.width)) × \(Int(AppWindowMetrics.minimum.height))")
+                        SettingsLine(title: "默认尺寸", value: "\(Int(AppWindowMetrics.defaultSize.width)) × \(Int(AppWindowMetrics.defaultSize.height))")
+                        SettingsLine(title: "平台", value: "macOS 13+")
+                    }
+                    settingsCard("数据路径", icon: "internaldrive.fill") {
+                        SettingsLine(title: "位置", value: "Application Support/iFocus")
+                        Text("任务、专注记录与头像都在这里。不会上传。")
+                            .font(.caption)
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    }
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .padding(.top, 4)
-            }
-            
-            settingsCard("新手引导", icon: "sparkles") {
-                Button("重新显示引导") {
-                    UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                Text("下次打开主窗口时会再次显示三步上手卡片。")
-                    .font(.caption)
+                .padding(.top, 10)
+            } label: {
+                Label("高级信息", systemImage: "chevron.down.circle")
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
         }
@@ -296,7 +298,7 @@ struct SettingsWindowView: View {
                 ShortcutRow(keys: "⌘,", action: "设置")
             }
             settingsCard("菜单栏", icon: "menubar.rectangle") {
-                Text("右上角显示倒计时与今日进度；菜单可快速选今日任务、自由专注、开始/暂停。")
+                Text("显示样式请到「外观」面板调整。菜单内可快速选今日任务、自由专注、开始/暂停。")
                     .font(.caption)
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
@@ -319,31 +321,68 @@ struct SettingsWindowView: View {
                     .pickerStyle(.segmented)
                 }
             }
-
-            settingsCard("预览", icon: "eye.fill") {
+            
+            settingsCard("强调色", icon: "paintbrush.pointed.fill") {
                 HStack(spacing: 12) {
-                    ForEach(AppearanceMode.allCases) { mode in
-                        let selected = settings.appearance == mode
+                    ForEach(AccentPreset.allCases) { preset in
+                        let selected = settings.accentPreset == preset
                         Button {
-                            settings.appearance = mode
+                            settings.accentPreset = preset
                         } label: {
                             VStack(spacing: 8) {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(previewFill(for: mode))
-                                    .frame(height: 56)
+                                Circle()
+                                    .fill(preset.color)
+                                    .frame(width: 28, height: 28)
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .stroke(selected ? AppTheme.accent : AppTheme.separator(for: colorScheme), lineWidth: selected ? 2 : 1)
+                                        Circle()
+                                            .stroke(Color.white.opacity(0.9), lineWidth: selected ? 2 : 0)
                                     )
-                                Text(mode.rawValue)
-                                    .font(.caption.weight(selected ? .bold : .medium))
-                                    .foregroundColor(selected ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme))
+                                    .shadow(color: preset.color.opacity(0.35), radius: selected ? 6 : 0)
+                                Text(preset.label)
+                                    .font(.caption2.weight(selected ? .bold : .medium))
+                                    .foregroundColor(selected ? preset.color : AppTheme.secondaryText(for: colorScheme))
                             }
                             .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(selected ? preset.color.opacity(0.10) : Color.clear)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .stroke(selected ? preset.color.opacity(0.45) : AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                                    )
+                            )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(SoftScaleButtonStyle())
                     }
                 }
+            }
+            
+            settingsCard("菜单栏显示", icon: "menubar.rectangle") {
+                Picker("", selection: $settings.menuBarDisplayStyle) {
+                    ForEach(MenuBarDisplayStyle.allCases) { style in
+                        Text(style.label).tag(style)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.radioGroup)
+                Text("仅图标最省空间；进度适合盯每日目标。")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            }
+
+            settingsCard("界面预览", icon: "eye.fill") {
+                AppearanceLivePreview(
+                    appearance: settings.appearance,
+                    accent: settings.accentPreset.color,
+                    sidebarCollapsed: false
+                )
+                .frame(height: 132)
+                
+                Text("主题与强调色会立即反映到主界面与菜单栏着色。")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    .padding(.top, 4)
             }
         }
     }
@@ -522,13 +561,86 @@ enum AppWindowMetrics {
 }
 
 enum AppVersion {
-    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.4 / 64).
+    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.5 / 65).
     static var short: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.4"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.5"
     }
     static var build: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "64"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "65"
     }
+}
+
+// MARK: - Live appearance preview chip
+
+private struct AppearanceLivePreview: View {
+    let appearance: AppearanceMode
+    let accent: Color
+    let sidebarCollapsed: Bool
+    
+    private var scheme: ColorScheme {
+        switch appearance {
+        case .light: return .light
+        case .dark: return .dark
+        case .system: return .light
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            // Mini sidebar
+            VStack(alignment: .leading, spacing: 6) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(accent.opacity(0.85))
+                    .frame(width: sidebarCollapsed ? 14 : 36, height: 6)
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(AppTheme.secondaryText(for: scheme).opacity(0.25))
+                    .frame(width: sidebarCollapsed ? 14 : 28, height: 6)
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(AppTheme.secondaryText(for: scheme).opacity(0.18))
+                    .frame(width: sidebarCollapsed ? 14 : 32, height: 6)
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .frame(width: sidebarCollapsed ? 36 : 72)
+            .background(AppTheme.sidebarBackground(for: scheme))
+            
+            // Mini stage
+            VStack(spacing: 8) {
+                Spacer(minLength: 0)
+                ZStack {
+                    Circle()
+                        .stroke(accent.opacity(0.2), lineWidth: 6)
+                        .frame(width: 52, height: 52)
+                    Circle()
+                        .trim(from: 0, to: 0.62)
+                        .stroke(accent, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                        .frame(width: 52, height: 52)
+                        .rotationEffect(.degrees(-90))
+                    Text("18:24")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.primaryText(for: scheme))
+                }
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(AppTheme.cardBackground(for: scheme))
+                    .frame(height: 18)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(AppTheme.separator(for: scheme), lineWidth: 1)
+                    )
+                    .padding(.horizontal, 16)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity)
+            .background(AppTheme.contentBackground(for: scheme))
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(AppTheme.separator(for: colorSchemeForPreview), lineWidth: 1)
+        )
+    }
+    
+    private var colorSchemeForPreview: ColorScheme { scheme }
 }
 
 private struct ShortcutRow: View {

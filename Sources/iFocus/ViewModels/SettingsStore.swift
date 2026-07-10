@@ -72,6 +72,8 @@ class SettingsStore: ObservableObject {
         static let showFocusModeHint = "showFocusModeHintOnStart"
         static let pauseReminderEnabled = "pauseReminderEnabled"
         static let pauseReminderMinutes = "pauseReminderMinutes"
+        static let accentPreset = "accentPreset"
+        static let menuBarDisplayStyle = "menuBarDisplayStyle"
     }
     
     private let defaults: UserDefaults
@@ -183,6 +185,18 @@ class SettingsStore: ObservableObject {
             }
             defaults.set(pauseReminderMinutes, forKey: Key.pauseReminderMinutes)
         }
+    }
+    
+    @Published var accentPreset: AccentPreset {
+        didSet {
+            defaults.set(accentPreset.rawValue, forKey: Key.accentPreset)
+            // Keep AppTheme.accent reader in sync (same UserDefaults key).
+            objectWillChange.send()
+        }
+    }
+    
+    @Published var menuBarDisplayStyle: MenuBarDisplayStyle {
+        didSet { defaults.set(menuBarDisplayStyle.rawValue, forKey: Key.menuBarDisplayStyle) }
     }
     
     /// Reflect OS login-item state in the toggle (read-only sync).
@@ -311,6 +325,13 @@ class SettingsStore: ObservableObject {
         self.showFocusModeHintOnStart = defaults.object(forKey: Key.showFocusModeHint) as? Bool ?? true
         self.pauseReminderEnabled = defaults.object(forKey: Key.pauseReminderEnabled) as? Bool ?? true
         self.pauseReminderMinutes = Self.intValue(for: Key.pauseReminderMinutes, in: defaults, defaultValue: 5)
+        let accentRaw = defaults.string(forKey: Key.accentPreset) ?? AccentPreset.tomato.rawValue
+        let resolvedAccent = AccentPreset(rawValue: accentRaw) ?? .tomato
+        self.accentPreset = resolvedAccent
+        // Mirror into the shared key AppTheme reads.
+        defaults.set(resolvedAccent.rawValue, forKey: "accentPreset")
+        let menuStyleRaw = defaults.string(forKey: Key.menuBarDisplayStyle) ?? MenuBarDisplayStyle.iconTime.rawValue
+        self.menuBarDisplayStyle = MenuBarDisplayStyle(rawValue: menuStyleRaw) ?? .iconTime
         
         // Drop legacy keys that used to persist transient UI/runtime state.
         defaults.removeObject(forKey: "isLocked")

@@ -736,25 +736,12 @@ private struct TipRow: View {
 }
 
 private struct EmptyStateView: View {
-    @Environment(\.colorScheme) private var colorScheme
     let systemImage: String
     let title: String
 
     var body: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(AppTheme.accent.opacity(0.08))
-                    .frame(width: 56, height: 56)
-                Image(systemName: systemImage)
-                    .font(.system(size: 22, weight: .light))
-                    .foregroundColor(AppTheme.accent)
-            }
-            Text(title)
-                .font(.subheadline)
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        AppEmptyState(systemImage: systemImage, title: title)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
