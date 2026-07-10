@@ -268,13 +268,14 @@ struct SettingsWindowView: View {
         VStack(alignment: .leading, spacing: 14) {
             settingsCard("番茄钟节奏", icon: "timer") {
                 StepperRow(title: "专注时长", value: $settings.workMinutes, suffix: "分钟", range: 1...90, step: 5) {
-                    if timerStore.mode == .work { timerStore.reset() }
+                    // Never reset a running/paused segment — that discarded work without logging.
+                    if timerStore.mode == .work { timerStore.syncDurationFromSettingsIfIdle() }
                 }
                 StepperRow(title: "短休息", value: $settings.shortBreakMinutes, suffix: "分钟", range: 1...30, step: 1) {
-                    if timerStore.mode == .shortBreak { timerStore.reset() }
+                    if timerStore.mode == .shortBreak { timerStore.syncDurationFromSettingsIfIdle() }
                 }
                 StepperRow(title: "长休息", value: $settings.longBreakMinutes, suffix: "分钟", range: 5...60, step: 5) {
-                    if timerStore.mode == .longBreak { timerStore.reset() }
+                    if timerStore.mode == .longBreak { timerStore.syncDurationFromSettingsIfIdle() }
                 }
             }
 

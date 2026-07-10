@@ -136,6 +136,7 @@ class TaskStore: ObservableObject {
     }
     
     func addFocusTime(to taskId: UUID, minutes: Int) {
+        guard minutes >= 1 else { return }
         guard let index = tasks.firstIndex(where: { $0.id == taskId }) else { return }
         tasks[index].completedPomodoros += 1
         tasks[index].timeSpentMinutes += minutes
@@ -442,6 +443,7 @@ class TaskStore: ObservableObject {
         taskCategory: TaskCategory? = nil,
         minutes: Int
     ) {
+        guard minutes >= 1 else { return }
         let session = FocusSession(
             taskId: taskId,
             taskTitle: taskTitle,

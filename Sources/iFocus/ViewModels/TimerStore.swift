@@ -212,21 +212,52 @@ class TimerStore: ObservableObject {
     }
     
     var progress: Double {
-        TimerFormatting.progress(
-            remaining: timeRemaining,
-            total: mode.duration(settings: settings)
-        )
+        // Prefer the duration locked in at session start so mid-session setting
+        // changes cannot invert the progress ring.
+        let total = sessionPlannedDuration ?? mode.duration(settings: settings)
+        return TimerFormatting.progress(remaining: timeRemaining, total: total)
     }
     
     var timeString: String {
         TimerFormatting.timeString(remaining: timeRemaining)
     }
     
-    /// True while running, or paused mid-session (not sitting on a fresh full duration).
+    /// True while running, or once a segment has been started (including immediate pause).
+    ///
+    /// Driven only by session bookkeeping (`sessionPlannedDuration` / elapsed), never by
+    /// comparing remaining time to live settings — otherwise changing duration while idle
+    /// (e.g. 25 → 40 min) would look "in progress" and block duration sync.
     var isSessionInProgress: Bool {
         if isRunning { return true }
-        let full = mode.duration(settings: settings)
-        return timeRemaining + 0.5 < full
+        if sessionPlannedDuration != nil { return true }
+        if elapsedBeforePause > 0.01 { return true }
+        return false
+    }
+    
+    /// Update idle timer length from settings without wiping an active/paused segment.
+    func syncDurationFromSettingsIfIdle() {
+        guard !isSessionInProgress else { return }
+        timeRemaining = mode.duration(settings: settings)
+        updateDockBadge()
+        emitClockTick()
+    }
+    
+    /// Next mode after a segment finishes (long break every 4th completed work session today).
+    static func nextMode(after completed: TimerMode, workSessionsCompletedToday: Int) -> TimerMode {
+        if completed == .work,
+           workSessionsCompletedToday > 0,
+           workSessionsCompletedToday % 4 == 0 {
+            return .longBreak
+        }
+        return completed.next
+    }
+    
+    /// Notification copy for a finished work segment (uses session snapshot, not live active task).
+    static func workCompletionBody(taskId: UUID?, taskTitle: String?, next: TimerMode) -> String {
+        if taskId != nil, let title = taskTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+            return "「\(title)」已完成 · 下一个：\(next.rawValue)"
+        }
+        return "休息一下吧，下一个：\(next.rawValue)"
     }
     
     func toggle() {
@@ -442,14 +473,17 @@ class TimerStore: ObservableObject {
         // Restore mode for notification copy (pause does not change mode).
         mode = previousMode
         
-        let nextMode: TimerMode
-        if wasWork && completedPomodoros > 0 && completedPomodoros % 4 == 0 {
-            nextMode = .longBreak
-        } else {
-            nextMode = mode.next
-        }
+        let nextMode = Self.nextMode(
+            after: previousMode,
+            workSessionsCompletedToday: wasWork ? completedPomodoros : 0
+        )
         playSound()
-        sendNotification(completed: previousMode, next: nextMode)
+        sendNotification(
+            completed: previousMode,
+            next: nextMode,
+            workTaskId: completedWorkContext?.taskId,
+            workTaskTitle: completedWorkContext?.taskTitle
+        )
         
         isCompleting = false
         applyCompletion(nextMode: nextMode)
@@ -502,17 +536,24 @@ class TimerStore: ObservableObject {
         NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
     }
     
-    private func sendNotification(completed: TimerMode, next: TimerMode) {
+    private func sendNotification(
+        completed: TimerMode,
+        next: TimerMode,
+        workTaskId: UUID? = nil,
+        workTaskTitle: String? = nil
+    ) {
         guard isPackagedApp else { return }
         let content = UNMutableNotificationContent()
         switch completed {
         case .work:
             content.title = "专注完成"
-            if let taskTitle = taskStore?.activeTask?.title, !taskTitle.isEmpty {
-                content.body = "「\(taskTitle)」已完成 · 下一个：\(next.rawValue)"
-            } else {
-                content.body = "休息一下吧，下一个：\(next.rawValue)"
-            }
+            // Use the session snapshot captured at start — active task may have been
+            // deleted or edited while the timer was running.
+            content.body = Self.workCompletionBody(
+                taskId: workTaskId,
+                taskTitle: workTaskTitle,
+                next: next
+            )
         case .shortBreak:
             content.title = "短休息结束"
             content.body = "准备好了吗？开始下一段专注！"

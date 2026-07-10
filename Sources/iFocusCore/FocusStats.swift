@@ -6,6 +6,8 @@ public enum FocusStats {
     // MARK: - Formatting
     
     public static func formatTotalMinutes(_ totalMins: Int) -> String {
+        // Negative inputs are treated as zero (defensive for corrupt stats).
+        let totalMins = max(0, totalMins)
         if totalMins <= 0 { return "0分钟" }
         let h = totalMins / 60
         let m = totalMins % 60
@@ -19,7 +21,8 @@ public enum FocusStats {
     
     public static func completionRate(total: Int, completed: Int) -> String {
         guard total > 0 else { return "0%" }
-        let rate = (completed * 100) / total
+        let safeCompleted = max(0, completed)
+        let rate = min(100, (safeCompleted * 100) / total)
         return "\(rate)%"
     }
     
