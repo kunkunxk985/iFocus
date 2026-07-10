@@ -10,8 +10,15 @@ struct TimerView: View {
     @EnvironmentObject var viewState: ContentViewState
     /// Local clock surface — driven by `clockTick`, not full store publishes.
     @State private var clockVersion: UInt = 0
+    @State private var showResetConfirm = false
     
     private var modeColor: Color { timerStore.mode.accent }
+    
+    private var longBreakProgress: (done: Int, total: Int) {
+        let until = timerStore.workSessionsUntilLongBreak
+        let done = 4 - until
+        return (done, 4)
+    }
     private var progress: Double {
         _ = clockVersion
         return timerStore.progress
@@ -165,7 +172,7 @@ struct TimerView: View {
             )
             
             // Goal card — single unified block (label + bar + count inside)
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
                 HStack {
                     Text("今日目标")
                         .font(.caption.weight(.semibold))
@@ -193,6 +200,27 @@ struct TimerView: View {
                     }
                 }
                 .frame(height: 6)
+                
+                // Long-break cycle: visual “4 tomatoes then long rest”
+                HStack(spacing: 8) {
+                    Text("长休息")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    HStack(spacing: 5) {
+                        ForEach(0..<4, id: \.self) { index in
+                            Circle()
+                                .fill(index < longBreakProgress.done
+                                      ? Color(hex: "#E65C40")
+                                      : AppTheme.separator(for: colorScheme))
+                                .frame(width: 8, height: 8)
+                        }
+                    }
+                    Spacer()
+                    Text(longBreakHintText)
+                        .font(.caption2.weight(.medium))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        .lineLimit(1)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -205,7 +233,43 @@ struct TimerView: View {
                             .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
                     )
             )
+            
+            if let celebration = timerStore.celebrationMessage {
+                Text(celebration)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(modeColor)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(modeColor.opacity(0.12))
+                            .overlay(Capsule().stroke(modeColor.opacity(0.25), lineWidth: 1))
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) {
+                            if timerStore.celebrationMessage == celebration {
+                                withAnimation { timerStore.celebrationMessage = nil }
+                            }
+                        }
+                    }
+            }
         }
+        .animation(.easeOut(duration: 0.25), value: timerStore.celebrationMessage)
+    }
+    
+    private var longBreakHintText: String {
+        if timerStore.mode == .longBreak {
+            return "正在长休息"
+        }
+        let until = timerStore.workSessionsUntilLongBreak
+        if until == 4 && timerStore.completedPomodoros > 0 && timerStore.completedPomodoros % 4 == 0 {
+            return "刚完成一轮 · 下一轮 4 个"
+        }
+        if until == 1 {
+            return "再 1 个进入长休息"
+        }
+        return "再 \(until) 个进入长休息"
     }
     
     // MARK: - Task
@@ -494,10 +558,32 @@ struct TimerView: View {
                 tint: AppTheme.secondaryText(for: colorScheme),
                 fill: AppTheme.cardBackground(for: colorScheme).opacity(0.75)
             ) {
-                timerStore.reset()
+                requestReset()
             }
             .keyboardShortcut("r", modifiers: .command)
             .help("重置 (⌘R)")
+            .confirmationDialog(
+                "重置当前计时？",
+                isPresented: $showResetConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("重置", role: .destructive) {
+                    timerStore.celebrationMessage = nil
+                    timerStore.reset()
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("进行中的时段不会记入专注记录。")
+            }
+        }
+    }
+    
+    private func requestReset() {
+        if timerStore.isSessionInProgress || timerStore.isRunning {
+            showResetConfirm = true
+        } else {
+            timerStore.celebrationMessage = nil
+            timerStore.reset()
         }
     }
     
@@ -532,10 +618,10 @@ struct TimerView: View {
         Group {
             if timerStore.mode == .work {
                 Text(taskStore.activeTask == nil
-                      ? "空格开始 · 上方可选任务"
+                      ? "空格开始自由专注 · 或上方选任务 · ⇧⌘空格 全局开始"
                       : "空格开始 · 将记入「\(taskStore.activeTask?.title ?? "")」")
             } else {
-                Text("休息中 · ⌘→ 跳过")
+                Text("休息中 · 空格继续 · ⌘→ 跳过")
             }
         }
         .font(.caption2)

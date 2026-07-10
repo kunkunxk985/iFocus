@@ -383,14 +383,26 @@ struct TaskListView: View {
             }
             
             if !isCompletedList {
-                Button {
-                    viewState.selectedScreen = .timer
-                } label: {
-                    Label("去专注钟", systemImage: "timer")
-                        .font(.subheadline.weight(.semibold))
+                HStack(spacing: 10) {
+                    Button {
+                        viewState.selectedScreen = .timer
+                    } label: {
+                        Label("去专注钟", systemImage: "timer")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.accent)
+                    
+                    if viewState.selectedScreen != .inboxTask {
+                        Button {
+                            viewState.selectedScreen = .inboxTask
+                        } label: {
+                            Label("去收集箱", systemImage: "tray")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(AppTheme.accent)
                 .padding(.top, 2)
             }
         }

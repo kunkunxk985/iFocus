@@ -6,6 +6,7 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
     case appearance = "外观"
     case timer = "计时"
     case notifications = "声音与通知"
+    case shortcuts = "快捷键"
 
     var id: String { rawValue }
 
@@ -15,6 +16,7 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
         case .appearance: return "paintpalette.fill"
         case .timer: return "timer"
         case .notifications: return "bell.fill"
+        case .shortcuts: return "keyboard"
         }
     }
 
@@ -24,6 +26,7 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
         case .appearance: return "主题与界面外观"
         case .timer: return "番茄节奏与每日目标"
         case .notifications: return "声音、通知与自动化"
+        case .shortcuts: return "键盘与菜单栏操作"
         }
     }
 }
@@ -55,6 +58,7 @@ struct SettingsWindowView: View {
                         case .appearance: appearancePanel
                         case .timer: timerPanel
                         case .notifications: notificationsPanel
+                        case .shortcuts: shortcutsPanel
                         }
                     }
                     .padding(.horizontal, 32)
@@ -202,6 +206,40 @@ struct SettingsWindowView: View {
             settingsCard("数据", icon: "internaldrive.fill") {
                 SettingsLine(title: "存储位置", value: "本机 Application Support")
                 Text("任务与专注记录仅保存在本机，不会上传。")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            }
+            
+            settingsCard("新手引导", icon: "sparkles") {
+                Button("重新显示引导") {
+                    UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                Text("下次打开主窗口时会再次显示三步上手卡片。")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            }
+        }
+    }
+    
+    private var shortcutsPanel: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            settingsCard("专注", icon: "timer") {
+                ShortcutRow(keys: "空格", action: "开始 / 暂停（专注页）")
+                ShortcutRow(keys: "⇧⌘空格", action: "开始 / 暂停（全局）")
+                ShortcutRow(keys: "⌘R", action: "重置当前计时")
+                ShortcutRow(keys: "⌘→", action: "跳过当前段")
+            }
+            settingsCard("前往", icon: "sidebar.left") {
+                ShortcutRow(keys: "⌘1", action: "专注钟")
+                ShortcutRow(keys: "⌘2", action: "数据统计")
+                ShortcutRow(keys: "⌘3–6", action: "今天 / 明天 / 本周 / 收集箱")
+                ShortcutRow(keys: "⌘7", action: "个人资料")
+                ShortcutRow(keys: "⌘,", action: "设置")
+            }
+            settingsCard("菜单栏", icon: "menubar.rectangle") {
+                Text("右上角番茄图标显示实时倒计时；点击可暂停、重置或显示主窗口。关闭主窗口后计时仍会继续。")
                     .font(.caption)
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
@@ -393,12 +431,37 @@ enum AppWindowMetrics {
 }
 
 enum AppVersion {
-    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.5.2 / 52).
+    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.0 / 60).
     static var short: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.5.2"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.0"
     }
     static var build: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "52"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "60"
+    }
+}
+
+private struct ShortcutRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let keys: String
+    let action: String
+    
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(keys)
+                .font(.system(.caption, design: .monospaced).weight(.semibold))
+                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(AppTheme.elevatedBackground(for: colorScheme))
+                )
+            Spacer(minLength: 12)
+            Text(action)
+                .font(.subheadline)
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                .multilineTextAlignment(.trailing)
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import AppKit
 import iFocusCore
 
 /// Stats dashboard — today / week operations board (A-tier insights).
@@ -136,11 +137,24 @@ struct AnalyticsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    PageTitle(
-                        title: "数据统计",
-                        subtitle: weekSubtitle,
-                        systemImage: "chart.bar.fill"
-                    )
+                    HStack(alignment: .top) {
+                        PageTitle(
+                            title: "数据统计",
+                            subtitle: weekSubtitle,
+                            systemImage: "chart.bar.fill"
+                        )
+                        Spacer(minLength: 12)
+                        Button {
+                            shareWeeklyReport()
+                        } label: {
+                            Label("导出周报", systemImage: "square.and.arrow.up")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("用邮件草稿生成近 7 天专注摘要")
+                        .padding(.top, 8)
+                    }
 
                     summaryGrid
 
@@ -466,6 +480,49 @@ struct AnalyticsView: View {
             return task.category
         }
         return nil
+    }
+    
+    private func shareWeeklyReport() {
+        let name = settings.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let who = name.isEmpty ? "小番茄" : name
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy年M月d日"
+        formatter.locale = Locale(identifier: "zh_CN")
+        let end = formatter.string(from: Date())
+        let start = formatter.string(from: weekStart)
+        
+        var lines: [String] = [
+            "\(who) 的 iFocus 近 7 天专注周报（\(start) – \(end)）",
+            "",
+            "· 番茄：\(weekTotals.pomodoros) 个",
+            "· 专注：\(FocusStats.formatTotalMinutes(weekTotals.minutes))",
+            "· 今日：\(timerStore.completedPomodoros) 个 / \(FocusStats.formatTotalMinutes(totalMinutesToday))",
+            "· 连续天数：\(streakCurrent) 天",
+            "· 任务绑定率：\(Int(((1 - freeShare) * 100).rounded()))%",
+            "",
+            "本周分类："
+        ]
+        
+        if categoryTop.isEmpty {
+            lines.append("· 暂无分类数据")
+        } else {
+            for item in categoryTop {
+                lines.append("· \(item.name)：\(item.minutes) 分钟")
+            }
+        }
+        
+        lines.append("")
+        lines.append(dayOverDayLabel)
+        lines.append("")
+        lines.append("-- 来自 iFocus macOS")
+        
+        let body = lines.joined(separator: "\n")
+        let subject = "iFocus 周报 \(end)"
+        let allowed = CharacterSet.urlQueryAllowed
+        guard let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: allowed),
+              let encodedBody = body.addingPercentEncoding(withAllowedCharacters: allowed),
+              let url = URL(string: "mailto:?subject=\(encodedSubject)&body=\(encodedBody)") else { return }
+        NSWorkspace.shared.open(url)
     }
 }
 

@@ -58,6 +58,8 @@ class TimerStore: ObservableObject {
     @Published var completedPomodoros: Int = 0
     @Published var notificationStatus: String = "未请求"
     @Published var notificationFeedback: String?
+    /// Brief toast after a segment completes (UI clears it).
+    @Published var celebrationMessage: String?
     
     /// High-frequency clock. NOT `@Published` — publishing every second was
     /// invalidating the entire view tree (task list + edit sheet) and freezing macOS Form.
@@ -262,6 +264,39 @@ class TimerStore: ObservableObject {
         return completed.next
     }
     
+    /// How many more work completions today until the next long break (1...4).
+    var workSessionsUntilLongBreak: Int {
+        Self.workSessionsUntilLongBreak(completedPomodorosToday: completedPomodoros)
+    }
+    
+    static func workSessionsUntilLongBreak(completedPomodorosToday: Int) -> Int {
+        let mod = max(0, completedPomodorosToday) % 4
+        return mod == 0 ? 4 : 4 - mod
+    }
+    
+    static func celebrationText(
+        wasWork: Bool,
+        minutes: Int?,
+        nextMode: TimerMode,
+        completedPomodorosToday: Int,
+        dailyGoal: Int
+    ) -> String {
+        if wasWork, let minutes {
+            let untilLong = workSessionsUntilLongBreak(completedPomodorosToday: completedPomodorosToday)
+            if nextMode == .longBreak {
+                return "专注 \(minutes) 分钟完成 · 进入长休息 🌿"
+            }
+            if dailyGoal > 0, completedPomodorosToday >= dailyGoal {
+                return "专注 \(minutes) 分钟 · 今日目标已达成 ✨"
+            }
+            if untilLong == 1 {
+                return "专注 \(minutes) 分钟 · 再 1 个番茄后长休息"
+            }
+            return "专注 \(minutes) 分钟完成 · 下一个：\(nextMode.rawValue)"
+        }
+        return "\(wasWork ? "专注" : "休息")结束 · 下一个：\(nextMode.rawValue)"
+    }
+    
     /// Notification copy for a finished work segment (uses session snapshot, not live active task).
     static func workCompletionBody(taskId: UUID?, taskTitle: String?, next: TimerMode) -> String {
         if taskId != nil, let title = taskTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
@@ -456,10 +491,12 @@ class TimerStore: ObservableObject {
         elapsedBeforePause = 0
         segmentStartedAt = nil
         
+        var loggedMinutes: Int?
         if wasWork, let minutes = TimerFormatting.logMinutes(
             elapsedSeconds: elapsedSeconds,
             maximumSeconds: plannedDuration
         ) {
+            loggedMinutes = minutes
             if let taskId = completedWorkContext?.taskId {
                 taskStore?.addFocusTime(to: taskId, minutes: minutes)
                 taskStore?.logFocusSession(
@@ -486,6 +523,13 @@ class TimerStore: ObservableObject {
         let nextMode = Self.nextMode(
             after: previousMode,
             workSessionsCompletedToday: wasWork ? completedPomodoros : 0
+        )
+        celebrationMessage = Self.celebrationText(
+            wasWork: wasWork,
+            minutes: loggedMinutes,
+            nextMode: nextMode,
+            completedPomodorosToday: completedPomodoros,
+            dailyGoal: settings.dailyGoal
         )
         playSound()
         sendNotification(

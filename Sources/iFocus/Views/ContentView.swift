@@ -22,6 +22,8 @@ struct SidebarItem: Identifiable {
 struct ContentView: View {
     @StateObject private var viewState = ContentViewState()
     @State private var isAccountMenuPresented = false
+    @State private var showResetConfirm = false
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @Environment(\.openWindow) private var openWindow
     @EnvironmentObject var settings: SettingsStore
     @EnvironmentObject var taskStore: TaskStore
@@ -91,6 +93,16 @@ struct ContentView: View {
                         .transition(accountMenuTransition)
                         .zIndex(30)
                 }
+                
+                if !hasCompletedOnboarding {
+                    OnboardingOverlay {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            hasCompletedOnboarding = true
+                        }
+                    }
+                    .transition(.opacity)
+                    .zIndex(40)
+                }
             }
         }
         // Draw under the transparent titlebar so no system white strip shows through.
@@ -98,6 +110,7 @@ struct ContentView: View {
         .ignoresSafeArea(.container, edges: .top)
         .environmentObject(viewState)
         .animation(accountMenuAnimation, value: isAccountMenuPresented)
+        .animation(.easeOut(duration: 0.25), value: hasCompletedOnboarding)
         .onChange(of: viewState.selectedScreen) { _ in
             if isAccountMenuPresented {
                 dismissAccountMenu()
@@ -115,10 +128,28 @@ struct ContentView: View {
             timerStore.toggle()
         }
         .onReceive(NotificationCenter.default.publisher(for: AppNavigation.resetTimer)) { _ in
-            timerStore.reset()
+            if timerStore.isSessionInProgress || timerStore.isRunning {
+                showResetConfirm = true
+            } else {
+                timerStore.celebrationMessage = nil
+                timerStore.reset()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: AppNavigation.skipTimer)) { _ in
             timerStore.skipToNext()
+        }
+        .confirmationDialog(
+            "重置当前计时？",
+            isPresented: $showResetConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("重置", role: .destructive) {
+                timerStore.celebrationMessage = nil
+                timerStore.reset()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("进行中的时段不会记入专注记录。")
         }
         // IMPORTANT: never subscribe to `clockTick` on this root view.
         // Per-second invalidation re-renders the whole tree (task list + edit sheet)
@@ -611,6 +642,89 @@ private struct FloatingFocusPill: View {
             return taskStore.activeTask?.title ?? "自由专注"
         }
         return timerStore.mode.rawValue
+    }
+}
+
+// MARK: - First-run onboarding
+
+private struct OnboardingOverlay: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let onFinish: () -> Void
+    
+    private let steps: [(icon: String, title: String, body: String)] = [
+        ("timer", "开始一个番茄", "在专注钟选任务（或自由专注），空格开始。菜单栏会显示倒计时。"),
+        ("checklist", "用清单排期", "今天 / 明天 / 收集箱整理任务；完成目标会记入统计。"),
+        ("chart.bar.fill", "看数据与习惯", "数据统计看今日与本周；个人资料有热力图与连续天数。")
+    ]
+    
+    var body: some View {
+        ZStack {
+            Color.black.opacity(colorScheme == .light ? 0.28 : 0.45)
+                .ignoresSafeArea()
+            
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(spacing: 10) {
+                    Image(systemName: "leaf.fill")
+                        .foregroundColor(AppTheme.accent)
+                    Text("欢迎使用 iFocus")
+                        .font(.title2.weight(.bold))
+                        .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                }
+                
+                Text("三分钟上手本地番茄钟 · 数据只存在这台 Mac。")
+                    .font(.subheadline)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                        HStack(alignment: .top, spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(AppTheme.accent.opacity(0.12))
+                                    .frame(width: 36, height: 36)
+                                Image(systemName: step.icon)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(AppTheme.accent)
+                            }
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("\(index + 1). \(step.title)")
+                                    .font(.subheadline.weight(.bold))
+                                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                                Text(step.body)
+                                    .font(.caption)
+                                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+                
+                HStack {
+                    Spacer()
+                    Button(action: onFinish) {
+                        Text("开始使用")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 22)
+                            .padding(.vertical, 10)
+                            .background(Capsule().fill(AppTheme.accent))
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(28)
+            .frame(maxWidth: 440)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(AppTheme.cardBackground(for: colorScheme))
+                    .shadow(color: AppTheme.softShadow(for: colorScheme), radius: 28, y: 12)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(AppTheme.separator(for: colorScheme), lineWidth: 1)
+            )
+        }
     }
 }
 

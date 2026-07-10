@@ -44,6 +44,31 @@ final class TimerStoreTests: XCTestCase {
         XCTAssertEqual(TimerStore.nextMode(after: .longBreak, workSessionsCompletedToday: 4), .work)
     }
     
+    func testWorkSessionsUntilLongBreakAndCelebration() {
+        XCTAssertEqual(TimerStore.workSessionsUntilLongBreak(completedPomodorosToday: 0), 4)
+        XCTAssertEqual(TimerStore.workSessionsUntilLongBreak(completedPomodorosToday: 1), 3)
+        XCTAssertEqual(TimerStore.workSessionsUntilLongBreak(completedPomodorosToday: 3), 1)
+        XCTAssertEqual(TimerStore.workSessionsUntilLongBreak(completedPomodorosToday: 4), 4)
+        
+        let text = TimerStore.celebrationText(
+            wasWork: true,
+            minutes: 25,
+            nextMode: .longBreak,
+            completedPomodorosToday: 4,
+            dailyGoal: 8
+        )
+        XCTAssertTrue(text.contains("长休息"))
+        
+        let goal = TimerStore.celebrationText(
+            wasWork: true,
+            minutes: 25,
+            nextMode: .shortBreak,
+            completedPomodorosToday: 8,
+            dailyGoal: 8
+        )
+        XCTAssertTrue(goal.contains("目标") || goal.contains("完成"))
+    }
+    
     func testWorkCompletionBodyUsesSessionSnapshotNotLiveTask() {
         let taskId = UUID()
         let body = TimerStore.workCompletionBody(
