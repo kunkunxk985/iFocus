@@ -280,7 +280,24 @@ struct TimerView: View {
                     )
             )
             
-            if let celebration = timerStore.celebrationMessage {
+            if timerStore.isPauseIdleTooLong {
+                Button {
+                    timerStore.start()
+                } label: {
+                    Text("已暂停 \(timerStore.pauseIdleMinutes) 分钟 · 点此继续")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(Color(hex: "#D97706"))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color(hex: "#F59E0B").opacity(0.15))
+                                .overlay(Capsule().stroke(Color(hex: "#F59E0B").opacity(0.35), lineWidth: 1))
+                        )
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            } else if let celebration = timerStore.celebrationMessage {
                 Text(celebration)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(modeColor)
@@ -302,6 +319,7 @@ struct TimerView: View {
             }
         }
         .animation(.easeOut(duration: 0.25), value: timerStore.celebrationMessage)
+        .animation(.easeOut(duration: 0.25), value: timerStore.isPauseIdleTooLong)
     }
     
     private var longBreakHintText: String {

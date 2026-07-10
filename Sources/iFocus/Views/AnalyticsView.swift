@@ -212,8 +212,10 @@ struct AnalyticsView: View {
                     .frame(height: primaryRowHeight)
                     
                     if range == .today {
+                        todayTimelineCard
+                            .frame(height: min(200, max(140, contentH * 0.18)))
                         todayHourCard
-                            .frame(height: min(180, max(130, contentH * 0.16)))
+                            .frame(height: min(160, max(120, contentH * 0.14)))
                     }
 
                     HStack(alignment: .top, spacing: 16) {
@@ -260,6 +262,26 @@ struct AnalyticsView: View {
             on: todayStart,
             calendar: calendar
         )
+    }
+    
+    private var todayTimelineBlocks: [FocusStats.TimelineBlock] {
+        let sessions = taskStore.focusSessions.map {
+            (timestamp: $0.timestamp, minutes: $0.durationMinutes, title: $0.taskTitle)
+        }
+        return FocusStats.timelineBlocks(sessions: sessions, on: todayStart, calendar: calendar)
+    }
+    
+    private var todayTimelineCard: some View {
+        let blocks = todayTimelineBlocks
+        return AnalyticsCard(title: "今日时间线", icon: "timeline.selection") {
+            if blocks.isEmpty {
+                EmptyStateView(systemImage: "calendar", title: "完成专注后会显示时间块")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                TodayTimelineView(blocks: blocks)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
     }
     
     private var todayHourCard: some View {
@@ -733,6 +755,59 @@ private struct EmptyStateView: View {
                 .foregroundColor(AppTheme.secondaryText(for: colorScheme))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Today timeline (block view)
+
+struct TodayTimelineView: View {
+    let blocks: [FocusStats.TimelineBlock]
+    @Environment(\.colorScheme) private var colorScheme
+    
+    private let hourLabels = [0, 6, 12, 18, 24]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            GeometryReader { geo in
+                let w = geo.size.width
+                let h = max(36, geo.size.height - 18)
+                ZStack(alignment: .topLeading) {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(AppTheme.separator(for: colorScheme).opacity(0.35))
+                        .frame(height: h)
+                    
+                    ForEach(blocks) { block in
+                        let prog = block.dayProgress()
+                        let x = prog.start * w
+                        let width = max(8, (prog.end - prog.start) * w)
+                        VStack(spacing: 2) {
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(AppTheme.accent.opacity(0.85))
+                                .frame(width: width, height: h * 0.72)
+                                .overlay(
+                                    Text(block.title)
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .lineLimit(1)
+                                        .padding(.horizontal, 4)
+                                        .opacity(width > 48 ? 1 : 0)
+                                )
+                                .help("\(block.title) · \(block.minutes) 分")
+                        }
+                        .offset(x: x, y: h * 0.14)
+                    }
+                }
+            }
+            
+            HStack {
+                ForEach(hourLabels, id: \.self) { hour in
+                    Text(String(format: "%02d", hour == 24 ? 24 : hour))
+                        .font(.system(size: 9, weight: .medium).monospacedDigit())
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    if hour < 24 { Spacer(minLength: 0) }
+                }
+            }
+        }
     }
 }
 

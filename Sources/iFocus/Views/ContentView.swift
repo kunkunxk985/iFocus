@@ -24,6 +24,7 @@ struct ContentView: View {
     @State private var isAccountMenuPresented = false
     @State private var showResetConfirm = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
     @Environment(\.openWindow) private var openWindow
     @EnvironmentObject var settings: SettingsStore
     @EnvironmentObject var taskStore: TaskStore
@@ -32,9 +33,11 @@ struct ContentView: View {
 
     /// Space under the transparent titlebar so sidebar content clears traffic lights.
     private let titlebarContentInset: CGFloat = AppTheme.detailTopInset
+    private let collapsedSidebarWidth: CGFloat = 64
 
     private func sidebarWidth(for availableWidth: CGFloat) -> CGFloat {
-        min(252, max(216, availableWidth * 0.10))
+        if sidebarCollapsed { return collapsedSidebarWidth }
+        return min(252, max(216, availableWidth * 0.10))
     }
 
     private var smartItems: [SidebarItem] {
@@ -72,6 +75,7 @@ struct ContentView: View {
                 HStack(spacing: 0) {
                     sidebarPane
                         .frame(width: sidebarWidth(for: geometry.size.width))
+                        .animation(.easeInOut(duration: 0.2), value: sidebarCollapsed)
 
                     detailPane
                 }
@@ -205,12 +209,17 @@ struct ContentView: View {
 
             VStack(spacing: 0) {
                 sidebarTopSpacer
-                brandHeader
+                
+                if sidebarCollapsed {
+                    collapsedSidebarHeader
+                } else {
+                    brandHeader
+                }
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: sidebarCollapsed ? 8 : 20) {
                         // Primary focus entry first — main product loop
-                        sidebarSection("专注") {
+                        sidebarSection(sidebarCollapsed ? "" : "专注") {
                             sidebarRow(
                                 title: "专注钟",
                                 screen: .timer,
@@ -228,7 +237,7 @@ struct ContentView: View {
                             )
                         }
                         
-                        sidebarSection("清单") {
+                        sidebarSection(sidebarCollapsed ? "" : "清单") {
                             ForEach(smartItems) { item in
                                 sidebarRow(
                                     title: item.title,
@@ -240,11 +249,12 @@ struct ContentView: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, sidebarCollapsed ? 8 : 12)
                     .padding(.bottom, 16)
                 }
                 .softScroll()
 
+                sidebarCollapseButton
                 bottomUserBar
             }
         }
@@ -254,6 +264,47 @@ struct ContentView: View {
                 .frame(width: 1)
                 .opacity(colorScheme == .light ? 0.55 : 0.7)
         }
+    }
+    
+    private var collapsedSidebarHeader: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "leaf.fill")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(AppTheme.accent)
+                .frame(width: 32, height: 32)
+                .background(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(AppTheme.accent.opacity(0.14))
+                )
+                .help("iFocus")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, 10)
+    }
+    
+    private var sidebarCollapseButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                sidebarCollapsed.toggle()
+                WindowLayoutStore.isSidebarCollapsed = sidebarCollapsed
+            }
+        } label: {
+            HStack {
+                Image(systemName: sidebarCollapsed ? "sidebar.left" : "sidebar.leading")
+                    .font(.system(size: 13, weight: .semibold))
+                if !sidebarCollapsed {
+                    Text("收起侧栏")
+                        .font(.caption.weight(.semibold))
+                    Spacer()
+                }
+            }
+            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            .padding(.horizontal, sidebarCollapsed ? 0 : 14)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .help(sidebarCollapsed ? "展开侧栏" : "收起侧栏")
     }
 
     private var sidebarTopSpacer: some View {
@@ -266,11 +317,13 @@ struct ContentView: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
-                .padding(.horizontal, 10)
-                .padding(.bottom, 2)
+            if !title.isEmpty {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 2)
+            }
 
             content()
         }
@@ -288,33 +341,37 @@ struct ContentView: View {
         return Button {
             viewState.selectedScreen = screen
         } label: {
-            HStack(spacing: 11) {
+            HStack(spacing: sidebarCollapsed ? 0 : 11) {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(isSelected ? AppTheme.accent : (emphasizeRunning ? AppTheme.accent : tint))
                     .frame(width: 20)
 
-                Text(title)
-                    .font(.system(size: 13.5, weight: isSelected ? .semibold : .medium))
-                    .foregroundColor(isSelected ? AppTheme.primaryText(for: colorScheme) : AppTheme.primaryText(for: colorScheme).opacity(0.88))
-                    .lineLimit(1)
+                if !sidebarCollapsed {
+                    Text(title)
+                        .font(.system(size: 13.5, weight: isSelected ? .semibold : .medium))
+                        .foregroundColor(isSelected ? AppTheme.primaryText(for: colorScheme) : AppTheme.primaryText(for: colorScheme).opacity(0.88))
+                        .lineLimit(1)
 
-                Spacer(minLength: 6)
+                    Spacer(minLength: 6)
 
-                if let badge, !badge.isEmpty {
-                    Text(badge)
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundColor(badgeForeground(isSelected: isSelected, emphasizeRunning: emphasizeRunning, badge: badge))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(badgeBackground(isSelected: isSelected, emphasizeRunning: emphasizeRunning, badge: badge))
-                        )
+                    if let badge, !badge.isEmpty {
+                        Text(badge)
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundColor(badgeForeground(isSelected: isSelected, emphasizeRunning: emphasizeRunning, badge: badge))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule()
+                                    .fill(badgeBackground(isSelected: isSelected, emphasizeRunning: emphasizeRunning, badge: badge))
+                            )
+                    }
                 }
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, sidebarCollapsed ? 12 : 10)
             .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: sidebarCollapsed ? .center : .leading)
+            .help(sidebarCollapsed ? title : "")
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(isSelected

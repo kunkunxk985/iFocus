@@ -60,6 +60,10 @@ class TimerStore: ObservableObject {
     @Published var notificationFeedback: String?
     /// Brief toast after a segment completes (UI clears it).
     @Published var celebrationMessage: String?
+    /// True when paused mid-session longer than the reminder threshold.
+    @Published var isPauseIdleTooLong: Bool = false
+    /// Whole minutes already spent paused (for UI copy).
+    @Published private(set) var pauseIdleMinutes: Int = 0
     
     /// High-frequency clock. NOT `@Published` — publishing every second was
     /// invalidating the entire view tree (task list + edit sheet) and freezing macOS Form.
@@ -77,6 +81,8 @@ class TimerStore: ObservableObject {
     var settings: SettingsStore
     var taskStore: TaskStore?
     private var timer: Timer?
+    private var pauseWatchTimer: Timer?
+    private var pauseStartedAt: Date?
     private var targetEndDate: Date?
     /// Wall-clock start of the current running segment (for accurate elapsed logging).
     private var segmentStartedAt: Date?
@@ -120,6 +126,7 @@ class TimerStore: ObservableObject {
             defaultNC.removeObserver(observer)
         }
         timer?.invalidate()
+        pauseWatchTimer?.invalidate()
     }
     
     private func bootstrapNotifications() {
@@ -315,6 +322,7 @@ class TimerStore: ObservableObject {
             sessionPlannedDuration = max(0, elapsedBeforePause + timeRemaining)
         }
         captureWorkSessionContextIfNeeded()
+        clearPauseIdleState()
         isRunning = true
         segmentStartedAt = Date()
         targetEndDate = Date().addingTimeInterval(timeRemaining)
@@ -339,12 +347,22 @@ class TimerStore: ObservableObject {
         timer?.invalidate()
         timer = nil
         targetEndDate = nil
+        // Only watch idle when a session is mid-way (not a fresh full duration sitting idle).
+        if isSessionInProgress {
+            pauseStartedAt = Date()
+            startPauseWatchIfNeeded()
+        } else {
+            clearPauseIdleState()
+        }
         updateDockBadge()
         emitClockTick()
     }
     
     func reset() {
+        pauseWatchTimer?.invalidate()
+        pauseWatchTimer = nil
         pause()
+        clearPauseIdleState()
         elapsedBeforePause = 0
         segmentStartedAt = nil
         sessionPlannedDuration = nil
@@ -353,6 +371,48 @@ class TimerStore: ObservableObject {
         refreshStatsFromHistory()
         updateDockBadge()
         emitClockTick()
+    }
+    
+    private func clearPauseIdleState() {
+        pauseStartedAt = nil
+        pauseIdleMinutes = 0
+        if isPauseIdleTooLong { isPauseIdleTooLong = false }
+        pauseWatchTimer?.invalidate()
+        pauseWatchTimer = nil
+    }
+    
+    private func startPauseWatchIfNeeded() {
+        pauseWatchTimer?.invalidate()
+        guard settings.pauseReminderEnabled else { return }
+        let watch = Timer(timeInterval: 30, repeats: true) { [weak self] _ in
+            self?.evaluatePauseIdle()
+        }
+        pauseWatchTimer = watch
+        RunLoop.main.add(watch, forMode: .common)
+        evaluatePauseIdle()
+    }
+    
+    private func evaluatePauseIdle() {
+        guard !isRunning, isSessionInProgress, let pauseStartedAt else {
+            if isPauseIdleTooLong { isPauseIdleTooLong = false }
+            return
+        }
+        guard settings.pauseReminderEnabled else {
+            if isPauseIdleTooLong { isPauseIdleTooLong = false }
+            return
+        }
+        let elapsed = Date().timeIntervalSince(pauseStartedAt)
+        let minutes = Int(elapsed / 60.0)
+        pauseIdleMinutes = minutes
+        let threshold = max(1, settings.pauseReminderMinutes)
+        let tooLong = minutes >= threshold
+        if isPauseIdleTooLong != tooLong {
+            isPauseIdleTooLong = tooLong
+        }
+        if tooLong {
+            emitClockTick()
+            updateDockBadge()
+        }
     }
     
     func setMode(_ newMode: TimerMode) {
@@ -488,6 +548,7 @@ class TimerStore: ObservableObject {
         let completedWorkContext = workSessionContext
         
         pause()
+        clearPauseIdleState()
         elapsedBeforePause = 0
         segmentStartedAt = nil
         

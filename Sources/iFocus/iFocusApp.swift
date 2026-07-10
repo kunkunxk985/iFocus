@@ -23,6 +23,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         UNUserNotificationCenter.current().delegate = self
         WindowChrome.applyAll()
         NSApp.setActivationPolicy(.regular)
+        WindowLayoutStore.restoreMainWindowIfPossible()
+        // Observe frame changes on the main window for layout memory.
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification,
+            object: nil,
+            queue: .main
+        ) { note in
+            guard let window = note.object as? NSWindow, window.title != "设置" else { return }
+            WindowLayoutStore.saveMainWindowFrame(window.frame)
+        }
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification,
+            object: nil,
+            queue: .main
+        ) { note in
+            guard let window = note.object as? NSWindow, window.title != "设置" else { return }
+            WindowLayoutStore.saveMainWindowFrame(window.frame)
+        }
     }
 
     func userNotificationCenter(

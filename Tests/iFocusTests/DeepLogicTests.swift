@@ -127,6 +127,26 @@ final class DeepLogicTests: XCTestCase {
         )
     }
     
+    func testTimelineBlocksFromSessionEnd() {
+        // timestamp = end of session
+        let end = day(2026, 3, 10, hour: 10) // 10:00
+        let sessions: [(Date, Int, String)] = [
+            (end, 25, "写代码"), // 09:35–10:00
+            (day(2026, 3, 10, hour: 15), 50, "阅读"),
+        ]
+        let blocks = FocusStats.timelineBlocks(
+            sessions: sessions,
+            on: day(2026, 3, 10),
+            calendar: utcCalendar
+        )
+        XCTAssertEqual(blocks.count, 2)
+        XCTAssertEqual(blocks[0].title, "写代码")
+        XCTAssertEqual(blocks[0].minutes, 25)
+        let prog = blocks[0].dayProgress(calendar: utcCalendar)
+        XCTAssertGreaterThan(prog.end, prog.start)
+        XCTAssertLessThan(prog.start, 0.5)
+    }
+    
     func testMinutesByHourOfDay() {
         let sessions: [(Date, Int)] = [
             (day(2026, 3, 10, hour: 9), 25),

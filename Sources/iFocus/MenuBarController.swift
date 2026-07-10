@@ -199,32 +199,39 @@ final class MenuBarController: NSObject, ObservableObject {
         let goal = timerStore.settings.dailyGoal
         let done = timerStore.completedPomodoros
         
+        let idleTooLong = timerStore.isPauseIdleTooLong
         let barText = Self.barTitle(
             timeString: time,
             mode: mode,
             isRunning: isRunning,
             isSessionInProgress: inProgress,
             completed: done,
-            goal: goal
+            goal: goal,
+            pauseIdleTooLong: idleTooLong
         )
         if let button = statusItem.button {
             button.attributedTitle = Self.attributedBarTitle(
                 barText,
                 mode: mode,
                 isRunning: isRunning,
-                isSessionInProgress: inProgress
+                isSessionInProgress: inProgress,
+                pauseIdleTooLong: idleTooLong
             )
             button.setAccessibilityLabel("iFocus \(time) 今日 \(done)/\(goal)")
         }
         
         let runStateLabel: String = {
             if isRunning { return "进行中" }
+            if idleTooLong { return "暂停过久" }
             if inProgress { return "已暂停" }
             return "待开始"
         }()
         
         let taskTitle = timerStore.taskStore?.activeTask?.title
         var tooltip = "iFocus\n\(mode.rawValue) \(time) · \(runStateLabel)\n今日 \(done)/\(goal) 番茄"
+        if idleTooLong {
+            tooltip += "\n已暂停 \(timerStore.pauseIdleMinutes) 分钟，点击菜单继续专注"
+        }
         if let taskTitle, !taskTitle.isEmpty {
             tooltip += "\n当前任务：\(taskTitle)"
         } else if mode == .work {
@@ -312,7 +319,8 @@ final class MenuBarController: NSObject, ObservableObject {
         isRunning: Bool,
         isSessionInProgress: Bool,
         completed: Int = 0,
-        goal: Int = 0
+        goal: Int = 0,
+        pauseIdleTooLong: Bool = false
     ) -> String {
         let progress: String = {
             guard goal > 0 else { return "" }
@@ -320,6 +328,9 @@ final class MenuBarController: NSObject, ObservableObject {
         }()
         if isRunning {
             return " \(timeString)\(progress)"
+        }
+        if pauseIdleTooLong {
+            return " ⚠\(timeString)\(progress)"
         }
         if isSessionInProgress {
             return " ⏸\(timeString)\(progress)"
@@ -331,10 +342,16 @@ final class MenuBarController: NSObject, ObservableObject {
         _ text: String,
         mode: TimerMode,
         isRunning: Bool,
-        isSessionInProgress: Bool
+        isSessionInProgress: Bool,
+        pauseIdleTooLong: Bool = false
     ) -> NSAttributedString {
         let font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
-        let color = nsColor(for: mode, emphasized: isRunning || isSessionInProgress)
+        let color: NSColor
+        if pauseIdleTooLong {
+            color = NSColor(calibratedRed: 0.95, green: 0.55, blue: 0.15, alpha: 1)
+        } else {
+            color = nsColor(for: mode, emphasized: isRunning || isSessionInProgress)
+        }
         return NSAttributedString(string: text, attributes: [
             .font: font,
             .foregroundColor: color

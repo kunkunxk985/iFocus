@@ -385,6 +385,27 @@ struct SettingsWindowView: View {
                     }
                 }
                 .toggleStyle(.switch)
+                
+                Toggle(isOn: $settings.pauseReminderEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("暂停过久提醒")
+                            .font(.subheadline.weight(.medium))
+                        Text("会话暂停超过设定时间后，菜单栏与界面会轻提示。")
+                            .font(.caption)
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    }
+                }
+                .toggleStyle(.switch)
+                
+                if settings.pauseReminderEnabled {
+                    StepperRow(
+                        title: "提醒阈值",
+                        value: $settings.pauseReminderMinutes,
+                        suffix: "分钟",
+                        range: 1...60,
+                        step: 1
+                    )
+                }
             }
 
             settingsCard("每日目标", icon: "target") {
@@ -501,12 +522,12 @@ enum AppWindowMetrics {
 }
 
 enum AppVersion {
-    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.3 / 63).
+    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.4 / 64).
     static var short: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.3"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.4"
     }
     static var build: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "63"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "64"
     }
 }
 

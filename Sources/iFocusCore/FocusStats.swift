@@ -298,6 +298,62 @@ public enum FocusStats {
         return String(format: "%02d:00–%02d:00", peak, (peak + 1) % 24 == 0 ? 24 : peak + 1)
     }
     
+    /// A focus block on a day timeline. `timestamp` is treated as **session end**.
+    public struct TimelineBlock: Equatable, Identifiable {
+        public var id: String { "\(start.timeIntervalSince1970)-\(end.timeIntervalSince1970)-\(title)" }
+        public let start: Date
+        public let end: Date
+        public let minutes: Int
+        public let title: String
+        
+        public init(start: Date, end: Date, minutes: Int, title: String) {
+            self.start = start
+            self.end = end
+            self.minutes = minutes
+            self.title = title
+        }
+        
+        /// Fraction of the day [0,1] for layout.
+        public func dayProgress(calendar: Calendar = .current) -> (start: Double, end: Double) {
+            let day = calendar.startOfDay(for: start)
+            let dayEnd = calendar.date(byAdding: .day, value: 1, to: day) ?? day.addingTimeInterval(86_400)
+            let span = dayEnd.timeIntervalSince(day)
+            guard span > 0 else { return (0, 0) }
+            let s = max(0, min(1, start.timeIntervalSince(day) / span))
+            let e = max(0, min(1, end.timeIntervalSince(day) / span))
+            return (s, max(s + 0.004, e)) // min width so short blocks remain visible
+        }
+    }
+    
+    /// Build timeline blocks for one calendar day.
+    /// Session `timestamp` = end time; start = end − minutes.
+    public static func timelineBlocks(
+        sessions: [(timestamp: Date, minutes: Int, title: String)],
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> [TimelineBlock] {
+        let dayStart = calendar.startOfDay(for: day)
+        let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart.addingTimeInterval(86_400)
+        var blocks: [TimelineBlock] = []
+        for s in sessions {
+            let end = s.timestamp
+            let mins = max(1, s.minutes)
+            let start = end.addingTimeInterval(-TimeInterval(mins * 60))
+            // Keep if any overlap with the day
+            guard end > dayStart, start < dayEnd else { continue }
+            let clippedStart = max(start, dayStart)
+            let clippedEnd = min(end, dayEnd)
+            let clippedMins = max(1, Int(clippedEnd.timeIntervalSince(clippedStart) / 60.0))
+            blocks.append(TimelineBlock(
+                start: clippedStart,
+                end: clippedEnd,
+                minutes: clippedMins,
+                title: s.title.isEmpty ? "专注" : s.title
+            ))
+        }
+        return blocks.sorted { $0.start < $1.start }
+    }
+    
     /// Up to two data-driven tips for the analytics dashboard (Chinese, product tone).
     public static func smartInsights(
         todayPomodoros: Int,

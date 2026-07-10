@@ -70,6 +70,8 @@ class SettingsStore: ObservableObject {
         static let launchAtLogin = "launchAtLogin"
         static let toggleShortcut = "toggleShortcutPreset"
         static let showFocusModeHint = "showFocusModeHintOnStart"
+        static let pauseReminderEnabled = "pauseReminderEnabled"
+        static let pauseReminderMinutes = "pauseReminderMinutes"
     }
     
     private let defaults: UserDefaults
@@ -165,6 +167,22 @@ class SettingsStore: ObservableObject {
     /// When starting a work segment, offer to open System Focus settings.
     @Published var showFocusModeHintOnStart: Bool {
         didSet { defaults.set(showFocusModeHintOnStart, forKey: Key.showFocusModeHint) }
+    }
+    
+    @Published var pauseReminderEnabled: Bool {
+        didSet { defaults.set(pauseReminderEnabled, forKey: Key.pauseReminderEnabled) }
+    }
+    
+    /// Minutes paused mid-session before nudging the user (default 5).
+    @Published var pauseReminderMinutes: Int {
+        didSet {
+            let clamped = min(60, max(1, pauseReminderMinutes))
+            guard clamped == pauseReminderMinutes else {
+                pauseReminderMinutes = clamped
+                return
+            }
+            defaults.set(pauseReminderMinutes, forKey: Key.pauseReminderMinutes)
+        }
     }
     
     /// Reflect OS login-item state in the toggle (read-only sync).
@@ -291,6 +309,8 @@ class SettingsStore: ObservableObject {
         let shortcutRaw = defaults.string(forKey: Key.toggleShortcut) ?? ToggleShortcutPreset.shiftCmdSpace.rawValue
         self.toggleShortcut = ToggleShortcutPreset(rawValue: shortcutRaw) ?? .shiftCmdSpace
         self.showFocusModeHintOnStart = defaults.object(forKey: Key.showFocusModeHint) as? Bool ?? true
+        self.pauseReminderEnabled = defaults.object(forKey: Key.pauseReminderEnabled) as? Bool ?? true
+        self.pauseReminderMinutes = Self.intValue(for: Key.pauseReminderMinutes, in: defaults, defaultValue: 5)
         
         // Drop legacy keys that used to persist transient UI/runtime state.
         defaults.removeObject(forKey: "isLocked")
