@@ -19,11 +19,8 @@ struct TimerView: View {
     @AppStorage("timerImmersiveMode") private var immersiveMode = false
     
     private var modeColor: Color {
-        // Prefer product accent for work; keep break colors distinct.
-        switch timerStore.mode {
-        case .work: return AppTheme.accent
-        case .shortBreak, .longBreak: return timerStore.mode.accent
-        }
+        // Work + breaks both go through TimerMode.accent (work = user accent preset).
+        timerStore.mode.accent
     }
     
     private var density: UIDensity { settings.uiDensity }
@@ -382,7 +379,7 @@ struct TimerView: View {
                         ForEach(0..<4, id: \.self) { index in
                             Circle()
                                 .fill(index < longBreakProgress.done
-                                      ? Color(hex: "#E65C40")
+                                      ? AppTheme.accent
                                       : AppTheme.separator(for: colorScheme))
                                 .frame(width: 8, height: 8)
                         }

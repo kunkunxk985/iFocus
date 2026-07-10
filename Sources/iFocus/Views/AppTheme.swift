@@ -451,15 +451,21 @@ struct PageTitle: View {
     
     var body: some View {
         let density = settings.uiDensity
-        HStack(alignment: .center, spacing: 14 * density.scale) {
+        HStack(alignment: .center, spacing: 12 * density.scale) {
             if let systemImage {
+                // Neutral tile + accent glyph — avoids a second huge brand-colored block
+                // next to the collapsed sidebar logo.
                 Image(systemName: systemImage)
-                    .font(.system(size: 18 * density.scale, weight: .semibold))
+                    .font(.system(size: 16 * density.scale, weight: .semibold))
                     .foregroundColor(tint)
-                    .frame(width: 40 * density.scale, height: 40 * density.scale)
+                    .frame(width: 34 * density.scale, height: 34 * density.scale)
                     .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(tint.opacity(0.12))
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(AppTheme.elevatedBackground(for: colorScheme))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
                     )
             }
             VStack(alignment: .leading, spacing: 3) {

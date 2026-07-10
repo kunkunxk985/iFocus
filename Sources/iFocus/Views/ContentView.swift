@@ -323,20 +323,15 @@ struct ContentView: View {
         }
     }
     
+    /// Compact mark only — avoid a second large accent tile next to PageTitle when collapsed.
     private var collapsedSidebarHeader: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "leaf.fill")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(AppTheme.accent)
-                .frame(width: 32, height: 32)
-                .background(
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(AppTheme.accent.opacity(0.14))
-                )
-                .help("iFocus")
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.bottom, 10)
+        Image(systemName: "leaf.fill")
+            .font(.system(size: 11, weight: .bold))
+            .foregroundColor(AppTheme.accent.opacity(0.85))
+            .frame(width: 22, height: 22)
+            .help("iFocus")
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 6)
     }
     
     private var sidebarCollapseButton: some View {
@@ -400,9 +395,9 @@ struct ContentView: View {
         } label: {
             HStack(spacing: sidebarCollapsed ? 0 : 11) {
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: sidebarCollapsed ? 14 : 13, weight: .semibold))
                     .foregroundColor(isSelected ? AppTheme.accent : (emphasizeRunning ? AppTheme.accent : tint))
-                    .frame(width: 20)
+                    .frame(width: sidebarCollapsed ? 22 : 20)
 
                 if !sidebarCollapsed {
                     Text(title)
@@ -425,27 +420,28 @@ struct ContentView: View {
                     }
                 }
             }
-            .padding(.horizontal, sidebarCollapsed ? 12 : 10)
-            .padding(.vertical, 9)
+            .padding(.horizontal, sidebarCollapsed ? 0 : 10)
+            .padding(.vertical, sidebarCollapsed ? 10 : 9)
             .frame(maxWidth: .infinity, alignment: sidebarCollapsed ? .center : .leading)
             .help(sidebarCollapsed ? title : "")
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: sidebarCollapsed ? 12 : 10, style: .continuous)
                     .fill(isSelected
                           ? AppTheme.accent.opacity(colorScheme == .light ? 0.11 : 0.18)
                           : Color.clear)
             )
             .overlay(alignment: .leading) {
-                if isSelected {
+                // Leading accent bar only in expanded mode (cramped / odd when collapsed).
+                if isSelected && !sidebarCollapsed {
                     Capsule()
                         .fill(AppTheme.accent)
                         .frame(width: 3, height: 16)
                         .padding(.leading, 2)
                 }
             }
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: sidebarCollapsed ? 12 : 10, style: .continuous))
         }
-        .buttonStyle(SoftHoverButtonStyle())
+        .buttonStyle(SoftHoverButtonStyle(cornerRadius: sidebarCollapsed ? 12 : 10))
     }
     
     private func badgeForeground(isSelected: Bool, emphasizeRunning: Bool, badge: String) -> Color {

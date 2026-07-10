@@ -20,10 +20,11 @@ enum TimerMode: String, CaseIterable, Identifiable {
         }
     }
     
+    /// Break modes keep fixed hues; work always follows the user accent preset.
     var accent: Color {
         switch self {
-        case .work:        return Color(hex: "#E65C40")
-        case .shortBreak:  return Color(hex: "#10B981")
+        case .work:        return AppTheme.accent
+        case .shortBreak:  return Color(hex: "#0D9488") // teal — stays distinct from 专注绿
         case .longBreak:   return Color(hex: "#3B82F6")
         }
     }
