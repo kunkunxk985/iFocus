@@ -215,12 +215,16 @@ struct SettingsWindowView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("登录 Mac 时打开 iFocus")
                             .font(.subheadline.weight(.medium))
-                        Text("建议把 App 放在「应用程序」文件夹。若系统要求批准，请到登录项中允许。")
+                        Text("默认关闭。仅在你手动打开时才会注册登录项，不会在安装或更新后自动开启。")
                             .font(.caption)
                             .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                     }
                 }
                 .toggleStyle(.switch)
+                
+                Text("建议把 App 放在「应用程序」文件夹。若系统要求批准，请到「登录项」中允许。")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                 
                 HStack(spacing: 10) {
                     Button("打开系统登录项…") {

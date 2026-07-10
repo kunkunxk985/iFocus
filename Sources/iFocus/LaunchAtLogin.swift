@@ -4,6 +4,7 @@ import ServiceManagement
 
 /// Login-item registration via `SMAppService` (macOS 13+).
 ///
+/// Policy: **opt-in only**. Never call `setEnabled(true)` on app launch or install.
 /// Best results when the app lives in `/Applications` as a real `.app` bundle.
 /// Development/`swift run` builds cannot reliably register.
 enum LaunchAtLogin {

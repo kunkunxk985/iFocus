@@ -109,7 +109,8 @@ class SettingsStore: ObservableObject {
         }
     }
     
-    /// Preference mirror; system registration is applied via `LaunchAtLogin`.
+    /// User preference for login launch. **Default is always off** — never auto-register.
+    /// System registration only runs when the user toggles this in Settings.
     @Published var launchAtLogin: Bool {
         didSet {
             defaults.set(launchAtLogin, forKey: Key.launchAtLogin)
@@ -119,24 +120,32 @@ class SettingsStore: ObservableObject {
     /// Last human-readable feedback from login-item registration.
     @Published var launchAtLoginFeedback: String?
     
-    /// Sync toggle with `SMAppService` reality (user may have disabled in System Settings).
+    /// Reflect OS login-item state in the toggle (read-only sync).
+    /// Does **not** register the app — only the Settings switch calls `applyLaunchAtLoginPreference()`.
     func refreshLaunchAtLoginFromSystem() {
+        // If the user (or System Settings) already registered us, show ON.
+        // If not registered, keep preference as saved (default false) — never force ON.
         let systemOn = LaunchAtLogin.isEnabled
-        if launchAtLogin != systemOn {
-            launchAtLogin = systemOn
+        if systemOn {
+            if !launchAtLogin { launchAtLogin = true }
+        } else if launchAtLogin, defaults.object(forKey: Key.launchAtLogin) as? Bool == true {
+            // Preference says on but OS says off (user removed login item, or not in /Applications).
+            launchAtLogin = false
+            launchAtLoginFeedback = "系统中未启用登录项，已同步为关闭。可在下方重新打开。"
         }
     }
     
+    /// Apply the toggle — only invoke from explicit user action in Settings.
     func applyLaunchAtLoginPreference() {
         let result = LaunchAtLogin.setEnabled(launchAtLogin)
         launchAtLoginFeedback = result.message
-        // Re-read system state after register/unregister.
         let systemOn = LaunchAtLogin.isEnabled
-        if launchAtLogin != systemOn {
-            // Keep UI honest if registration failed or requires approval only.
-            if !result.ok {
-                launchAtLogin = systemOn
-            }
+        if !result.ok {
+            // Registration failed — don't leave a lying "ON" switch.
+            launchAtLogin = systemOn
+        } else if launchAtLogin, !systemOn, LaunchAtLogin.status == .requiresApproval {
+            // Waiting for user approval in System Settings; keep preference ON.
+            launchAtLoginFeedback = result.message
         }
     }
     
@@ -227,9 +236,10 @@ class SettingsStore: ObservableObject {
         }
         self.avatarColorIndex  = defaults.integer(forKey: Key.avatarColorIndex)
         self.avatarPath        = defaults.string(forKey: Key.avatarPath)
-        // Prefer live system status when available; fall back to saved preference.
+        // Default OFF. Never register login item here — user must enable in Settings.
         let savedLaunch = defaults.object(forKey: Key.launchAtLogin) as? Bool ?? false
-        self.launchAtLogin = LaunchAtLogin.isEnabled ? true : savedLaunch
+        // Only show ON at launch if already registered in the OS (user previously opted in).
+        self.launchAtLogin = LaunchAtLogin.isEnabled || savedLaunch
         
         // Drop legacy keys that used to persist transient UI/runtime state.
         defaults.removeObject(forKey: "isLocked")
