@@ -196,13 +196,8 @@ struct AnalyticsView: View {
                         .padding(.top, 8)
                     }
                     
-                    Picker("范围", selection: $range) {
-                        ForEach(AnalyticsRange.allCases) { r in
-                            Text(r.rawValue).tag(r)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 420)
+                    rangeChipsBar
+                        .frame(maxWidth: 520)
 
                     summaryGrid
 
@@ -271,6 +266,45 @@ struct AnalyticsView: View {
             return "\(range.rawValue) · \(pomos) 个番茄 · \(time)  ·  \(dayOverDayLabel)"
         }
         return "\(range.rawValue) · \(pomos) 个番茄 · \(time)"
+    }
+    
+    private var rangeChipsBar: some View {
+        HStack(spacing: 8) {
+            ForEach(AnalyticsRange.allCases) { r in
+                let selected = range == r
+                Button {
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        range = r
+                    }
+                } label: {
+                    Text(r.rawValue)
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(selected ? .white : AppTheme.primaryText(for: colorScheme).opacity(0.85))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(
+                            Capsule()
+                                .fill(selected
+                                      ? AppTheme.accent
+                                      : AppTheme.cardBackground(for: colorScheme))
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(
+                                    selected ? Color.clear : AppTheme.separatorLow(for: colorScheme),
+                                    lineWidth: 1
+                                )
+                        )
+                        .shadow(
+                            color: selected ? AppTheme.accent.opacity(0.25) : .clear,
+                            radius: 6,
+                            y: 2
+                        )
+                }
+                .buttonStyle(SoftScaleButtonStyle())
+            }
+            Spacer(minLength: 0)
+        }
     }
     
     private var todayHourMinutes: [Int] {

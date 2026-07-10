@@ -690,6 +690,9 @@ private struct SidebarAccountStatusLine: View {
         if timerStore.isRunning {
             return "专注中 · \(timerStore.timeString)"
         }
+        if timerStore.isSessionInProgress {
+            return "已暂停 · \(timerStore.timeString)"
+        }
         return "本地账号"
     }
 }
@@ -708,10 +711,11 @@ private struct FloatingFocusPill: View {
                 viewState.selectedScreen = .timer
             } label: {
                 HStack(spacing: 10) {
-                    Circle()
-                        .fill(timerStore.mode.accent)
-                        .frame(width: 8, height: 8)
-                        .shadow(color: timerStore.isRunning ? timerStore.mode.accent.opacity(0.55) : .clear, radius: 4)
+                    PulseDot(
+                        color: timerStore.mode.accent,
+                        isActive: timerStore.isRunning,
+                        size: 8
+                    )
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(primaryTitle)
@@ -738,21 +742,43 @@ private struct FloatingFocusPill: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 30, height: 30)
-                    .background(Circle().fill(timerStore.mode.accent))
+                    .background(
+                        Circle().fill(
+                            LinearGradient(
+                                colors: [timerStore.mode.accent, timerStore.mode.accent.opacity(0.85)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    )
+                    .shadow(color: timerStore.mode.accent.opacity(0.35), radius: 6, y: 2)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SoftScaleButtonStyle())
             .help(timerStore.isRunning ? "暂停" : "继续")
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
         .background(
             Capsule(style: .continuous)
-                .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.96))
+                .fill(.ultraThinMaterial)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.72))
+                )
                 .overlay(
                     Capsule(style: .continuous)
-                        .stroke(timerStore.mode.accent.opacity(0.28), lineWidth: 1)
+                        .stroke(
+                            timerStore.mode.accent.opacity(timerStore.isRunning ? 0.42 : 0.22),
+                            lineWidth: 1
+                        )
                 )
-                .shadow(color: AppTheme.softShadow(for: colorScheme), radius: 20, y: 8)
+                .shadow(
+                    color: timerStore.isRunning
+                        ? timerStore.mode.accent.opacity(0.18)
+                        : AppTheme.softShadow(for: colorScheme),
+                    radius: 20,
+                    y: 8
+                )
         )
         .padding(.horizontal, 28)
         .padding(.bottom, 22)

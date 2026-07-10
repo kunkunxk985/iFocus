@@ -291,6 +291,96 @@ struct SoftScaleButtonStyle: ButtonStyle {
     }
 }
 
+/// Live status dot — soft radial pulse while `isActive`.
+struct PulseDot: View {
+    let color: Color
+    var isActive: Bool = true
+    var size: CGFloat = 7
+    
+    @State private var pulse = false
+    
+    var body: some View {
+        ZStack {
+            if isActive {
+                Circle()
+                    .fill(color.opacity(0.38))
+                    .frame(width: size * 2.6, height: size * 2.6)
+                    .scaleEffect(pulse ? 1.2 : 0.7)
+                    .opacity(pulse ? 0.12 : 0.5)
+            }
+            Circle()
+                .fill(isActive ? color : color.opacity(0.32))
+                .frame(width: size, height: size)
+                .shadow(color: isActive ? color.opacity(0.55) : .clear, radius: 3.5)
+        }
+        .frame(width: size * 2.6, height: size * 2.6)
+        .onAppear { syncPulse() }
+        .onChange(of: isActive) { _ in syncPulse() }
+    }
+    
+    private func syncPulse() {
+        if isActive {
+            pulse = false
+            withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        } else {
+            withAnimation(.easeOut(duration: 0.2)) {
+                pulse = false
+            }
+        }
+    }
+}
+
+/// Compact keyboard-key chrome for hints (Space / ⌘R).
+struct KeyCap: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let label: String
+    
+    var body: some View {
+        Text(label)
+            .font(.system(size: 10, weight: .bold, design: .rounded))
+            .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.8))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(AppTheme.elevatedBackground(for: colorScheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .stroke(AppTheme.separator(for: colorScheme), lineWidth: 1)
+            )
+    }
+}
+
+/// Soft card hover lift for interactive surfaces.
+struct SoftHoverLift: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    var cornerRadius: CGFloat = AppTheme.cornerRadiusRow
+    @State private var hovering = false
+    
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(hovering
+                          ? AppTheme.accent.opacity(colorScheme == .light ? 0.04 : 0.07)
+                          : Color.clear)
+                    .allowsHitTesting(false)
+            )
+            .scaleEffect(hovering ? 1.008 : 1)
+            .animation(.easeOut(duration: 0.16), value: hovering)
+            .onHover { hovering = $0 }
+    }
+}
+
+extension View {
+    func softHoverLift(cornerRadius: CGFloat = AppTheme.cornerRadiusRow) -> some View {
+        modifier(SoftHoverLift(cornerRadius: cornerRadius))
+    }
+}
+
 /// Unified empty / zero-data surface.
 struct AppEmptyState: View {
     @Environment(\.colorScheme) private var colorScheme

@@ -169,6 +169,7 @@ struct TaskRowView: View {
         .padding(.horizontal, density == .compact ? 12 : 14)
         .padding(.vertical, density.rowVerticalPadding)
         .background(rowBackground)
+        .softHoverLift(cornerRadius: AppTheme.cornerRadiusRow)
         .contentShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadiusRow, style: .continuous))
         .onTapGesture(count: 2) {
             if !isSelecting { onEdit() }

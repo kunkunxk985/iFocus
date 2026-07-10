@@ -302,6 +302,56 @@ struct SettingsWindowView: View {
                     .font(.caption)
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
+            
+            settingsCard("URL 自动化（Shortcuts / Alfred）", icon: "link") {
+                Text("安装应用版后可用 `ifocus://` 控制计时与导航。")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    deepLinkRow("ifocus://start", "开始计时")
+                    deepLinkRow("ifocus://toggle", "开始 / 暂停")
+                    deepLinkRow("ifocus://pause", "暂停")
+                    deepLinkRow("ifocus://skip", "跳过当前段")
+                    deepLinkRow("ifocus://reset", "重置")
+                    deepLinkRow("ifocus://freefocus", "自由专注并开始")
+                    deepLinkRow("ifocus://today", "打开今天清单")
+                    deepLinkRow("ifocus://open?screen=analytics", "打开数据统计")
+                }
+                
+                Text("也可在终端试：open 'ifocus://toggle'")
+                    .font(.caption2)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
+            }
+        }
+    }
+    
+    private func deepLinkRow(_ scheme: String, _ action: String) -> some View {
+        HStack(spacing: 10) {
+            Text(scheme)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(AppTheme.elevatedBackground(for: colorScheme))
+                )
+                .textSelection(.enabled)
+            Text(action)
+                .font(.caption)
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            Spacer(minLength: 4)
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(scheme, forType: .string)
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            }
+            .buttonStyle(.plain)
+            .help("复制")
         }
     }
 
@@ -585,12 +635,12 @@ enum AppWindowMetrics {
 }
 
 enum AppVersion {
-    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.7 / 67).
+    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.8 / 68).
     static var short: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.7"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.8"
     }
     static var build: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "67"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "68"
     }
 }
 

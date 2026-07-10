@@ -14,6 +14,8 @@ struct TimerView: View {
     @State private var showResetConfirm = false
     @State private var showFocusModeHint = false
     @State private var celebratePulse = false
+    @State private var ringBreath = false
+    @State private var playInvite = false
     @AppStorage("timerImmersiveMode") private var immersiveMode = false
     
     private var modeColor: Color {
@@ -129,12 +131,24 @@ struct TimerView: View {
                     } else {
                         // Minimal status pill only
                         HStack(spacing: 8) {
-                            Circle()
-                                .fill(timerStore.isRunning ? modeColor : AppTheme.secondaryText(for: colorScheme).opacity(0.35))
-                                .frame(width: 7, height: 7)
+                            PulseDot(
+                                color: timerStore.isRunning
+                                    ? modeColor
+                                    : AppTheme.secondaryText(for: colorScheme),
+                                isActive: timerStore.isRunning,
+                                size: 7
+                            )
                             Text(statusLabel)
                                 .font(.system(size: 12, weight: .bold, design: .rounded))
                                 .foregroundColor(timerStore.isRunning ? modeColor : AppTheme.secondaryText(for: colorScheme))
+                            if timerStore.mode == .work, let title = taskStore.activeTask?.title {
+                                Text("·")
+                                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.5))
+                                Text(title)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.85))
+                                    .lineLimit(1)
+                            }
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 5)
@@ -146,8 +160,14 @@ struct TimerView: View {
                     Spacer(minLength: 4)
                     
                     timerRing(size: ringSize)
-                        .scaleEffect(celebratePulse ? 1.045 : 1)
+                        .scaleEffect(celebratePulse ? 1.045 : (timerStore.isRunning && ringBreath ? 1.018 : 1))
                         .animation(.spring(response: 0.38, dampingFraction: 0.62), value: celebratePulse)
+                        .animation(
+                            timerStore.isRunning
+                            ? .easeInOut(duration: 2.2).repeatForever(autoreverses: true)
+                            : .easeOut(duration: 0.3),
+                            value: ringBreath
+                        )
                     
                     Spacer(minLength: 4)
                     
@@ -176,7 +196,13 @@ struct TimerView: View {
         .onReceive(timerStore.clockTick) { _ in
             clockVersion &+= 1
         }
-        .onAppear { clockVersion &+= 1 }
+        .onAppear {
+            clockVersion &+= 1
+            syncAmbientMotion()
+        }
+        .onChange(of: timerStore.isRunning) { _ in
+            syncAmbientMotion()
+        }
         .confirmationDialog(
             "开始专注",
             isPresented: $showFocusModeHint,
@@ -208,6 +234,26 @@ struct TimerView: View {
             showFocusModeHint = true
         } else {
             timerStore.toggle()
+        }
+    }
+    
+    private func syncAmbientMotion() {
+        if timerStore.isRunning {
+            ringBreath = false
+            playInvite = false
+            DispatchQueue.main.async {
+                ringBreath = true
+            }
+        } else {
+            ringBreath = false
+            playInvite = false
+            if !timerStore.isSessionInProgress {
+                DispatchQueue.main.async {
+                    withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                        playInvite = true
+                    }
+                }
+            }
         }
     }
     
@@ -260,14 +306,24 @@ struct TimerView: View {
         VStack(spacing: compact ? 10 : 12) {
             // Status pill — centered
             HStack(spacing: 8) {
-                Circle()
-                    .fill(timerStore.isRunning ? modeColor : AppTheme.secondaryText(for: colorScheme).opacity(0.35))
-                    .frame(width: 7, height: 7)
-                    .shadow(color: timerStore.isRunning ? modeColor.opacity(0.6) : .clear, radius: 4)
+                PulseDot(
+                    color: timerStore.isRunning
+                        ? modeColor
+                        : AppTheme.secondaryText(for: colorScheme),
+                    isActive: timerStore.isRunning,
+                    size: 7
+                )
                 
                 Text(statusLabel)
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundColor(timerStore.isRunning ? modeColor : AppTheme.secondaryText(for: colorScheme))
+                
+                if timerStore.mode == .work {
+                    let mins = timerStore.totalSecondsToday / 60
+                    Text("· 今日 \(mins) 分")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
@@ -276,16 +332,21 @@ struct TimerView: View {
                     .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.78 : 0.55))
                     .overlay(
                         Capsule(style: .continuous)
-                            .stroke(AppTheme.separator(for: colorScheme), lineWidth: 1)
+                            .stroke(
+                                timerStore.isRunning
+                                ? modeColor.opacity(0.28)
+                                : AppTheme.separator(for: colorScheme),
+                                lineWidth: 1
+                            )
                     )
             )
             
             // Goal card — single unified block (label + bar + count inside)
             VStack(spacing: 10) {
                 HStack {
-                    Text("今日目标")
+                    Text(goalProgress >= 1 ? "今日目标已达成" : "今日目标")
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        .foregroundColor(goalProgress >= 1 ? modeColor : AppTheme.secondaryText(for: colorScheme))
                     Spacer()
                     Text("\(timerStore.completedPomodoros) / \(settings.dailyGoal) 番茄")
                         .font(.caption.weight(.bold).monospacedDigit())
@@ -299,12 +360,14 @@ struct TimerView: View {
                         Capsule()
                             .fill(
                                 LinearGradient(
-                                    colors: [modeColor.opacity(0.75), modeColor],
+                                    colors: goalProgress >= 1
+                                    ? [Color(hex: "#10B981").opacity(0.85), Color(hex: "#10B981")]
+                                    : [modeColor.opacity(0.75), modeColor],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
-                            .frame(width: max(6, g.size.width * goalProgress))
+                            .frame(width: max(goalProgress > 0 ? 6 : 0, g.size.width * goalProgress))
                             .animation(.easeInOut(duration: 0.4), value: goalProgress)
                     }
                 }
@@ -572,13 +635,14 @@ struct TimerView: View {
                     .background(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .fill(selected ? mode.accent : AppTheme.cardBackground(for: colorScheme).opacity(0.75))
+                            .shadow(color: selected ? mode.accent.opacity(0.28) : .clear, radius: 8, y: 3)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .stroke(selected ? Color.clear : AppTheme.separator(for: colorScheme), lineWidth: 1)
                     )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SoftScaleButtonStyle())
                 .disabled(timerStore.isRunning)
             }
         }
@@ -598,21 +662,26 @@ struct TimerView: View {
     
     private func timerRing(size: CGFloat) -> some View {
         let line = max(12, size * 0.06)
+        let glowBoost = timerStore.isRunning ? 1.0 : 0.55
         
         return ZStack {
+            // Outer soft bloom — breathes while running
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            modeColor.opacity(colorScheme == .light ? 0.10 : 0.16),
+                            modeColor.opacity((colorScheme == .light ? 0.14 : 0.22) * glowBoost),
+                            modeColor.opacity((colorScheme == .light ? 0.05 : 0.08) * glowBoost),
                             .clear
                         ],
                         center: .center,
-                        startRadius: size * 0.2,
-                        endRadius: size * 0.55
+                        startRadius: size * 0.18,
+                        endRadius: size * (timerStore.isRunning ? 0.62 : 0.55)
                     )
                 )
-                .frame(width: size * 1.12, height: size * 1.12)
+                .frame(width: size * 1.22, height: size * 1.22)
+                .scaleEffect(timerStore.isRunning && ringBreath ? 1.06 : 1)
+                .opacity(timerStore.isRunning && ringBreath ? 0.85 : 1)
             
             Circle()
                 .stroke(modeColor.opacity(colorScheme == .light ? 0.10 : 0.14), lineWidth: line)
@@ -630,7 +699,7 @@ struct TimerView: View {
                 .frame(width: size, height: size)
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 0.9), value: progress)
-                .shadow(color: modeColor.opacity(0.3), radius: 12, y: 0)
+                .shadow(color: modeColor.opacity(timerStore.isRunning ? 0.42 : 0.28), radius: timerStore.isRunning ? 16 : 12, y: 0)
             
             VStack(spacing: 6) {
                 Text(displayTime)
@@ -641,9 +710,17 @@ struct TimerView: View {
                 Text(modeTitle)
                     .font(.system(size: max(12, size * 0.05), weight: .semibold))
                     .foregroundColor(modeColor)
+                
+                if timerStore.isRunning && timerStore.mode == .work {
+                    Text("保持节奏")
+                        .font(.system(size: max(10, size * 0.038), weight: .medium))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
+                        .transition(.opacity)
+                }
             }
         }
-        .frame(width: size * 1.12, height: size * 1.12)
+        .frame(width: size * 1.22, height: size * 1.22)
+        .animation(.easeInOut(duration: 0.35), value: timerStore.isRunning)
     }
     
     // MARK: - Controls
@@ -670,10 +747,29 @@ struct TimerView: View {
                 requestStartOrToggle()
             } label: {
                 ZStack {
+                    // Soft invite ring when idle
+                    if !timerStore.isRunning {
+                        Circle()
+                            .stroke(modeColor.opacity(0.28), lineWidth: 2)
+                            .frame(width: main + 14, height: main + 14)
+                            .scaleEffect(playInvite ? 1.08 : 0.96)
+                            .opacity(playInvite ? 0.25 : 0.55)
+                    }
+                    
                     Circle()
-                        .fill(modeColor)
+                        .fill(
+                            LinearGradient(
+                                colors: [modeColor, modeColor.opacity(0.88)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                         .frame(width: main, height: main)
-                        .shadow(color: modeColor.opacity(0.4), radius: 12, y: 6)
+                        .shadow(
+                            color: modeColor.opacity(timerStore.isRunning ? 0.5 : 0.38),
+                            radius: timerStore.isRunning ? 16 : 12,
+                            y: 6
+                        )
                     
                     Image(systemName: timerStore.isRunning ? "pause.fill" : "play.fill")
                         .font(.system(size: main * 0.34, weight: .bold))
@@ -681,7 +777,7 @@ struct TimerView: View {
                         .offset(x: timerStore.isRunning ? 0 : 2)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SoftScaleButtonStyle())
             .keyboardShortcut(.space, modifiers: [])
             .help(timerStore.isRunning ? "暂停 (空格)" : "开始 (空格)")
             
@@ -749,18 +845,40 @@ struct TimerView: View {
     }
     
     private var sessionHint: some View {
-        Group {
+        HStack(spacing: 8) {
             if timerStore.mode == .work {
-                Text(taskStore.activeTask == nil
-                      ? "空格开始自由专注 · 或上方选任务 · ⇧⌘空格 全局开始"
-                      : "空格开始 · 将记入「\(taskStore.activeTask?.title ?? "")」")
+                if timerStore.isRunning {
+                    KeyCap(label: "空格")
+                    Text("暂停")
+                    Text("·")
+                        .opacity(0.4)
+                    KeyCap(label: "⌘→")
+                    Text("跳过")
+                } else if let title = taskStore.activeTask?.title, !title.isEmpty {
+                    KeyCap(label: "空格")
+                    Text("开始 · \(title)")
+                        .lineLimit(1)
+                } else {
+                    KeyCap(label: "空格")
+                    Text("自由专注")
+                    Text("·")
+                        .opacity(0.4)
+                    Text("上方可选任务")
+                }
             } else {
-                Text("休息中 · 空格继续 · ⌘→ 跳过")
+                KeyCap(label: "空格")
+                Text(timerStore.isRunning ? "暂停休息" : "开始休息")
+                Text("·")
+                    .opacity(0.4)
+                KeyCap(label: "⌘→")
+                Text("跳过")
             }
         }
-        .font(.caption2)
+        .font(.caption2.weight(.medium))
         .foregroundColor(AppTheme.secondaryText(for: colorScheme))
         .lineLimit(1)
-        .frame(maxWidth: 340)
+        .frame(maxWidth: 380)
+        .animation(.easeOut(duration: 0.2), value: timerStore.isRunning)
+        .animation(.easeOut(duration: 0.2), value: timerStore.mode)
     }
 }

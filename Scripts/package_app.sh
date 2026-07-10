@@ -29,8 +29,8 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
     <key>CFBundleExecutable</key><string>${APP_NAME}</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.6.7</string>
-    <key>CFBundleVersion</key><string>67</string>
+    <key>CFBundleShortVersionString</key><string>1.6.8</string>
+    <key>CFBundleVersion</key><string>68</string>
     <key>LSMinimumSystemVersion</key><string>${MACOS_MIN_VERSION}</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>NSHighResolutionCapable</key><true/>
