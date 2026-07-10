@@ -1,7 +1,7 @@
 import AppKit
 import Combine
 
-/// Menu-bar tomato + timer.
+/// Menu-bar tomato + live countdown (`mm:ss`).
 ///
 /// `NSStatusBar.statusItem` must not be created during `App.init`.
 /// On newer macOS, menu extras attach via hosted scenes; creating the item
@@ -14,6 +14,7 @@ final class MenuBarController: NSObject, ObservableObject {
     private var launchObserver: NSObjectProtocol?
     
     private enum MenuTag: Int {
+        case countdown = 99
         case status = 100
         case task = 101
         case toggle = 102
@@ -49,7 +50,6 @@ final class MenuBarController: NSObject, ObservableObject {
     }
     
     private var applicationHasFinishedLaunching: Bool {
-        // After didFinishLaunching, the main menu is populated for normal apps.
         NSApp.mainMenu != nil
     }
     
@@ -79,6 +79,7 @@ final class MenuBarController: NSObject, ObservableObject {
         
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.isVisible = true
+        item.autosaveName = "iFocus.menuBarCountdown"
         statusItem = item
         
         configureStatusItem()
@@ -93,11 +94,28 @@ final class MenuBarController: NSObject, ObservableObject {
             button.imagePosition = .imageLeading
             button.imageHugsTitle = true
             button.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
-            button.toolTip = "iFocus"
+            button.toolTip = "iFocus 倒计时"
+            // Prefer attributed title for monospaced digits + mode tint.
+            button.setButtonType(.momentaryLight)
         }
         
         let menu = NSMenu()
         menu.autoenablesItems = false
+        
+        // Large countdown row at top of menu (updates live while open via status item title).
+        let countdownRow = NSMenuItem(title: "00:00", action: nil, keyEquivalent: "")
+        countdownRow.tag = MenuTag.countdown.rawValue
+        countdownRow.isEnabled = false
+        if let font = NSFont.monospacedDigitSystemFont(ofSize: 22, weight: .semibold) as NSFont? {
+            countdownRow.attributedTitle = NSAttributedString(
+                string: "00:00",
+                attributes: [
+                    .font: font,
+                    .foregroundColor: NSColor.labelColor
+                ]
+            )
+        }
+        menu.addItem(countdownRow)
         
         let statusRow = NSMenuItem(title: "状态", action: nil, keyEquivalent: "")
         statusRow.tag = MenuTag.status.rawValue
@@ -156,7 +174,7 @@ final class MenuBarController: NSObject, ObservableObject {
             }
             .store(in: &cancellables)
         
-        // Second-by-second display only — does not refresh SwiftUI task lists.
+        // Second-by-second countdown — menu bar only, not SwiftUI tree.
         timerStore.clockTick
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -177,48 +195,77 @@ final class MenuBarController: NSObject, ObservableObject {
     private func updateStatusItem() {
         guard let statusItem else { return }
         
-        let modeLabel = shortModeLabel(timerStore.mode)
-        let title: String
-        if timerStore.isRunning {
-            title = " \(modeLabel) \(timerStore.timeString)"
-        } else {
-            title = " \(timerStore.timeString)"
-        }
-        statusItem.button?.title = title
+        let time = timerStore.timeString
+        let isRunning = timerStore.isRunning
+        let inProgress = timerStore.isSessionInProgress
+        let mode = timerStore.mode
         
-        let taskTitle = timerStore.taskStore?.activeTask?.title
+        // Menu bar button: time-first live countdown.
+        let barText = Self.barTitle(
+            timeString: time,
+            mode: mode,
+            isRunning: isRunning,
+            isSessionInProgress: inProgress
+        )
+        if let button = statusItem.button {
+            // Only attributedTitle — assigning `.title` after would wipe monospaced styling.
+            button.attributedTitle = Self.attributedBarTitle(
+                barText,
+                mode: mode,
+                isRunning: isRunning,
+                isSessionInProgress: inProgress
+            )
+            button.setAccessibilityLabel("iFocus 倒计时 \(time)")
+        }
+        
         let runStateLabel: String = {
-            if timerStore.isRunning { return "进行中" }
-            if timerStore.isSessionInProgress { return "已暂停" }
+            if isRunning { return "进行中" }
+            if inProgress { return "已暂停" }
             return "待开始"
         }()
-        var tooltip = "iFocus · \(timerStore.mode.rawValue) \(timerStore.timeString) · \(runStateLabel)"
+        
+        let taskTitle = timerStore.taskStore?.activeTask?.title
+        var tooltip = "iFocus 倒计时\n\(mode.rawValue) \(time) · \(runStateLabel)"
         if let taskTitle, !taskTitle.isEmpty {
             tooltip += "\n当前任务：\(taskTitle)"
+        } else if mode == .work {
+            tooltip += "\n当前任务：自由专注"
         }
         statusItem.button?.toolTip = tooltip
         
         guard let menu = statusItem.menu else { return }
         
+        // Big countdown at top of dropdown.
+        if let countdownItem = menu.item(withTag: MenuTag.countdown.rawValue) {
+            let font = NSFont.monospacedDigitSystemFont(ofSize: 22, weight: .semibold)
+            countdownItem.attributedTitle = NSAttributedString(
+                string: "  \(time)",
+                attributes: [
+                    .font: font,
+                    .foregroundColor: Self.nsColor(for: mode, emphasized: isRunning || inProgress)
+                ]
+            )
+        }
+        
         menu.item(withTag: MenuTag.status.rawValue)?.title =
-            "\(timerStore.mode.rawValue)  \(timerStore.timeString)  · \(runStateLabel)"
+            "\(mode.rawValue)  · \(runStateLabel)"
         
         if let taskTitle, !taskTitle.isEmpty {
             menu.item(withTag: MenuTag.task.rawValue)?.title = "任务：\(taskTitle)"
             menu.item(withTag: MenuTag.task.rawValue)?.isHidden = false
         } else {
             menu.item(withTag: MenuTag.task.rawValue)?.title = "任务：自由专注"
-            menu.item(withTag: MenuTag.task.rawValue)?.isHidden = timerStore.mode != .work
+            menu.item(withTag: MenuTag.task.rawValue)?.isHidden = mode != .work
         }
         
         let toggleTitle: String
-        if timerStore.isRunning {
-            switch timerStore.mode {
+        if isRunning {
+            switch mode {
             case .work: toggleTitle = "暂停专注"
             case .shortBreak, .longBreak: toggleTitle = "暂停休息"
             }
         } else {
-            switch timerStore.mode {
+            switch mode {
             case .work: toggleTitle = "开始专注"
             case .shortBreak: toggleTitle = "开始短休息"
             case .longBreak: toggleTitle = "开始长休息"
@@ -227,15 +274,52 @@ final class MenuBarController: NSObject, ObservableObject {
         menu.item(withTag: MenuTag.toggle.rawValue)?.title = toggleTitle
         
         menu.item(withTag: MenuTag.nextMode.rawValue)?.isEnabled = true
-        let next = timerStore.mode.next
+        let next = mode.next
         menu.item(withTag: MenuTag.nextMode.rawValue)?.title = "切换到\(next.rawValue)"
     }
     
-    private func shortModeLabel(_ mode: TimerMode) -> String {
+    // MARK: - Title formatting (unit-testable)
+    
+    /// Status-item plain text. Time is always first so the bar reads as a countdown.
+    static func barTitle(
+        timeString: String,
+        mode: TimerMode,
+        isRunning: Bool,
+        isSessionInProgress: Bool
+    ) -> String {
+        if isRunning {
+            return " \(timeString)"
+        }
+        if isSessionInProgress {
+            return " ⏸\(timeString)"
+        }
+        // Idle: still show remaining (full duration) so the bar is useful at a glance.
+        return " \(timeString)"
+    }
+    
+    static func attributedBarTitle(
+        _ text: String,
+        mode: TimerMode,
+        isRunning: Bool,
+        isSessionInProgress: Bool
+    ) -> NSAttributedString {
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
+        let color = nsColor(for: mode, emphasized: isRunning || isSessionInProgress)
+        return NSAttributedString(string: text, attributes: [
+            .font: font,
+            .foregroundColor: color
+        ])
+    }
+    
+    private static func nsColor(for mode: TimerMode, emphasized: Bool) -> NSColor {
+        guard emphasized else { return .labelColor }
         switch mode {
-        case .work: return "专注"
-        case .shortBreak: return "短休"
-        case .longBreak: return "长休"
+        case .work:
+            return NSColor(calibratedRed: 0.90, green: 0.36, blue: 0.25, alpha: 1) // #E65C40-ish
+        case .shortBreak:
+            return NSColor(calibratedRed: 0.06, green: 0.73, blue: 0.51, alpha: 1) // #10B981
+        case .longBreak:
+            return NSColor(calibratedRed: 0.23, green: 0.51, blue: 0.96, alpha: 1) // #3B82F6
         }
     }
     
