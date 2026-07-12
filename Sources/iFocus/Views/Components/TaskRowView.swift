@@ -23,150 +23,192 @@ struct TaskRowView: View {
         !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     
+    /// Quiet priority rail — higher number = more urgent (matches sort + color helpers).
+    private var priorityRailColor: Color {
+        switch task.priority {
+        case 1: return AppTheme.separator(for: colorScheme)
+        case 2: return Color(hex: "#F59E0B").opacity(0.55)
+        case 3: return Color(hex: "#EF4444").opacity(0.75)
+        default: return Color(hex: "#8B5CF6").opacity(0.85)
+        }
+    }
+    
     var body: some View {
         let density = settings.uiDensity
         let completedFade = task.isCompleted
-        HStack(alignment: .center, spacing: 10 * density.scale) {
-            if isSelecting {
-                Button {
-                    onToggleSelect?()
-                } label: {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 20, weight: .regular))
-                        .foregroundColor(isSelected ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme).opacity(0.55))
-                }
-                .buttonStyle(.plain)
+        
+        HStack(alignment: .center, spacing: 0) {
+            // Priority rail (quiet signal, no “3 级” chrome)
+            if !completedFade && !isSelecting {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(priorityRailColor)
+                    .frame(width: 3, height: density == .compact ? 28 : 34)
+                    .padding(.trailing, 10)
+                    .help("优先级 \(task.priority)")
             } else {
-                Button { taskStore.toggleCompletion(for: task) } label: {
-                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 20, weight: .regular))
-                        .foregroundColor(task.isCompleted ? Color(hex: "#10B981") : AppTheme.secondaryText(for: colorScheme).opacity(0.45))
-                }
-                .buttonStyle(.plain)
-                .help(task.isCompleted ? "标为未完成" : "标为完成")
-                
-                if !task.isCompleted {
-                    Button(action: handleFocusButton) {
-                        Image(systemName: focusButtonIcon)
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(isActive ? .white : AppTheme.primaryText(for: colorScheme))
-                            .frame(width: 26 * density.scale, height: 26 * density.scale)
-                            .background(
-                                Circle().fill(
-                                    isActive
-                                    ? AppTheme.accent
-                                    : AppTheme.elevatedBackground(for: colorScheme)
-                                )
-                            )
-                            .overlay(
-                                Circle().stroke(
-                                    isActive ? Color.clear : AppTheme.separator(for: colorScheme),
-                                    lineWidth: 1
-                                )
+                Color.clear.frame(width: 3).padding(.trailing, 10)
+            }
+            
+            HStack(alignment: .center, spacing: 10 * density.scale) {
+                if isSelecting {
+                    Button {
+                        onToggleSelect?()
+                    } label: {
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundColor(isSelected ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme).opacity(0.5))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button { taskStore.toggleCompletion(for: task) } label: {
+                        Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundColor(
+                                task.isCompleted
+                                ? Color(hex: "#10B981").opacity(0.9)
+                                : AppTheme.secondaryText(for: colorScheme).opacity(0.4)
                             )
                     }
                     .buttonStyle(.plain)
-                    .help(focusButtonHelp)
-                }
-            }
-            
-            VStack(alignment: .leading, spacing: density == .compact ? 3 : 5) {
-                // Primary line: title + only critical badges
-                HStack(spacing: 6) {
-                    if task.isPinned {
-                        Image(systemName: "pin.fill")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(AppTheme.accent.opacity(0.9))
-                            .help("已置顶")
+                    .help(task.isCompleted ? "标为未完成" : "标为完成")
+                    
+                    if !task.isCompleted {
+                        Button(action: handleFocusButton) {
+                            Image(systemName: focusButtonIcon)
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(isActive ? .white : AppTheme.secondaryText(for: colorScheme))
+                                .frame(width: 24 * density.scale, height: 24 * density.scale)
+                                .background(
+                                    Circle().fill(
+                                        isActive
+                                        ? AppTheme.accent
+                                        : AppTheme.elevatedBackground(for: colorScheme)
+                                    )
+                                )
+                                .overlay(
+                                    Circle().stroke(
+                                        isActive ? Color.clear : AppTheme.separatorLow(for: colorScheme),
+                                        lineWidth: 1
+                                    )
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .help(focusButtonHelp)
                     }
-                    
-                    Text(task.title)
-                        .font(.system(size: density == .compact ? 14 : 15.5, weight: .semibold))
-                        .foregroundColor(completedFade
-                                         ? AppTheme.secondaryText(for: colorScheme).opacity(0.72)
-                                         : AppTheme.primaryText(for: colorScheme))
-                        .strikethrough(task.isCompleted, color: AppTheme.secondaryText(for: colorScheme).opacity(0.5))
-                        .lineLimit(2)
-                    
-                    if isActive && !completedFade {
-                        statusPill(isRunning ? "专注中" : "当前", color: AppTheme.accent)
-                    }
-                    
-                    if task.isOverdue && !task.isCompleted {
-                        statusPill("逾期", color: Color(hex: "#EF4444"))
-                    }
-                    
-                    Spacer(minLength: 0)
                 }
                 
-                // Secondary line: quieter meta
-                HStack(spacing: 6) {
-                    pomodoroProgress
-                    
-                    metaChip(task.category.rawValue, color: task.category.color.opacity(completedFade ? 0.55 : 0.85))
-                    
-                    if task.recurrence != .none {
-                        metaChip(task.recurrence.rawValue, color: Color(hex: "#8B5CF6").opacity(0.75))
-                    }
-                    
-                    if hasNotes {
-                        Image(systemName: "note.text")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.7))
-                            .help(task.notes)
-                    }
-                    
-                    if task.hasLink {
-                        Button {
-                            openTaskLink()
-                        } label: {
-                            Image(systemName: "link")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(AppTheme.accent.opacity(0.9))
+                VStack(alignment: .leading, spacing: density == .compact ? 2 : 4) {
+                    // Primary: title + only critical flags
+                    HStack(spacing: 6) {
+                        if task.isPinned {
+                            Image(systemName: "pin.fill")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.55))
+                                .help("已置顶")
                         }
-                        .buttonStyle(.plain)
-                        .help(task.linkURL)
-                    }
-                    
-                    if let due = task.dueDate {
-                        Text(dueLabel(for: due))
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(
-                                task.isOverdue && !task.isCompleted
-                                ? Color(hex: "#EF4444").opacity(0.9)
-                                : AppTheme.secondaryText(for: colorScheme).opacity(0.75)
-                            )
-                    }
-                    
-                    Spacer(minLength: 0)
-                    
-                    if !task.isCompleted && !isSelecting {
-                        Button {
-                            taskStore.togglePin(for: task)
-                        } label: {
-                            Image(systemName: task.isPinned ? "pin.fill" : "pin")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(task.isPinned ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme).opacity(0.35))
-                                .frame(width: 22, height: 22)
-                        }
-                        .buttonStyle(.plain)
-                        .help(task.isPinned ? "取消置顶" : "置顶")
                         
-                        Button(action: onEdit) {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.4))
-                                .frame(width: 22, height: 22)
+                        Text(task.title)
+                            .font(.system(size: density == .compact ? 13.5 : 14.5, weight: .medium))
+                            .foregroundColor(completedFade
+                                             ? AppTheme.secondaryText(for: colorScheme).opacity(0.7)
+                                             : AppTheme.primaryText(for: colorScheme))
+                            .strikethrough(task.isCompleted, color: AppTheme.secondaryText(for: colorScheme).opacity(0.45))
+                            .lineLimit(2)
+                        
+                        if isActive && !completedFade {
+                            Text(isRunning ? "专注中" : "当前")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(AppTheme.accent)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(AppTheme.accent.opacity(0.10)))
                         }
-                        .buttonStyle(.plain)
-                        .help("编辑（也可双击）")
+                        
+                        if task.isOverdue && !task.isCompleted {
+                            Text("逾期")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(Color(hex: "#EF4444").opacity(0.95))
+                        }
+                        
+                        Spacer(minLength: 0)
+                    }
+                    
+                    // Secondary: mono meta, low contrast
+                    HStack(spacing: 8) {
+                        pomodoroProgress
+                        
+                        Text(task.category.rawValue)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.72))
+                        
+                        if task.recurrence != .none {
+                            Text(task.recurrence.rawValue)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.55))
+                        }
+                        
+                        if hasNotes {
+                            Image(systemName: "text.alignleft")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.5))
+                                .help(task.notes)
+                        }
+                        
+                        if task.hasLink {
+                            Button(action: openTaskLink) {
+                                Image(systemName: "link")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.55))
+                            }
+                            .buttonStyle(.plain)
+                            .help(task.linkURL)
+                        }
+                        
+                        if let due = task.dueDate {
+                            Text(dueLabel(for: due))
+                                .font(.system(size: 10, weight: .medium).monospacedDigit())
+                                .foregroundColor(
+                                    task.isOverdue && !task.isCompleted
+                                    ? Color(hex: "#EF4444").opacity(0.85)
+                                    : AppTheme.secondaryText(for: colorScheme).opacity(0.6)
+                                )
+                        }
+                        
+                        Spacer(minLength: 0)
+                        
+                        if !task.isCompleted && !isSelecting {
+                            Button {
+                                taskStore.togglePin(for: task)
+                            } label: {
+                                Image(systemName: task.isPinned ? "pin.fill" : "pin")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(
+                                        task.isPinned
+                                        ? AppTheme.accent.opacity(0.85)
+                                        : AppTheme.secondaryText(for: colorScheme).opacity(0.28)
+                                    )
+                                    .frame(width: 22, height: 22)
+                            }
+                            .buttonStyle(.plain)
+                            .help(task.isPinned ? "取消置顶" : "置顶")
+                            
+                            Button(action: onEdit) {
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.32))
+                                    .frame(width: 22, height: 22)
+                            }
+                            .buttonStyle(.plain)
+                            .help("编辑（也可双击）")
+                        }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .opacity(completedFade ? 0.75 : 1)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .opacity(completedFade ? 0.78 : 1)
         }
-        .padding(.horizontal, density == .compact ? 12 : 14)
+        .padding(.leading, density == .compact ? 10 : 12)
+        .padding(.trailing, density == .compact ? 10 : 12)
         .padding(.vertical, density.rowVerticalPadding)
         .background(rowBackground)
         .softHoverLift(cornerRadius: AppTheme.cornerRadiusRow)
@@ -178,25 +220,7 @@ struct TaskRowView: View {
             if isSelecting { onToggleSelect?() }
         })
         .contextMenu { if !isSelecting { contextMenuContent } }
-        .opacity(isSelecting && !isSelected ? 0.85 : 1)
-    }
-    
-    private func statusPill(_ text: String, color: Color) -> some View {
-        Text(text)
-            .font(.system(size: 9, weight: .bold))
-            .foregroundColor(color)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(color.opacity(0.12)))
-    }
-    
-    private func metaChip(_ text: String, color: Color) -> some View {
-        Text(text)
-            .font(.system(size: 10, weight: .medium))
-            .foregroundColor(color.opacity(0.9))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(color.opacity(0.08)))
+        .opacity(isSelecting && !isSelected ? 0.88 : 1)
     }
     
     private var focusButtonIcon: String {
@@ -222,16 +246,16 @@ struct TaskRowView: View {
     private var pomodoroProgress: some View {
         HStack(spacing: 3) {
             Image(systemName: "timer")
-                .font(.caption2.bold())
-                .foregroundColor(AppTheme.accent.opacity(0.9))
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.55))
             if task.completedPomodoros > task.estimatedPomodoros {
                 Text("+\(task.completedPomodoros - task.estimatedPomodoros)")
-                    .font(.caption2.bold())
-                    .foregroundColor(AppTheme.accent)
+                    .font(.system(size: 10, weight: .medium).monospacedDigit())
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.7))
             } else if task.estimatedPomodoros > 0 {
                 Text("\(task.completedPomodoros)/\(task.estimatedPomodoros)")
-                    .font(.caption2.weight(.medium))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    .font(.system(size: 10, weight: .medium).monospacedDigit())
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.65))
             }
         }
     }
@@ -243,17 +267,12 @@ struct TaskRowView: View {
                 RoundedRectangle(cornerRadius: AppTheme.cornerRadiusRow, style: .continuous)
                     .stroke(
                         isActive
-                        ? AppTheme.accent.opacity(0.4)
+                        ? AppTheme.accent.opacity(0.28)
                         : (task.isOverdue && !task.isCompleted
-                           ? Color(hex: "#EF4444").opacity(0.25)
+                           ? Color(hex: "#EF4444").opacity(0.18)
                            : AppTheme.separatorLow(for: colorScheme)),
-                        lineWidth: isActive ? 1.4 : 1
+                        lineWidth: isActive ? 1.2 : 1
                     )
-            )
-            .shadow(
-                color: isActive ? AppTheme.accent.opacity(0.14) : .clear,
-                radius: isActive ? 10 : 0,
-                y: isActive ? 3 : 0
             )
     }
     
@@ -345,13 +364,7 @@ struct TaskRowView: View {
     }
     
     private func handleFocusButton() {
-        // Always work-intent: if on break (or wrong mode), startFocus switches to work.
-        // Parent's onStartFocus / onToggleTimer should route through TimerStore.startFocus.
-        if isActive {
-            onStartFocus()
-            viewState.selectedScreen = .timer
-            return
-        }
+        // Always work-intent via parent startFocus path.
         onStartFocus()
         viewState.selectedScreen = .timer
     }

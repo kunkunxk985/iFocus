@@ -149,10 +149,10 @@ enum AppTheme {
         colorScheme == .light ? Color(hex: "#F0F0F2") : Color(hex: "#111113")
     }
     static func sidebarBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color(hex: "#E8E8EC") : Color(hex: "#18181B")
+        colorScheme == .light ? Color(hex: "#E8E8EC") : Color(hex: "#141416")
     }
     static func sidebarTint(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color.white.opacity(0.10) : Color.black.opacity(0.14)
+        colorScheme == .light ? Color.white.opacity(0.10) : Color.black.opacity(0.12)
     }
     static func sidebarRowBackground(for colorScheme: ColorScheme) -> Color {
         Color.white.opacity(0.001)
@@ -164,29 +164,30 @@ enum AppTheme {
         colorScheme == .light ? Color.white.opacity(0.96) : Color(hex: "#252528").opacity(0.97)
     }
     static func contentBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color(hex: "#F0F0F2") : Color(hex: "#111113")
+        colorScheme == .light ? Color(hex: "#F0F0F2") : Color(hex: "#0F0F11")
     }
     static func cardBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color.white : Color(hex: "#1C1C1F")
+        // Dark cards slightly lifted from canvas for quiet depth
+        colorScheme == .light ? Color.white : Color(hex: "#1A1A1E")
     }
     static func elevatedBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color(hex: "#F5F5F7") : Color(hex: "#27272B")
+        colorScheme == .light ? Color(hex: "#F5F5F7") : Color(hex: "#25252A")
     }
     
-    // Text — calm contrast
+    // Text — calm contrast; dark mode secondary slightly brighter for readability
     static func primaryText(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color(hex: "1A1A1E") : Color.white.opacity(0.92)
+        colorScheme == .light ? Color(hex: "1A1A1E") : Color.white.opacity(0.93)
     }
     static func secondaryText(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color(hex: "6B6B73") : Color(hex: "9898A0")
+        colorScheme == .light ? Color(hex: "6B6B73") : Color(hex: "A0A0A8")
     }
     
     // Separators / overlays
     static func separator(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color.black.opacity(0.07) : Color.white.opacity(0.10)
+        colorScheme == .light ? Color.black.opacity(0.07) : Color.white.opacity(0.09)
     }
     static func separatorLow(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color.black.opacity(0.045) : Color.white.opacity(0.06)
+        colorScheme == .light ? Color.black.opacity(0.045) : Color.white.opacity(0.055)
     }
     static func overlayThin(for colorScheme: ColorScheme) -> Color {
         colorScheme == .light ? Color.black.opacity(0.06) : Color.black.opacity(0.15)

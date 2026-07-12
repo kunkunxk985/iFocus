@@ -367,36 +367,36 @@ public enum FocusStats {
         var tips: [String] = []
         
         if !hasAnyHistory {
-            tips.append("还没有专注记录。从清单选一个小任务，或直接开始自由专注。")
+            tips.append("还没有记录。选一个小任务，或直接开始一次自由专注。")
             return tips
         }
         
         if todayPomodoros == 0 && todayMinutes == 0 {
-            tips.append("今天还没开始。挑一个最小任务，先完成 1 个番茄。")
+            tips.append("今天还没开始。先完成 1 个番茄即可。")
         } else if dailyGoal > 0, todayPomodoros >= dailyGoal {
-            tips.append("今日目标已达成（\(todayPomodoros)/\(dailyGoal)）。可以收工，或做些轻松任务。")
+            tips.append("今日目标已达成（\(todayPomodoros)/\(dailyGoal)）。可以收工了。")
         } else if dailyGoal > 0 {
             let left = dailyGoal - todayPomodoros
-            tips.append("距离今日目标还差 \(left) 个番茄，保持节奏即可。")
+            tips.append("今日 \(todayPomodoros)/\(dailyGoal) 番茄，还差 \(left) 个。")
         }
         
         if freeFocusShare >= 0.6, tips.count < 2 {
-            tips.append("近期自由专注偏多。绑定任务后，分类统计会更有意义。")
+            tips.append("近 7 天自由专注偏多，绑任务后分类会更清楚。")
         }
         
         if currentStreak >= 3, tips.count < 2 {
-            tips.append("已连续专注 \(currentStreak) 天，习惯正在成形，继续保持。")
+            tips.append("已连续 \(currentStreak) 天有专注记录。")
         }
         
         if let pct = percentChange(from: yesterdayMinutes, to: todayMinutes),
            pct <= -30,
            yesterdayMinutes >= 25,
            tips.count < 2 {
-            tips.append("今日专注时长明显低于昨天。若太累，不妨把目标调低一点。")
+            tips.append("比昨天少了不少。累的话可以把目标调低一点。")
         }
         
         if tips.isEmpty {
-            tips.append("专注前先选定任务，统计会更清晰；每 4 个番茄安排一次长休息。")
+            tips.append("选定任务再开始，统计会更清晰。")
         }
         
         return Array(tips.prefix(2))

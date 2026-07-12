@@ -213,23 +213,49 @@ struct AnalyticsView: View {
                         Button {
                             shareWeeklyReport()
                         } label: {
-                            Label("导出摘要", systemImage: "square.and.arrow.up")
-                                .font(.caption.weight(.semibold))
+                            Label("导出", systemImage: "square.and.arrow.up")
+                                .font(.caption.weight(.medium))
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                        .help("用邮件草稿导出当前时间范围摘要")
+                        .help("导出当前范围摘要（邮件或剪贴板）")
                         .padding(.top, 8)
                     }
                     
+                    // One-line narrative — primary insight before charts.
+                    if let line = headlineInsight {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "text.quote")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.7))
+                                .padding(.top, 2)
+                            Text(line)
+                                .font(.subheadline)
+                                .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.88))
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
+                                .fill(AppTheme.cardBackground(for: colorScheme))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
+                                        .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                                )
+                        )
+                    }
+                    
                     rangeChipsBar
-                        .frame(maxWidth: 520)
+                        .frame(maxWidth: 480)
 
                     summaryGrid
 
-                    HStack(alignment: .top, spacing: 16) {
+                    // Main visual: goal + trend (or today timeline when range is today)
+                    HStack(alignment: .top, spacing: 14) {
                         goalCard
-                            .frame(maxWidth: contentW * 0.38)
+                            .frame(maxWidth: contentW * 0.36)
                         weeklyCard
                             .frame(maxWidth: .infinity)
                     }
@@ -237,29 +263,32 @@ struct AnalyticsView: View {
                     
                     if range == .today {
                         todayTimelineCard
-                            .frame(height: min(200, max(140, contentH * 0.18)) * density.scale)
-                        todayHourCard
-                            .frame(height: min(160, max(120, contentH * 0.14)) * density.scale)
+                            .frame(height: min(190, max(130, contentH * 0.17)) * density.scale)
                     }
 
-                    HStack(alignment: .top, spacing: 16) {
+                    HStack(alignment: .top, spacing: 14) {
                         categoryCard
-                            .frame(maxWidth: contentW * 0.34)
+                            .frame(maxWidth: contentW * 0.36)
                         freeFocusCard
-                            .frame(maxWidth: contentW * 0.28)
-                        collapsibleAnalyticsCard(
-                            title: "智能建议",
-                            icon: "lightbulb.fill",
-                            isExpanded: $showInsights
-                        ) {
-                            insightsCardBody
+                            .frame(maxWidth: contentW * 0.30)
+                        if range == .today {
+                            todayHourCard
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            collapsibleAnalyticsCard(
+                                title: "说明",
+                                icon: "info.circle",
+                                isExpanded: $showInsights
+                            ) {
+                                insightsCardBody
+                            }
+                            .frame(maxWidth: .infinity)
                         }
-                        .frame(maxWidth: .infinity)
                     }
-                    .frame(minHeight: secondaryRowHeight * 0.55 * density.scale)
+                    .frame(minHeight: secondaryRowHeight * 0.5 * density.scale)
 
                     collapsibleAnalyticsCard(
-                        title: "最近专注记录",
+                        title: "最近记录",
                         icon: "clock.arrow.circlepath",
                         isExpanded: $showRecent
                     ) {
@@ -288,10 +317,16 @@ struct AnalyticsView: View {
         let mins = rangeTotals.minutes
         let pomos = rangeTotals.pomodoros
         let time = FocusStats.formatTotalMinutes(mins)
+            .replacingOccurrences(of: "分钟", with: "分")
         if range == .today {
-            return "\(range.rawValue) · \(pomos) 个番茄 · \(time)  ·  \(dayOverDayLabel)"
+            return "\(pomos) 番茄 · \(time) · \(dayOverDayLabel)"
         }
-        return "\(range.rawValue) · \(pomos) 个番茄 · \(time)"
+        return "\(range.rawValue) · \(pomos) 番茄 · \(time)"
+    }
+    
+    /// Single calm sentence for the top of the page (first smart insight).
+    private var headlineInsight: String? {
+        insights.first
     }
     
     private var rangeChipsBar: some View {
@@ -304,10 +339,10 @@ struct AnalyticsView: View {
                     }
                 } label: {
                     Text(r.rawValue)
-                        .font(.caption.weight(.bold))
-                        .foregroundColor(selected ? .white : AppTheme.primaryText(for: colorScheme).opacity(0.85))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(selected ? .white : AppTheme.primaryText(for: colorScheme).opacity(0.8))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                         .background(
                             Capsule()
                                 .fill(selected
@@ -321,13 +356,8 @@ struct AnalyticsView: View {
                                     lineWidth: 1
                                 )
                         )
-                        .shadow(
-                            color: selected ? AppTheme.accent.opacity(0.25) : .clear,
-                            radius: 6,
-                            y: 2
-                        )
                 }
-                .buttonStyle(SoftScaleButtonStyle())
+                .buttonStyle(.plain)
             }
             Spacer(minLength: 0)
         }
