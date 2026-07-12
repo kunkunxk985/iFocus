@@ -79,6 +79,8 @@ class SettingsStore: ObservableObject {
         static let menuBarDisplayStyle = "menuBarDisplayStyle"
         static let uiDensity = "uiDensity"
         static let dockBounceOnComplete = "dockBounceOnComplete"
+        static let decorativeMotionEnabled = "decorativeMotionEnabled"
+        static let smartLaunchLanding = "smartLaunchLanding"
     }
     
     private let defaults: UserDefaults
@@ -213,6 +215,16 @@ class SettingsStore: ObservableObject {
         didSet { defaults.set(dockBounceOnComplete, forKey: Key.dockBounceOnComplete) }
     }
     
+    /// Ring breath, play invite pulse, celebrate scale — off by default (安静工具).
+    @Published var decorativeMotionEnabled: Bool {
+        didSet { defaults.set(decorativeMotionEnabled, forKey: Key.decorativeMotionEnabled) }
+    }
+    
+    /// Open 「今天」 when there are open today/overdue tasks; otherwise 专注钟.
+    @Published var smartLaunchLanding: Bool {
+        didSet { defaults.set(smartLaunchLanding, forKey: Key.smartLaunchLanding) }
+    }
+    
     /// Reflect OS login-item state in the toggle (read-only sync).
     /// Does **not** register the app — only the Settings switch calls `applyLaunchAtLoginPreference()`.
     func refreshLaunchAtLoginFromSystem() {
@@ -336,7 +348,8 @@ class SettingsStore: ObservableObject {
         
         let shortcutRaw = defaults.string(forKey: Key.toggleShortcut) ?? ToggleShortcutPreset.defaultPreset.rawValue
         self.toggleShortcut = ToggleShortcutPreset(rawValue: shortcutRaw) ?? .defaultPreset
-        self.showFocusModeHintOnStart = defaults.object(forKey: Key.showFocusModeHint) as? Bool ?? true
+        // Quiet-tool defaults: no Focus hint spam, no Dock bounce, no decorative motion.
+        self.showFocusModeHintOnStart = defaults.object(forKey: Key.showFocusModeHint) as? Bool ?? false
         self.pauseReminderEnabled = defaults.object(forKey: Key.pauseReminderEnabled) as? Bool ?? true
         self.pauseReminderMinutes = Self.intValue(for: Key.pauseReminderMinutes, in: defaults, defaultValue: 5)
         let accentRaw = defaults.string(forKey: Key.accentPreset) ?? AccentPreset.tomato.rawValue
@@ -348,7 +361,9 @@ class SettingsStore: ObservableObject {
         self.menuBarDisplayStyle = MenuBarDisplayStyle(rawValue: menuStyleRaw) ?? .iconTime
         let densityRaw = defaults.string(forKey: Key.uiDensity) ?? UIDensity.comfortable.rawValue
         self.uiDensity = UIDensity(rawValue: densityRaw) ?? .comfortable
-        self.dockBounceOnComplete = defaults.object(forKey: Key.dockBounceOnComplete) as? Bool ?? true
+        self.dockBounceOnComplete = defaults.object(forKey: Key.dockBounceOnComplete) as? Bool ?? false
+        self.decorativeMotionEnabled = defaults.object(forKey: Key.decorativeMotionEnabled) as? Bool ?? false
+        self.smartLaunchLanding = defaults.object(forKey: Key.smartLaunchLanding) as? Bool ?? true
         
         // Drop legacy keys that used to persist transient UI/runtime state.
         defaults.removeObject(forKey: "isLocked")

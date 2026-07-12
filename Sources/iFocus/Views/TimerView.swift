@@ -157,12 +157,21 @@ struct TimerView: View {
                     Spacer(minLength: 4)
                     
                     timerRing(size: ringSize)
-                        .scaleEffect(celebratePulse ? 1.045 : (timerStore.isRunning && ringBreath ? 1.018 : 1))
-                        .animation(.spring(response: 0.38, dampingFraction: 0.62), value: celebratePulse)
+                        .scaleEffect(
+                            settings.decorativeMotionEnabled && celebratePulse
+                            ? 1.04
+                            : (settings.decorativeMotionEnabled && timerStore.isRunning && ringBreath ? 1.015 : 1)
+                        )
                         .animation(
-                            timerStore.isRunning
-                            ? .easeInOut(duration: 2.2).repeatForever(autoreverses: true)
-                            : .easeOut(duration: 0.3),
+                            settings.decorativeMotionEnabled
+                            ? .easeOut(duration: 0.35)
+                            : .linear(duration: 0),
+                            value: celebratePulse
+                        )
+                        .animation(
+                            settings.decorativeMotionEnabled && timerStore.isRunning
+                            ? .easeInOut(duration: 2.4).repeatForever(autoreverses: true)
+                            : .easeOut(duration: 0.2),
                             value: ringBreath
                         )
                     
@@ -237,6 +246,11 @@ struct TimerView: View {
     }
     
     private func syncAmbientMotion() {
+        guard settings.decorativeMotionEnabled else {
+            ringBreath = false
+            playInvite = false
+            return
+        }
         if timerStore.isRunning {
             ringBreath = false
             playInvite = false
@@ -271,32 +285,26 @@ struct TimerView: View {
     // MARK: - Ambient
     
     private var ambientBackground: some View {
-        ZStack {
+        let quiet = !settings.decorativeMotionEnabled
+        return ZStack {
             AppTheme.contentBackground(for: colorScheme)
             
+            // Quiet tool: barely-there wash. Decorative mode: slightly richer wash.
             RadialGradient(
                 colors: [
-                    modeColor.opacity(colorScheme == .light ? 0.14 : 0.18),
-                    modeColor.opacity(colorScheme == .light ? 0.04 : 0.06),
+                    modeColor.opacity(quiet
+                                      ? (colorScheme == .light ? 0.05 : 0.08)
+                                      : (colorScheme == .light ? 0.12 : 0.16)),
+                    modeColor.opacity(quiet ? 0.02 : 0.04),
                     .clear
                 ],
                 center: UnitPoint(x: 0.5, y: 0.42),
                 startRadius: 40,
-                endRadius: 520
-            )
-            
-            LinearGradient(
-                colors: [
-                    modeColor.opacity(colorScheme == .light ? 0.10 : 0.14),
-                    modeColor.opacity(colorScheme == .light ? 0.04 : 0.06),
-                    .clear
-                ],
-                startPoint: .top,
-                endPoint: UnitPoint(x: 0.5, y: 0.32)
+                endRadius: 480
             )
         }
         .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.45), value: timerStore.mode)
+        .animation(.easeInOut(duration: quiet ? 0.2 : 0.4), value: timerStore.mode)
     }
     
     // MARK: - Top meta
@@ -446,11 +454,14 @@ struct TimerView: View {
         .animation(.easeOut(duration: 0.25), value: timerStore.celebrationMessage)
         .animation(.easeOut(duration: 0.25), value: timerStore.isPauseIdleTooLong)
         .onChange(of: timerStore.celebrationMessage) { message in
-            guard message != nil else { return }
+            guard message != nil, settings.decorativeMotionEnabled else { return }
             celebratePulse = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 celebratePulse = false
             }
+        }
+        .onChange(of: settings.decorativeMotionEnabled) { _ in
+            syncAmbientMotion()
         }
     }
     
@@ -662,26 +673,26 @@ struct TimerView: View {
     
     private func timerRing(size: CGFloat) -> some View {
         let line = max(12, size * 0.06)
-        let glowBoost = timerStore.isRunning ? 1.0 : 0.55
+        let motion = settings.decorativeMotionEnabled
+        let glowBoost = timerStore.isRunning ? (motion ? 1.0 : 0.7) : 0.45
         
         return ZStack {
-            // Outer soft bloom — breathes while running
+            // Soft bloom — only breathes when decorative motion is on
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            modeColor.opacity((colorScheme == .light ? 0.14 : 0.22) * glowBoost),
-                            modeColor.opacity((colorScheme == .light ? 0.05 : 0.08) * glowBoost),
+                            modeColor.opacity((colorScheme == .light ? 0.10 : 0.16) * glowBoost),
+                            modeColor.opacity((colorScheme == .light ? 0.03 : 0.06) * glowBoost),
                             .clear
                         ],
                         center: .center,
                         startRadius: size * 0.18,
-                        endRadius: size * (timerStore.isRunning ? 0.62 : 0.55)
+                        endRadius: size * 0.55
                     )
                 )
-                .frame(width: size * 1.22, height: size * 1.22)
-                .scaleEffect(timerStore.isRunning && ringBreath ? 1.06 : 1)
-                .opacity(timerStore.isRunning && ringBreath ? 0.85 : 1)
+                .frame(width: size * 1.18, height: size * 1.18)
+                .scaleEffect(motion && timerStore.isRunning && ringBreath ? 1.04 : 1)
             
             Circle()
                 .stroke(modeColor.opacity(colorScheme == .light ? 0.10 : 0.14), lineWidth: line)
@@ -699,28 +710,24 @@ struct TimerView: View {
                 .frame(width: size, height: size)
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 0.9), value: progress)
-                .shadow(color: modeColor.opacity(timerStore.isRunning ? 0.42 : 0.28), radius: timerStore.isRunning ? 16 : 12, y: 0)
+                .shadow(
+                    color: modeColor.opacity(timerStore.isRunning ? (motion ? 0.35 : 0.18) : 0.12),
+                    radius: timerStore.isRunning ? (motion ? 14 : 8) : 6,
+                    y: 0
+                )
             
             VStack(spacing: 6) {
                 Text(displayTime)
-                    .font(.system(size: max(44, size * 0.24), weight: .bold, design: .rounded))
+                    .font(.system(size: max(48, size * 0.26), weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
                 
                 Text(modeTitle)
-                    .font(.system(size: max(12, size * 0.05), weight: .semibold))
-                    .foregroundColor(modeColor)
-                
-                if timerStore.isRunning && timerStore.mode == .work {
-                    Text("保持节奏")
-                        .font(.system(size: max(10, size * 0.038), weight: .medium))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
-                        .transition(.opacity)
-                }
+                    .font(.system(size: max(12, size * 0.048), weight: .medium))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
         }
-        .frame(width: size * 1.22, height: size * 1.22)
-        .animation(.easeInOut(duration: 0.35), value: timerStore.isRunning)
+        .frame(width: size * 1.18, height: size * 1.18)
     }
     
     // MARK: - Controls
@@ -747,28 +754,21 @@ struct TimerView: View {
                 requestStartOrToggle()
             } label: {
                 ZStack {
-                    // Soft invite ring when idle
-                    if !timerStore.isRunning {
+                    if settings.decorativeMotionEnabled, !timerStore.isRunning {
                         Circle()
-                            .stroke(modeColor.opacity(0.28), lineWidth: 2)
-                            .frame(width: main + 14, height: main + 14)
-                            .scaleEffect(playInvite ? 1.08 : 0.96)
-                            .opacity(playInvite ? 0.25 : 0.55)
+                            .stroke(modeColor.opacity(0.22), lineWidth: 1.5)
+                            .frame(width: main + 12, height: main + 12)
+                            .scaleEffect(playInvite ? 1.06 : 0.98)
+                            .opacity(playInvite ? 0.2 : 0.45)
                     }
                     
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [modeColor, modeColor.opacity(0.88)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(modeColor)
                         .frame(width: main, height: main)
                         .shadow(
-                            color: modeColor.opacity(timerStore.isRunning ? 0.5 : 0.38),
-                            radius: timerStore.isRunning ? 16 : 12,
-                            y: 6
+                            color: modeColor.opacity(settings.decorativeMotionEnabled ? 0.35 : 0.18),
+                            radius: settings.decorativeMotionEnabled ? 12 : 6,
+                            y: 4
                         )
                     
                     Image(systemName: timerStore.isRunning ? "pause.fill" : "play.fill")

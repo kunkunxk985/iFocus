@@ -357,6 +357,16 @@ struct SettingsWindowView: View {
 
     private var appearancePanel: some View {
         VStack(alignment: .leading, spacing: 14) {
+            settingsCard("产品气质", icon: "leaf") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("安静工具")
+                        .font(.subheadline.weight(.semibold))
+                    Text("默认少动效、少打扰。完成时用轻提示，不抢注意力。")
+                        .font(.caption)
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                }
+            }
+            
             settingsCard("主题", icon: "paintpalette.fill") {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("界面外观")
@@ -370,6 +380,30 @@ struct SettingsWindowView: View {
                     .labelsHidden()
                     .pickerStyle(.segmented)
                 }
+            }
+            
+            settingsCard("动效与启动", icon: "sparkles") {
+                Toggle(isOn: $settings.decorativeMotionEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("装饰动效")
+                            .font(.subheadline.weight(.medium))
+                        Text("圆环呼吸、播放邀请光环、完成轻弹。默认关闭。")
+                            .font(.caption)
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    }
+                }
+                .toggleStyle(.switch)
+                
+                Toggle(isOn: $settings.smartLaunchLanding) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("智能启动页")
+                            .font(.subheadline.weight(.medium))
+                        Text("今天有待办时打开「今天」，否则打开专注钟。")
+                            .font(.caption)
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    }
+                }
+                .toggleStyle(.switch)
             }
             
             settingsCard("强调色", icon: "paintbrush.pointed.fill") {
@@ -635,12 +669,12 @@ enum AppWindowMetrics {
 }
 
 enum AppVersion {
-    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.6.13 / 73).
+    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.7.0 / 74).
     static var short: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.13"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.7.0"
     }
     static var build: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "73"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "74"
     }
 }
 

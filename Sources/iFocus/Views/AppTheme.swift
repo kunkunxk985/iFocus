@@ -133,19 +133,26 @@ enum AppTheme {
         return (AccentPreset(rawValue: raw) ?? .tomato).nsColor
     }
     
-    static let cornerRadiusCard: CGFloat = 16
-    static let cornerRadiusControl: CGFloat = 12
-    static let cornerRadiusRow: CGFloat = 14
+    // Quiet-tool spacing / radius tokens (prefer these over one-off values).
+    static let spaceXS: CGFloat = 4
+    static let spaceS: CGFloat = 8
+    static let spaceM: CGFloat = 12
+    static let spaceL: CGFloat = 16
+    static let spaceXL: CGFloat = 24
     
-    // Backgrounds — light mode uses cooler gray canvas so white cards lift off
+    static let cornerRadiusCard: CGFloat = 14
+    static let cornerRadiusControl: CGFloat = 10
+    static let cornerRadiusRow: CGFloat = 12
+    
+    // Backgrounds — cooler, flatter canvas (less “toy”, more tool)
     static func appBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color(hex: "#ECECEF") : Color(hex: "#121214")
+        colorScheme == .light ? Color(hex: "#F0F0F2") : Color(hex: "#111113")
     }
     static func sidebarBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color(hex: "#E4E4EA") : Color(hex: "#1A1A1D")
+        colorScheme == .light ? Color(hex: "#E8E8EC") : Color(hex: "#18181B")
     }
     static func sidebarTint(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color.white.opacity(0.14) : Color.black.opacity(0.16)
+        colorScheme == .light ? Color.white.opacity(0.10) : Color.black.opacity(0.14)
     }
     static func sidebarRowBackground(for colorScheme: ColorScheme) -> Color {
         Color.white.opacity(0.001)
@@ -157,29 +164,29 @@ enum AppTheme {
         colorScheme == .light ? Color.white.opacity(0.96) : Color(hex: "#252528").opacity(0.97)
     }
     static func contentBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color(hex: "#ECECEF") : Color(hex: "#121214")
+        colorScheme == .light ? Color(hex: "#F0F0F2") : Color(hex: "#111113")
     }
     static func cardBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color.white : Color(hex: "#1E1E22")
+        colorScheme == .light ? Color.white : Color(hex: "#1C1C1F")
     }
     static func elevatedBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color(hex: "#F4F4F7") : Color(hex: "#2A2A2F")
+        colorScheme == .light ? Color(hex: "#F5F5F7") : Color(hex: "#27272B")
     }
     
-    // Text — slightly stronger contrast in light mode
+    // Text — calm contrast
     static func primaryText(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color(hex: "141416") : Color.white.opacity(0.95)
+        colorScheme == .light ? Color(hex: "1A1A1E") : Color.white.opacity(0.92)
     }
     static func secondaryText(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color(hex: "5C5C63") : Color(hex: "9A9A9F")
+        colorScheme == .light ? Color(hex: "6B6B73") : Color(hex: "9898A0")
     }
     
     // Separators / overlays
     static func separator(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color.black.opacity(0.09) : Color.white.opacity(0.11)
+        colorScheme == .light ? Color.black.opacity(0.07) : Color.white.opacity(0.10)
     }
     static func separatorLow(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color.black.opacity(0.055) : Color.white.opacity(0.07)
+        colorScheme == .light ? Color.black.opacity(0.045) : Color.white.opacity(0.06)
     }
     static func overlayThin(for colorScheme: ColorScheme) -> Color {
         colorScheme == .light ? Color.black.opacity(0.06) : Color.black.opacity(0.15)
@@ -200,13 +207,14 @@ enum AppTheme {
     }
     
     static func softShadow(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color.black.opacity(0.07) : Color.black.opacity(0.32)
+        // Quieter elevation — less “floating toy cards”
+        colorScheme == .light ? Color.black.opacity(0.045) : Color.black.opacity(0.28)
     }
     
     static var windowBackgroundColor: NSColor {
         NSColor(name: nil) { appearance in
             let isLight = appearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua
-            return isLight ? NSColor(white: 0.925, alpha: 1.0) : NSColor(white: 0.07, alpha: 1.0)
+            return isLight ? NSColor(white: 0.94, alpha: 1.0) : NSColor(white: 0.067, alpha: 1.0)
         }
     }
 }
@@ -251,17 +259,16 @@ struct SoftCardBackground: View {
     var elevated: Bool = false
     
     var body: some View {
-        let alwaysLift = colorScheme == .light
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(AppTheme.cardBackground(for: colorScheme))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(AppTheme.separator(for: colorScheme).opacity(colorScheme == .light ? 0.65 : 0.9), lineWidth: 1)
+                    .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
             )
             .shadow(
-                color: (elevated || alwaysLift) ? AppTheme.softShadow(for: colorScheme) : .clear,
-                radius: elevated ? 14 : (alwaysLift ? 8 : 0),
-                y: elevated ? 5 : (alwaysLift ? 2 : 0)
+                color: elevated ? AppTheme.softShadow(for: colorScheme) : .clear,
+                radius: elevated ? 10 : 0,
+                y: elevated ? 3 : 0
             )
     }
 }
@@ -375,8 +382,8 @@ struct SoftHoverLift: ViewModifier {
                           : Color.clear)
                     .allowsHitTesting(false)
             )
-            .scaleEffect(hovering ? 1.008 : 1)
-            .animation(.easeOut(duration: 0.16), value: hovering)
+            // Minimal hover — quiet tools don't scale rows on mouse-over.
+            .animation(.easeOut(duration: 0.12), value: hovering)
             .onHover { hovering = $0 }
     }
 }

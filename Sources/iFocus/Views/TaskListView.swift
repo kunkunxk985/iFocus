@@ -734,22 +734,63 @@ struct TaskListView: View {
     
     private var emptyState: some View {
         let isCompletedList = viewState.selectedScreen == .completedTask
+        let isToday = viewState.selectedScreen == .todayTask
         let filteredEmpty = !baseTasks.isEmpty && currentTasks.isEmpty
-        return AppEmptyState(
-            systemImage: filteredEmpty ? "line.3.horizontal.decrease.circle" : (isCompletedList ? "archivebox" : "tray"),
-            title: filteredEmpty
-                ? "没有匹配的任务"
-                : (isCompletedList ? "暂无已完成任务" : "这里还是空的"),
-            subtitle: filteredEmpty
-                ? "换一个筛选条件，或点「全部」查看整表"
-                : (isCompletedList ? "完成任务后会出现在这里" : "在上方添加一条，或去专注钟自由开始"),
-            actionTitle: filteredEmpty ? "显示全部" : (isCompletedList ? nil : "去专注钟"),
-            action: filteredEmpty
-                ? { activeChip = .all }
-                : (isCompletedList ? nil : { viewState.selectedScreen = .timer })
+        
+        if filteredEmpty {
+            return AnyView(
+                AppEmptyState(
+                    systemImage: "line.3.horizontal.decrease.circle",
+                    title: "没有匹配的任务",
+                    subtitle: "换一个筛选，或点「全部」查看整表",
+                    actionTitle: "显示全部",
+                    action: { activeChip = .all }
+                )
+                .padding(.vertical, 28)
+                .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
+            )
+        }
+        
+        if isCompletedList {
+            return AnyView(
+                AppEmptyState(
+                    systemImage: "checkmark.circle",
+                    title: "还没有完成记录",
+                    subtitle: "完成任务后会出现在这里",
+                    actionTitle: nil,
+                    action: nil
+                )
+                .padding(.vertical, 28)
+                .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
+            )
+        }
+        
+        // Quiet single-focus empty for 今天; others stay minimal.
+        return AnyView(
+            VStack(spacing: 14) {
+                Text(isToday ? "今天最重要的一件事是？" : "还没有任务")
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                Text(isToday
+                     ? "在上方输入标题，回车即可。先写一件就够。"
+                     : "在上方添加，或去专注钟直接开始。")
+                    .font(.subheadline)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    .multilineTextAlignment(.center)
+                if !isToday {
+                    Button("去专注钟") {
+                        viewState.selectedScreen = .timer
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .padding(.top, 4)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 36)
+            .padding(.horizontal, 24)
+            .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
         )
-        .padding(.vertical, 28)
-        .background(SoftCardBackground(cornerRadius: 18))
     }
 }
 

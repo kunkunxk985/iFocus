@@ -24,6 +24,7 @@ struct ContentView: View {
     @State private var isAccountMenuPresented = false
     @State private var showResetConfirm = false
     @State private var showResumeSessionAlert = false
+    @State private var didApplySmartLanding = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
     @Environment(\.openWindow) private var openWindow
@@ -106,6 +107,7 @@ struct ContentView: View {
                     OnboardingOverlay {
                         withAnimation(.easeOut(duration: 0.25)) {
                             hasCompletedOnboarding = true
+                            applySmartLaunchLandingIfNeeded(force: true)
                             // After first-run, offer pending resume if any.
                             if timerStore.pendingResumeSnapshot != nil {
                                 showResumeSessionAlert = true
@@ -142,6 +144,7 @@ struct ContentView: View {
             // Keep AppStorage sidebar flag in sync for traffic-light layout.
             WindowLayoutStore.isSidebarCollapsed = sidebarCollapsed
             WindowChrome.layoutMainWindowTrafficLights()
+            applySmartLaunchLandingIfNeeded()
             // Offer resume after quit mid-session — wait until onboarding is done.
             if hasCompletedOnboarding, timerStore.pendingResumeSnapshot != nil {
                 showResumeSessionAlert = true
@@ -248,6 +251,24 @@ struct ContentView: View {
         // IMPORTANT: never subscribe to `clockTick` on this root view.
         // Per-second invalidation re-renders the whole tree (task list + edit sheet)
         // and freezes macOS DatePicker / controls. Clock UI lives in leaf views only.
+    }
+    
+    /// Quiet-tool launch: open 今天 when there is work waiting; otherwise 专注钟.
+    private func applySmartLaunchLandingIfNeeded(force: Bool = false) {
+        guard settings.smartLaunchLanding else { return }
+        guard force || !didApplySmartLanding else { return }
+        didApplySmartLanding = true
+        // Don't yank user if a deep link already navigated, or session resume is pending.
+        if timerStore.pendingResumeSnapshot != nil {
+            viewState.selectedScreen = .timer
+            return
+        }
+        let counts = taskStore.sidebarBadgeCounts()
+        if counts.today > 0 || counts.overdue > 0 {
+            viewState.selectedScreen = .todayTask
+        } else {
+            viewState.selectedScreen = .timer
+        }
     }
     
     private var resumeAlertMessage: String {
@@ -890,25 +911,15 @@ private struct FloatingFocusPill: View {
         .padding(.vertical, 12)
         .background(
             Capsule(style: .continuous)
-                .fill(.ultraThinMaterial)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.72))
-                )
+                .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.97))
                 .overlay(
                     Capsule(style: .continuous)
                         .stroke(
-                            timerStore.mode.accent.opacity(timerStore.isRunning ? 0.42 : 0.22),
+                            timerStore.mode.accent.opacity(timerStore.isRunning ? 0.26 : 0.12),
                             lineWidth: 1
                         )
                 )
-                .shadow(
-                    color: timerStore.isRunning
-                        ? timerStore.mode.accent.opacity(0.18)
-                        : AppTheme.softShadow(for: colorScheme),
-                    radius: 20,
-                    y: 8
-                )
+                .shadow(color: AppTheme.softShadow(for: colorScheme), radius: 14, y: 5)
         )
         .padding(.horizontal, 28)
         .padding(.bottom, 22)
@@ -1018,33 +1029,33 @@ private struct DailyGoalCelebrationOverlay: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(AppTheme.accent)
                 
-                Text("很好！可以收工休息，或继续做轻松任务。")
+                Text("可以收工，或继续做轻松的事。")
                     .font(.caption)
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                     .multilineTextAlignment(.center)
                 
                 Button(action: onDismiss) {
-                    Text("太棒了")
-                        .font(.subheadline.weight(.bold))
+                    Text("好的")
+                        .font(.subheadline.weight(.semibold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 28)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 9)
                         .background(Capsule().fill(AppTheme.accent))
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.defaultAction)
                 .padding(.top, 4)
             }
-            .padding(32)
-            .frame(maxWidth: 360)
+            .padding(28)
+            .frame(maxWidth: 340)
             .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard + 4, style: .continuous)
                     .fill(AppTheme.cardBackground(for: colorScheme))
-                    .shadow(color: AppTheme.softShadow(for: colorScheme), radius: 28, y: 12)
+                    .shadow(color: AppTheme.softShadow(for: colorScheme), radius: 20, y: 8)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(AppTheme.accent.opacity(0.25), lineWidth: 1)
+                RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard + 4, style: .continuous)
+                    .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
             )
         }
     }
@@ -1057,9 +1068,9 @@ private struct OnboardingOverlay: View {
     let onFinish: () -> Void
     
     private let steps: [(icon: String, title: String, body: String)] = [
-        ("timer", "开始一个番茄", "在专注钟选任务（或自由专注），空格开始。菜单栏会显示倒计时。"),
-        ("checklist", "用清单排期", "今天 / 明天 / 收集箱整理任务；完成目标会记入统计。"),
-        ("chart.bar.fill", "看数据与习惯", "数据统计看今日与本周；个人资料有热力图与连续天数。")
+        ("timer", "开始专注", "选任务或自由专注，空格开始。菜单栏会显示倒计时。"),
+        ("checklist", "整理今天", "在「今天」写下要做的事；完成会记入本地统计。"),
+        ("internaldrive", "数据只在本机", "无账号、无云同步。可随时在设置里打开数据文件夹。")
     ]
     
     var body: some View {
@@ -1076,7 +1087,7 @@ private struct OnboardingOverlay: View {
                         .foregroundColor(AppTheme.primaryText(for: colorScheme))
                 }
                 
-                Text("三分钟上手本地番茄钟 · 数据只存在这台 Mac。")
+                Text("安静的本机专注工具 · 数据只留在这台 Mac。")
                     .font(.subheadline)
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                 
