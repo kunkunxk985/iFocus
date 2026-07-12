@@ -81,6 +81,16 @@ class SettingsStore: ObservableObject {
         static let dockBounceOnComplete = "dockBounceOnComplete"
         static let decorativeMotionEnabled = "decorativeMotionEnabled"
         static let smartLaunchLanding = "smartLaunchLanding"
+        // Analytics dashboard cards (quiet defaults: core on, details off)
+        static let analyticsShowInsight = "analyticsShowInsight"
+        static let analyticsShowKPI = "analyticsShowKPI"
+        static let analyticsShowGoal = "analyticsShowGoal"
+        static let analyticsShowTrend = "analyticsShowTrend"
+        static let analyticsShowTimeline = "analyticsShowTimeline"
+        static let analyticsShowHours = "analyticsShowHours"
+        static let analyticsShowCategory = "analyticsShowCategory"
+        static let analyticsShowTaskBinding = "analyticsShowTaskBinding"
+        static let analyticsShowRecent = "analyticsShowRecentCards"
     }
     
     private let defaults: UserDefaults
@@ -225,6 +235,49 @@ class SettingsStore: ObservableObject {
         didSet { defaults.set(smartLaunchLanding, forKey: Key.smartLaunchLanding) }
     }
     
+    // MARK: - Analytics cards visibility (设置里可开关)
+    
+    @Published var analyticsShowInsight: Bool {
+        didSet { defaults.set(analyticsShowInsight, forKey: Key.analyticsShowInsight) }
+    }
+    @Published var analyticsShowKPI: Bool {
+        didSet { defaults.set(analyticsShowKPI, forKey: Key.analyticsShowKPI) }
+    }
+    @Published var analyticsShowGoal: Bool {
+        didSet { defaults.set(analyticsShowGoal, forKey: Key.analyticsShowGoal) }
+    }
+    @Published var analyticsShowTrend: Bool {
+        didSet { defaults.set(analyticsShowTrend, forKey: Key.analyticsShowTrend) }
+    }
+    @Published var analyticsShowTimeline: Bool {
+        didSet { defaults.set(analyticsShowTimeline, forKey: Key.analyticsShowTimeline) }
+    }
+    @Published var analyticsShowHours: Bool {
+        didSet { defaults.set(analyticsShowHours, forKey: Key.analyticsShowHours) }
+    }
+    @Published var analyticsShowCategory: Bool {
+        didSet { defaults.set(analyticsShowCategory, forKey: Key.analyticsShowCategory) }
+    }
+    @Published var analyticsShowTaskBinding: Bool {
+        didSet { defaults.set(analyticsShowTaskBinding, forKey: Key.analyticsShowTaskBinding) }
+    }
+    @Published var analyticsShowRecent: Bool {
+        didSet { defaults.set(analyticsShowRecent, forKey: Key.analyticsShowRecent) }
+    }
+    
+    /// Restore quiet-tool analytics layout (core on, details off).
+    func resetAnalyticsCardVisibilityToQuietDefaults() {
+        analyticsShowInsight = true
+        analyticsShowKPI = true
+        analyticsShowGoal = true
+        analyticsShowTrend = true
+        analyticsShowTimeline = false
+        analyticsShowHours = false
+        analyticsShowCategory = false
+        analyticsShowTaskBinding = false
+        analyticsShowRecent = false
+    }
+    
     /// Reflect OS login-item state in the toggle (read-only sync).
     /// Does **not** register the app — only the Settings switch calls `applyLaunchAtLoginPreference()`.
     func refreshLaunchAtLoginFromSystem() {
@@ -364,6 +417,16 @@ class SettingsStore: ObservableObject {
         self.dockBounceOnComplete = defaults.object(forKey: Key.dockBounceOnComplete) as? Bool ?? false
         self.decorativeMotionEnabled = defaults.object(forKey: Key.decorativeMotionEnabled) as? Bool ?? false
         self.smartLaunchLanding = defaults.object(forKey: Key.smartLaunchLanding) as? Bool ?? true
+        
+        self.analyticsShowInsight = defaults.object(forKey: Key.analyticsShowInsight) as? Bool ?? true
+        self.analyticsShowKPI = defaults.object(forKey: Key.analyticsShowKPI) as? Bool ?? true
+        self.analyticsShowGoal = defaults.object(forKey: Key.analyticsShowGoal) as? Bool ?? true
+        self.analyticsShowTrend = defaults.object(forKey: Key.analyticsShowTrend) as? Bool ?? true
+        self.analyticsShowTimeline = defaults.object(forKey: Key.analyticsShowTimeline) as? Bool ?? false
+        self.analyticsShowHours = defaults.object(forKey: Key.analyticsShowHours) as? Bool ?? false
+        self.analyticsShowCategory = defaults.object(forKey: Key.analyticsShowCategory) as? Bool ?? false
+        self.analyticsShowTaskBinding = defaults.object(forKey: Key.analyticsShowTaskBinding) as? Bool ?? false
+        self.analyticsShowRecent = defaults.object(forKey: Key.analyticsShowRecent) as? Bool ?? false
         
         // Drop legacy keys that used to persist transient UI/runtime state.
         defaults.removeObject(forKey: "isLocked")

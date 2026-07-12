@@ -21,9 +21,6 @@ struct AnalyticsView: View {
     /// Local only — do not put clock ticks on ContentView.
     @State private var clockVersion: UInt = 0
     @State private var range: AnalyticsRange = .today
-    /// Secondary charts — collapsed by default (安静工具：少展开)
-    @AppStorage("analyticsShowDetails") private var showDetails = false
-    @AppStorage("analyticsShowRecent") private var showRecent = false
 
     // MARK: - Derived metrics
 
@@ -192,8 +189,16 @@ struct AnalyticsView: View {
         !taskStore.focusSessions.isEmpty
     }
     
-    private var hasDataInSelectedRange: Bool {
-        rangeTotals.minutes > 0 || rangeTotals.pomodoros > 0 || timerStore.completedPomodoros > 0
+    private var anyAnalyticsCardEnabled: Bool {
+        settings.analyticsShowInsight
+            || settings.analyticsShowKPI
+            || settings.analyticsShowGoal
+            || settings.analyticsShowTrend
+            || settings.analyticsShowTimeline
+            || settings.analyticsShowHours
+            || settings.analyticsShowCategory
+            || settings.analyticsShowTaskBinding
+            || settings.analyticsShowRecent
     }
 
     // MARK: - Body
@@ -206,7 +211,7 @@ struct AnalyticsView: View {
             let contentW = min(availableW, min(1100, max(720, availableW * 0.88)))
             let contentH = max(0, geo.size.height - topInset)
             let primaryRowHeight = min(280, max(200, contentH * 0.32))
-            let recentMinHeight = min(140, max(96, contentH * 0.12))
+            let detailHeight = min(160, max(120, contentH * 0.14)) * settings.uiDensity.scale
 
             ScrollView {
                 let density = settings.uiDensity
@@ -239,42 +244,65 @@ struct AnalyticsView: View {
                     if !hasAnyHistory {
                         analyticsEmptyShell
                     } else {
-                        // Layer 1 — one calm sentence
-                        if let line = headlineInsight {
+                        // Visibility driven by Settings → 统计
+                        if settings.analyticsShowInsight, let line = headlineInsight {
                             insightBanner(line)
                         }
                         
-                        // Layer 2 — three KPIs only
-                        summaryGridQuiet
-                        
-                        // Layer 3 — main visual only
-                        HStack(alignment: .top, spacing: 16) {
-                            goalCard
-                                .frame(maxWidth: contentW * 0.38)
-                            weeklyCard
-                                .frame(maxWidth: .infinity)
+                        if settings.analyticsShowKPI {
+                            summaryGridQuiet
                         }
-                        .frame(height: primaryRowHeight * density.scale)
                         
-                        // Layer 4 — details collapsed by default
-                        if hasDataInSelectedRange || range == .today {
-                            collapsibleAnalyticsCard(
-                                title: "更多细节",
-                                icon: "rectangle.split.3x1",
-                                isExpanded: $showDetails
-                            ) {
-                                detailsExpandedBody(contentW: contentW, contentH: contentH, density: density)
+                        if settings.analyticsShowGoal || settings.analyticsShowTrend {
+                            HStack(alignment: .top, spacing: 16) {
+                                if settings.analyticsShowGoal {
+                                    goalCard
+                                        .frame(maxWidth: settings.analyticsShowTrend ? contentW * 0.38 : .infinity)
+                                }
+                                if settings.analyticsShowTrend {
+                                    weeklyCard
+                                        .frame(maxWidth: .infinity)
+                                }
                             }
+                            .frame(height: primaryRowHeight * density.scale)
                         }
                         
-                        collapsibleAnalyticsCard(
-                            title: "最近记录",
-                            icon: "clock.arrow.circlepath",
-                            isExpanded: $showRecent
-                        ) {
-                            recentSessionsBody
+                        if range == .today, settings.analyticsShowTimeline {
+                            todayTimelineCard
+                                .frame(height: detailHeight)
                         }
-                        .frame(minHeight: showRecent ? recentMinHeight * density.scale : 44)
+                        
+                        if range == .today, settings.analyticsShowHours {
+                            todayHourCard
+                                .frame(height: detailHeight * 0.9)
+                        }
+                        
+                        if settings.analyticsShowCategory || settings.analyticsShowTaskBinding {
+                            HStack(alignment: .top, spacing: 14) {
+                                if settings.analyticsShowCategory {
+                                    categoryCard.frame(maxWidth: .infinity)
+                                }
+                                if settings.analyticsShowTaskBinding {
+                                    freeFocusCard.frame(maxWidth: .infinity)
+                                }
+                            }
+                            .frame(minHeight: 120 * density.scale)
+                        }
+                        
+                        if settings.analyticsShowRecent {
+                            AnalyticsCard(title: "最近记录", icon: "clock.arrow.circlepath") {
+                                recentSessionsBody
+                            }
+                            .frame(minHeight: 120 * density.scale)
+                        }
+                        
+                        // If user turned everything off, gentle hint
+                        if !anyAnalyticsCardEnabled {
+                            Text("所有卡片已关闭。可在 设置 → 统计 中打开需要的内容。")
+                                .font(.caption)
+                                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                                .padding(.top, 8)
+                        }
                     }
                 }
                 .frame(width: contentW, alignment: .topLeading)
@@ -282,8 +310,8 @@ struct AnalyticsView: View {
                 .padding(.horizontal, pad * density.scale)
                 .padding(.top, topInset)
                 .padding(.bottom, 36)
-                .animation(.easeInOut(duration: 0.2), value: showDetails)
-                .animation(.easeInOut(duration: 0.2), value: showRecent)
+                .animation(.easeInOut(duration: 0.2), value: settings.analyticsShowGoal)
+                .animation(.easeInOut(duration: 0.2), value: settings.analyticsShowRecent)
             }
             .softScroll()
             .frame(width: geo.size.width, height: contentH + topInset, alignment: .top)
@@ -453,26 +481,6 @@ struct AnalyticsView: View {
         .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
     }
     
-    @ViewBuilder
-    private func detailsExpandedBody(contentW: CGFloat, contentH: CGFloat, density: UIDensity) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if range == .today {
-                todayTimelineCard
-                    .frame(height: min(160, max(120, contentH * 0.14)) * density.scale)
-                todayHourCard
-                    .frame(height: min(140, max(100, contentH * 0.12)) * density.scale)
-            }
-            HStack(alignment: .top, spacing: 14) {
-                categoryCard
-                    .frame(maxWidth: .infinity)
-                freeFocusCard
-                    .frame(maxWidth: .infinity)
-            }
-            .frame(minHeight: 120 * density.scale)
-        }
-        .padding(.top, 4)
-    }
-
     // MARK: - KPI row (3 max)
 
     private var summaryGridQuiet: some View {

@@ -4,6 +4,7 @@ import AppKit
 private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
     case general = "常规"
     case appearance = "外观"
+    case analytics = "统计"
     case timer = "计时"
     case notifications = "声音与通知"
     case shortcuts = "快捷键"
@@ -14,6 +15,7 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
         switch self {
         case .general: return "gearshape.fill"
         case .appearance: return "paintpalette.fill"
+        case .analytics: return "chart.bar.fill"
         case .timer: return "timer"
         case .notifications: return "bell.fill"
         case .shortcuts: return "keyboard"
@@ -24,6 +26,7 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
         switch self {
         case .general: return "版本信息与窗口说明"
         case .appearance: return "主题与界面外观"
+        case .analytics: return "数据页展示哪些卡片"
         case .timer: return "番茄节奏与每日目标"
         case .notifications: return "声音、通知与自动化"
         case .shortcuts: return "键盘与菜单栏操作"
@@ -56,6 +59,7 @@ struct SettingsWindowView: View {
                         switch selectedPanel {
                         case .general: generalPanel
                         case .appearance: appearancePanel
+                        case .analytics: analyticsPanel
                         case .timer: timerPanel
                         case .notifications: notificationsPanel
                         case .shortcuts: shortcutsPanel
@@ -355,6 +359,63 @@ struct SettingsWindowView: View {
         }
     }
 
+    private var analyticsPanel: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            settingsCard("展示说明", icon: "info.circle") {
+                Text("在「数据统计」页按需显示卡片。默认只开核心几项，保持界面安静；需要时再打开细节。")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            
+            settingsCard("核心", icon: "square.grid.2x2") {
+                analyticsToggle("一句话洞察", subtitle: "顶部的智能摘要", isOn: $settings.analyticsShowInsight)
+                Divider().opacity(0.5)
+                analyticsToggle("今日概览", subtitle: "番茄 / 时长 / 连续天数", isOn: $settings.analyticsShowKPI)
+                Divider().opacity(0.5)
+                analyticsToggle("今日目标", subtitle: "目标完成环", isOn: $settings.analyticsShowGoal)
+                Divider().opacity(0.5)
+                analyticsToggle("趋势图", subtitle: "范围内每日专注趋势", isOn: $settings.analyticsShowTrend)
+            }
+            
+            settingsCard("细节", icon: "rectangle.split.3x1") {
+                analyticsToggle("今日时间线", subtitle: "仅「今日」范围有效", isOn: $settings.analyticsShowTimeline)
+                Divider().opacity(0.5)
+                analyticsToggle("时段分布", subtitle: "仅「今日」范围有效", isOn: $settings.analyticsShowHours)
+                Divider().opacity(0.5)
+                analyticsToggle("分类 Top", subtitle: "按分类统计专注", isOn: $settings.analyticsShowCategory)
+                Divider().opacity(0.5)
+                analyticsToggle("任务绑定", subtitle: "自由专注占比", isOn: $settings.analyticsShowTaskBinding)
+                Divider().opacity(0.5)
+                analyticsToggle("最近记录", subtitle: "近期专注会话列表", isOn: $settings.analyticsShowRecent)
+            }
+            
+            settingsCard("预设", icon: "arrow.counterclockwise") {
+                Button {
+                    settings.resetAnalyticsCardVisibilityToQuietDefaults()
+                } label: {
+                    Text("恢复安静默认（核心开、细节关）")
+                        .font(.subheadline.weight(.medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+            }
+        }
+    }
+    
+    private func analyticsToggle(_ title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            }
+        }
+        .toggleStyle(.switch)
+    }
+    
     private var appearancePanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             settingsCard("产品气质", icon: "leaf") {
@@ -669,12 +730,12 @@ enum AppWindowMetrics {
 }
 
 enum AppVersion {
-    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.7.2 / 76).
+    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.7.3 / 77).
     static var short: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.7.2"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.7.3"
     }
     static var build: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "76"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "77"
     }
 }
 
