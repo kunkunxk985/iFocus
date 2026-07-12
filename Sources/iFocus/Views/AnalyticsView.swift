@@ -20,9 +20,10 @@ struct AnalyticsView: View {
     @Environment(\.colorScheme) private var colorScheme
     /// Local only — do not put clock ticks on ContentView.
     @State private var clockVersion: UInt = 0
-    @State private var range: AnalyticsRange = .days7
-    @AppStorage("analyticsShowInsights") private var showInsights = true
-    @AppStorage("analyticsShowRecent") private var showRecent = true
+    @State private var range: AnalyticsRange = .today
+    /// Secondary charts — collapsed by default (安静工具：少展开)
+    @AppStorage("analyticsShowDetails") private var showDetails = false
+    @AppStorage("analyticsShowRecent") private var showRecent = false
 
     // MARK: - Derived metrics
 
@@ -187,22 +188,30 @@ struct AnalyticsView: View {
         Array(sessionsInRange.sorted(by: { $0.timestamp > $1.timestamp }).prefix(8))
     }
 
+    private var hasAnyHistory: Bool {
+        !taskStore.focusSessions.isEmpty
+    }
+    
+    private var hasDataInSelectedRange: Bool {
+        rangeTotals.minutes > 0 || rangeTotals.pomodoros > 0 || timerStore.completedPomodoros > 0
+    }
+
     // MARK: - Body
 
     var body: some View {
         GeometryReader { geo in
-            let pad: CGFloat = 40
+            let pad: CGFloat = 44
             let topInset = AppTheme.detailTopInset
             let availableW = max(0, geo.size.width - pad * 2)
-            let contentW = min(availableW, min(1760, max(1040, availableW * 0.84)))
+            let contentW = min(availableW, min(1100, max(720, availableW * 0.88)))
             let contentH = max(0, geo.size.height - topInset)
-            let primaryRowHeight = min(300, max(220, contentH * 0.30))
-            let secondaryRowHeight = min(220, max(150, contentH * 0.20))
-            let recentMinHeight = min(160, max(104, contentH * 0.14))
+            let primaryRowHeight = min(280, max(200, contentH * 0.32))
+            let recentMinHeight = min(140, max(96, contentH * 0.12))
 
             ScrollView {
                 let density = settings.uiDensity
-                VStack(alignment: .leading, spacing: density.sectionSpacing) {
+                // Roomier vertical rhythm for quiet dashboard
+                VStack(alignment: .leading, spacing: max(20, density.sectionSpacing + 6)) {
                     HStack(alignment: .top) {
                         PageTitle(
                             title: "数据统计",
@@ -210,98 +219,70 @@ struct AnalyticsView: View {
                             systemImage: "chart.bar.fill"
                         )
                         Spacer(minLength: 12)
-                        Button {
-                            shareWeeklyReport()
-                        } label: {
-                            Label("导出", systemImage: "square.and.arrow.up")
-                                .font(.caption.weight(.medium))
+                        if hasAnyHistory {
+                            Button {
+                                shareWeeklyReport()
+                            } label: {
+                                Label("导出", systemImage: "square.and.arrow.up")
+                                    .font(.caption.weight(.medium))
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .help("导出摘要（邮件或剪贴板）")
+                            .padding(.top, 8)
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .help("导出当前范围摘要（邮件或剪贴板）")
-                        .padding(.top, 8)
-                    }
-                    
-                    // One-line narrative — primary insight before charts.
-                    if let line = headlineInsight {
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: "text.quote")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.7))
-                                .padding(.top, 2)
-                            Text(line)
-                                .font(.subheadline)
-                                .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.88))
-                                .fixedSize(horizontal: false, vertical: true)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
-                                .fill(AppTheme.cardBackground(for: colorScheme))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
-                                        .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                                )
-                        )
                     }
                     
                     rangeChipsBar
-                        .frame(maxWidth: 480)
-
-                    summaryGrid
-
-                    // Main visual: goal + trend (or today timeline when range is today)
-                    HStack(alignment: .top, spacing: 14) {
-                        goalCard
-                            .frame(maxWidth: contentW * 0.36)
-                        weeklyCard
-                            .frame(maxWidth: .infinity)
-                    }
-                    .frame(height: primaryRowHeight * density.scale)
+                        .frame(maxWidth: 420)
                     
-                    if range == .today {
-                        todayTimelineCard
-                            .frame(height: min(190, max(130, contentH * 0.17)) * density.scale)
-                    }
-
-                    HStack(alignment: .top, spacing: 14) {
-                        categoryCard
-                            .frame(maxWidth: contentW * 0.36)
-                        freeFocusCard
-                            .frame(maxWidth: contentW * 0.30)
-                        if range == .today {
-                            todayHourCard
-                                .frame(maxWidth: .infinity)
-                        } else {
-                            collapsibleAnalyticsCard(
-                                title: "说明",
-                                icon: "info.circle",
-                                isExpanded: $showInsights
-                            ) {
-                                insightsCardBody
-                            }
-                            .frame(maxWidth: .infinity)
+                    if !hasAnyHistory {
+                        analyticsEmptyShell
+                    } else {
+                        // Layer 1 — one calm sentence
+                        if let line = headlineInsight {
+                            insightBanner(line)
                         }
+                        
+                        // Layer 2 — three KPIs only
+                        summaryGridQuiet
+                        
+                        // Layer 3 — main visual only
+                        HStack(alignment: .top, spacing: 16) {
+                            goalCard
+                                .frame(maxWidth: contentW * 0.38)
+                            weeklyCard
+                                .frame(maxWidth: .infinity)
+                        }
+                        .frame(height: primaryRowHeight * density.scale)
+                        
+                        // Layer 4 — details collapsed by default
+                        if hasDataInSelectedRange || range == .today {
+                            collapsibleAnalyticsCard(
+                                title: "更多细节",
+                                icon: "rectangle.split.3x1",
+                                isExpanded: $showDetails
+                            ) {
+                                detailsExpandedBody(contentW: contentW, contentH: contentH, density: density)
+                            }
+                        }
+                        
+                        collapsibleAnalyticsCard(
+                            title: "最近记录",
+                            icon: "clock.arrow.circlepath",
+                            isExpanded: $showRecent
+                        ) {
+                            recentSessionsBody
+                        }
+                        .frame(minHeight: showRecent ? recentMinHeight * density.scale : 44)
                     }
-                    .frame(minHeight: secondaryRowHeight * 0.5 * density.scale)
-
-                    collapsibleAnalyticsCard(
-                        title: "最近记录",
-                        icon: "clock.arrow.circlepath",
-                        isExpanded: $showRecent
-                    ) {
-                        recentSessionsBody
-                    }
-                    .frame(minHeight: showRecent ? recentMinHeight * density.scale : 44)
-                    .padding(.bottom, 28)
                 }
                 .frame(width: contentW, alignment: .topLeading)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, pad * density.scale)
                 .padding(.top, topInset)
-                .animation(.easeInOut(duration: 0.2), value: showInsights)
+                .padding(.bottom, 36)
+                .animation(.easeInOut(duration: 0.2), value: showDetails)
                 .animation(.easeInOut(duration: 0.2), value: showRecent)
             }
             .softScroll()
@@ -408,20 +389,102 @@ struct AnalyticsView: View {
         }
     }
 
-    // MARK: - KPI row
+    // MARK: - Quiet shells
+    
+    private func insightBanner(_ line: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "text.alignleft")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.65))
+                .padding(.top, 2)
+            Text(line)
+                .font(.subheadline)
+                .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.9))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
+                .fill(AppTheme.cardBackground(for: colorScheme))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
+                        .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                )
+        )
+    }
+    
+    /// Zero-history: one calm panel instead of a wall of empty cards.
+    private var analyticsEmptyShell: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.system(size: 28, weight: .light))
+                .foregroundColor(AppTheme.accent.opacity(0.75))
+                .frame(width: 64, height: 64)
+                .background(Circle().fill(AppTheme.accent.opacity(0.08)))
+            
+            Text("完成一次专注后，这里会变清晰")
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+            
+            Text("趋势、时间线和分类都会出现。现在只需开始第一个番茄。")
+                .font(.subheadline)
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 360)
+            
+            Button {
+                AppNavigation.post(.timer)
+            } label: {
+                Text("去专注钟")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 9)
+                    .background(Capsule().fill(AppTheme.accent))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 56)
+        .padding(.horizontal, 24)
+        .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
+    }
+    
+    @ViewBuilder
+    private func detailsExpandedBody(contentW: CGFloat, contentH: CGFloat, density: UIDensity) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if range == .today {
+                todayTimelineCard
+                    .frame(height: min(160, max(120, contentH * 0.14)) * density.scale)
+                todayHourCard
+                    .frame(height: min(140, max(100, contentH * 0.12)) * density.scale)
+            }
+            HStack(alignment: .top, spacing: 14) {
+                categoryCard
+                    .frame(maxWidth: .infinity)
+                freeFocusCard
+                    .frame(maxWidth: .infinity)
+            }
+            .frame(minHeight: 120 * density.scale)
+        }
+        .padding(.top, 4)
+    }
 
-    private var summaryGrid: some View {
+    // MARK: - KPI row (3 max)
+
+    private var summaryGridQuiet: some View {
         HStack(spacing: 12) {
             StatCard(
                 systemImage: "timer",
                 value: "\(timerStore.completedPomodoros)/\(settings.dailyGoal)",
-                label: goalRemaining == 0 && timerStore.completedPomodoros > 0
-                    ? "今日番茄 · 已达标"
-                    : (goalRemaining > 0 ? "今日番茄 · 还差 \(goalRemaining)" : "今日番茄"),
+                label: goalRemaining > 0 ? "今日番茄 · 还差 \(goalRemaining)" : "今日番茄",
                 tint: AppTheme.accent
             )
             StatCard(
-                systemImage: "clock.fill",
+                systemImage: "clock",
                 value: FocusStats.formatTotalMinutes(totalMinutesToday)
                     .replacingOccurrences(of: "分钟", with: "分")
                     .replacingOccurrences(of: "小时", with: "时"),
@@ -429,16 +492,10 @@ struct AnalyticsView: View {
                 tint: Color(hex: "#3B82F6")
             )
             StatCard(
-                systemImage: "flame.fill",
+                systemImage: "flame",
                 value: "\(streakCurrent)",
-                label: streakCurrent > 0 ? "连续专注天数" : "连续天数 · 待开启",
+                label: streakCurrent > 0 ? "连续天数" : "连续 · 待开启",
                 tint: Color(hex: "#F59E0B")
-            )
-            StatCard(
-                systemImage: "chart.line.uptrend.xyaxis",
-                value: dayOverDayShortValue,
-                label: dayOverDayLabel,
-                tint: dayOverDayTint
             )
         }
     }
