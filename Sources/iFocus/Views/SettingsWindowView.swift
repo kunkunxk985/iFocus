@@ -839,12 +839,35 @@ enum AppWindowMetrics {
 }
 
 enum AppVersion {
-    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.9.3 / 85).
+    /// Prefer Info.plist (written by `package_app.sh` from root `VERSION` file).
+    /// Unpackaged `swift run` falls back to reading `VERSION` next to the package, else "dev".
     static var short: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.9.3"
+        if let fromBundle = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+           !fromBundle.isEmpty, fromBundle != "1.0" {
+            return fromBundle
+        }
+        return versionFileLines()?.first ?? "dev"
     }
     static var build: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "85"
+        if let fromBundle = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
+           !fromBundle.isEmpty {
+            return fromBundle
+        }
+        return versionFileLines()?.dropFirst().first ?? "0"
+    }
+
+    private static func versionFileLines() -> [String]? {
+        // Walk up from executable / cwd to find repo VERSION (dev only).
+        var dir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        for _ in 0..<6 {
+            let candidate = dir.appendingPathComponent("VERSION")
+            if let text = try? String(contentsOf: candidate, encoding: .utf8) {
+                let lines = text.split(whereSeparator: \.isNewline).map(String.init)
+                if lines.count >= 2 { return lines }
+            }
+            dir.deleteLastPathComponent()
+        }
+        return nil
     }
 }
 

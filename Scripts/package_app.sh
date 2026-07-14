@@ -9,8 +9,15 @@ cd "$ROOT"
 APP_NAME="iFocus"
 BUNDLE_ID="com.kun.ifocus"
 MACOS_MIN_VERSION="13.0"
-APP_VERSION="1.9.3"
-BUILD_VERSION="85"
+# Single source of truth: repo-root VERSION (line1=marketing, line2=build).
+VERSION_FILE="$ROOT/VERSION"
+if [[ -f "$VERSION_FILE" ]]; then
+  APP_VERSION=$(sed -n '1p' "$VERSION_FILE" | tr -d '[:space:]')
+  BUILD_VERSION=$(sed -n '2p' "$VERSION_FILE" | tr -d '[:space:]')
+else
+  APP_VERSION="0.0.0-dev"
+  BUILD_VERSION="0"
+fi
 
 echo "Building SwiftPM executable..."
 CLANG_MODULE_CACHE_PATH="${ROOT}/.build/clang-module-cache" \

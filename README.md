@@ -4,7 +4,7 @@ macOS 专注 / 番茄钟应用（SwiftUI + AppKit，Swift Package Manager）。
 
 | 项 | 值 |
 |----|-----|
-| 版本 | **1.9.3**（build **85**） |
+| 版本 | **1.9.4**（build **87**）· 单一来源见根目录 `VERSION` |
 | 平台 | macOS 13+ |
 | 工具链 | Swift tools 5.8+（见 `Package.swift`） |
 | Bundle ID | `com.kun.ifocus` |
@@ -88,17 +88,19 @@ bash Scripts/smoke_test.sh --replace-running
 ## 工程结构
 
 ```
+VERSION               # 营销版本 + build（唯一来源）
 Sources/
-  iFocus/          # App 目标：SwiftUI 界面、Store、菜单栏
-  iFocusCore/      # 纯逻辑（过滤、统计、计时格式），便于单测
+  iFocus/             # App：SwiftUI、Store、菜单栏
+    Views/Analytics/  # 统计页拆分（Chrome / Charts / Cards）
+  iFocusCore/         # 纯逻辑（过滤、统计、时间范围、备份包）
 Tests/iFocusTests/
 Scripts/
-  package_app.sh   # 打包 .app
-  smoke_test.sh    # 冒烟
-  run_deep_qa.sh   # 全量测试、性能基准与冒烟
+  package_app.sh      # 读 VERSION 写入 Info.plist
+  smoke_test.sh
+  run_deep_qa.sh
 ```
 
 ## 版本一致性
 
-打包版本以 `Scripts/package_app.sh` 中的 `CFBundleShortVersionString` / `CFBundleVersion` 为准。  
-`AppVersion` 的 fallback 应与之保持一致（当前 1.9.3 / 85）。
+**只改根目录 `VERSION` 两行**（第 1 行营销版本、第 2 行 build）。  
+`package_app.sh` 写入 Info.plist；`AppVersion` 优先读 Bundle，开发态可回退读 `VERSION`。
