@@ -154,7 +154,9 @@ struct ContentView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: AppNavigation.skipTimer)) { _ in
-            timerStore.skipToNext()
+            if timerStore.canSkipSegment {
+                timerStore.skipToNext()
+            }
         }
         .confirmationDialog(
             "重置当前计时？",

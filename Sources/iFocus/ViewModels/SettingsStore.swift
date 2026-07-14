@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import SwiftUI
+import UserNotifications
 import iFocusCore
 
 enum AppearanceMode: String, CaseIterable, Identifiable {
@@ -66,6 +67,7 @@ class SettingsStore: ObservableObject {
         static let autoStartBreaks = "autoStartBreaks"
         static let autoStartWork = "autoStartWork"
         static let longBreakEvery = "longBreakEvery"
+        static let strictMode = "strictMode"
         static let soundEnabled = "soundEnabled"
         static let soundName = "soundName"
         static let dailyGoal = "dailyGoal"
@@ -148,6 +150,10 @@ class SettingsStore: ObservableObject {
             }
             defaults.set(longBreakEvery, forKey: Key.longBreakEvery)
         }
+    }
+    /// Disables skip (and deep-link skip) so a segment must finish or be reset with confirm.
+    @Published var strictMode: Bool {
+        didSet { defaults.set(strictMode, forKey: Key.strictMode) }
     }
     @Published var soundEnabled: Bool {
         didSet { defaults.set(soundEnabled, forKey: Key.soundEnabled) }
@@ -387,7 +393,7 @@ class SettingsStore: ObservableObject {
     /// Preference keys included in quiet local backup (not transient UI state).
     static let backupPreferenceKeys: [String] = [
         Key.workMinutes, Key.shortBreakMinutes, Key.longBreakMinutes,
-        Key.autoStartBreaks, Key.autoStartWork, Key.longBreakEvery,
+        Key.autoStartBreaks, Key.autoStartWork, Key.longBreakEvery, Key.strictMode,
         Key.soundEnabled, Key.soundName, Key.dailyGoal,
         Key.appearance, Key.username, Key.avatarColorIndex,
         Key.toggleShortcut, Key.showFocusModeHint,
@@ -410,6 +416,7 @@ class SettingsStore: ObservableObject {
             Key.autoStartBreaks: autoStartBreaks,
             Key.autoStartWork: autoStartWork,
             Key.longBreakEvery: longBreakEvery,
+            Key.strictMode: strictMode,
             Key.soundEnabled: soundEnabled,
             Key.soundName: soundName as String,
             Key.dailyGoal: dailyGoal,
@@ -456,6 +463,7 @@ class SettingsStore: ObservableObject {
         if let v = Self.jsonBool(dict["autoStartBreaks"]) { autoStartBreaks = v }
         if let v = Self.jsonBool(dict["autoStartWork"]) { autoStartWork = v }
         if let v = Self.jsonInt(dict["longBreakEvery"]) { longBreakEvery = Self.clampLongBreakEvery(v) }
+        if let v = Self.jsonBool(dict["strictMode"]) { strictMode = v }
         if let v = Self.jsonBool(dict["soundEnabled"]) { soundEnabled = v }
         if let v = dict["soundName"] as? String { soundName = NSSound.Name(v) }
         if let v = Self.jsonInt(dict["dailyGoal"]) { dailyGoal = Self.clampDailyGoal(v) }
@@ -588,6 +596,7 @@ class SettingsStore: ObservableObject {
         self.longBreakEvery    = Self.clampLongBreakEvery(
             Self.intValue(for: Key.longBreakEvery, in: defaults, defaultValue: 4)
         )
+        self.strictMode        = defaults.object(forKey: Key.strictMode) as? Bool ?? false
         self.soundEnabled      = defaults.object(forKey: Key.soundEnabled) as? Bool ?? true
         let saved = defaults.string(forKey: Key.soundName) ?? "Glass"
         self.soundName         = NSSound.Name(saved)
@@ -686,6 +695,18 @@ class SettingsStore: ObservableObject {
 
     static func clampLongBreakEvery(_ value: Int) -> Int {
         min(8, max(2, value))
+    }
+
+    /// Sound for UserNotifications. Custom names try app/system; nil when muted.
+    func completionNotificationSound() -> UNNotificationSound? {
+        guard soundEnabled else { return nil }
+        // Prefer the same family as in-app NSSound names (Glass, Ping, …).
+        // If the OS cannot resolve the name, fall back to default so end alerts still ring.
+        let raw = (soundName as String).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !raw.isEmpty {
+            return UNNotificationSound(named: UNNotificationSoundName(rawValue: raw))
+        }
+        return .default
     }
     
     private static func intValue(for key: String, in defaults: UserDefaults, defaultValue: Int) -> Int {

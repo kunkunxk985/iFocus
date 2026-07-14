@@ -354,13 +354,16 @@ final class MenuBarController: NSObject, ObservableObject {
         )
         menu.item(withTag: MenuTag.freeFocus.rawValue)?.isEnabled = true
 
-        menu.item(withTag: MenuTag.nextMode.rawValue)?.isEnabled = true
+        let canSkip = timerStore.canSkipSegment
+        menu.item(withTag: MenuTag.nextMode.rawValue)?.isEnabled = canSkip
         let skipTarget = TimerStore.nextMode(
             after: mode,
             workSessionsCompletedToday: mode == .work ? done : 0,
             longBreakEvery: timerStore.settings.longBreakEvery
         )
-        menu.item(withTag: MenuTag.nextMode.rawValue)?.title = "跳过 → \(skipTarget.rawValue)"
+        menu.item(withTag: MenuTag.nextMode.rawValue)?.title = canSkip
+            ? "跳过 → \(skipTarget.rawValue)"
+            : "跳过（严格模式关闭）"
 
         // Reset only meaningful when something is live.
         menu.item(withTag: MenuTag.reset.rawValue)?.isEnabled = isRunning || inProgress

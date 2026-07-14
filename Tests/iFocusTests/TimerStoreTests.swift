@@ -123,6 +123,25 @@ final class TimerStoreTests: XCTestCase {
         XCTAssertFalse(timer.isRunning)
     }
 
+    func testStrictModeBlocksSkip() {
+        let (settings, _, timer) = makeStores(workMinutes: 25)
+        settings.strictMode = true
+        XCTAssertFalse(timer.canSkipSegment)
+        timer.mode = .work
+        timer.start()
+        XCTAssertTrue(timer.isRunning)
+        timer.skipToNext()
+        // Still work and running — skip must no-op (mode unchanged)
+        XCTAssertEqual(timer.mode, .work)
+        XCTAssertTrue(timer.isRunning)
+        XCTAssertNotNil(timer.celebrationMessage)
+        settings.strictMode = false
+        XCTAssertTrue(timer.canSkipSegment)
+        timer.skipToNext()
+        XCTAssertEqual(timer.mode, .shortBreak)
+        XCTAssertFalse(timer.isRunning)
+    }
+
     func testWorkCompletionBodyUsesSessionSnapshotNotLiveTask() {
         let taskId = UUID()
         let body = TimerStore.workCompletionBody(

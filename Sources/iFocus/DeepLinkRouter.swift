@@ -87,7 +87,9 @@ enum DeepLinkRouter {
         case .toggle:
             timerStore.toggle()
         case .skip:
-            timerStore.skipToNext()
+            if timerStore.canSkipSegment {
+                timerStore.skipToNext()
+            }
         case .reset:
             NotificationCenter.default.post(name: AppNavigation.resetTimer, object: nil)
         case .settings:

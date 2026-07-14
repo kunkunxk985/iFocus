@@ -74,13 +74,14 @@ struct TimerControlsBar: View {
                 title: "跳过",
                 size: side,
                 showTitle: showLabels,
-                tint: AppTheme.secondaryText(for: colorScheme),
+                tint: AppTheme.secondaryText(for: colorScheme).opacity(timerStore.canSkipSegment ? 1 : 0.35),
                 fill: AppTheme.cardBackground(for: colorScheme).opacity(0.75)
             ) {
                 timerStore.skipToNext()
             }
+            .disabled(!timerStore.canSkipSegment)
             .keyboardShortcut(.rightArrow, modifiers: [.command])
-            .help("立即跳过当前段 (⌘→)")
+            .help(timerStore.canSkipSegment ? "立即跳过当前段 (⌘→)" : "严格模式：不可跳过")
 
             Button(action: onPlayToggle) {
                 ZStack {
@@ -182,6 +183,7 @@ struct TimerControlsBar: View {
 struct TimerSessionHint: View {
     @EnvironmentObject var timerStore: TimerStore
     @EnvironmentObject var taskStore: TaskStore
+    @EnvironmentObject var settings: SettingsStore
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -190,9 +192,14 @@ struct TimerSessionHint: View {
                 if timerStore.isRunning {
                     KeyCap(label: "空格")
                     Text("暂停")
-                    Text("·").opacity(0.4)
-                    KeyCap(label: "⌘→")
-                    Text("跳过")
+                    if timerStore.canSkipSegment {
+                        Text("·").opacity(0.4)
+                        KeyCap(label: "⌘→")
+                        Text("跳过")
+                    } else {
+                        Text("·").opacity(0.4)
+                        Text("严格模式")
+                    }
                 } else if let title = taskStore.activeTask?.title, !title.isEmpty {
                     KeyCap(label: "空格")
                     Text("开始 · \(title)")
@@ -206,9 +213,11 @@ struct TimerSessionHint: View {
             } else {
                 KeyCap(label: "空格")
                 Text(timerStore.isRunning ? "暂停休息" : "开始休息")
-                Text("·").opacity(0.4)
-                KeyCap(label: "⌘→")
-                Text("跳过")
+                if timerStore.canSkipSegment {
+                    Text("·").opacity(0.4)
+                    KeyCap(label: "⌘→")
+                    Text("跳过")
+                }
             }
         }
         .font(.caption2.weight(.medium))

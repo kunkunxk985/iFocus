@@ -106,6 +106,9 @@ struct TimerView: View {
                             onDecorativeMotionChange: syncAmbientMotion
                         )
 
+                        TimerRhythmStrip(layout: layout, modeColor: modeColor)
+                            .transition(.opacity)
+
                         TimerTaskFocusBlock(layout: layout, modeColor: modeColor)
                             .frame(maxWidth: min(layout.taskBlockMaxWidth, layout.width - layout.horizontalPadding * 2))
                             .transition(.opacity.combined(with: .move(edge: .top)))

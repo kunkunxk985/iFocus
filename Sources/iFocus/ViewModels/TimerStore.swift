@@ -600,8 +600,15 @@ class TimerStore: ObservableObject {
     
     /// Skip the current segment without logging a completed pomodoro.
     /// Next mode follows the same long-break cadence as natural completion (skip does not count as a pomodoro).
+    /// Whether skip is allowed (strict mode blocks skip for a pure pomodoro flow).
+    var canSkipSegment: Bool { !settings.strictMode }
+
     func skipToNext() {
         guard !isCompleting else { return }
+        guard canSkipSegment else {
+            celebrationMessage = "严格模式：不可跳过，请完成本段或重置"
+            return
+        }
         let previousMode = mode
         pause()
         cancelSegmentEndNotification()
@@ -1008,7 +1015,7 @@ class TimerStore: ObservableObject {
             content.title = "长休息结束"
             content.body = "准备好了吗？开始下一段专注。"
         }
-        content.sound = settings.soundEnabled ? .default : nil
+        content.sound = settings.completionNotificationSound()
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: remaining, repeats: false)
         let request = UNNotificationRequest(
             identifier: Self.segmentEndNotificationId,
@@ -1070,7 +1077,7 @@ class TimerStore: ObservableObject {
             let content = UNMutableNotificationContent()
             content.title = "iFocus 通知测试"
             content.body = "通知已正常启用，专注结束时会在这里提醒你。"
-            content.sound = self.settings.soundEnabled ? .default : nil
+            content.sound = self.settings.completionNotificationSound()
             let request = UNNotificationRequest(
                 identifier: "ifocus.test.\(UUID().uuidString)",
                 content: content,
@@ -1126,7 +1133,7 @@ class TimerStore: ObservableObject {
             content.title = "长休息结束"
             content.body = "准备好了吗？开始下一段专注！"
         }
-        content.sound = settings.soundEnabled ? .default : nil
+        content.sound = settings.completionNotificationSound()
         let request = UNNotificationRequest(
             identifier: "ifocus.timer.\(UUID().uuidString)",
             content: content,

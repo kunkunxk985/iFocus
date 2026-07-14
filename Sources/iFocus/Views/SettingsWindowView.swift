@@ -749,6 +749,16 @@ struct SettingsWindowView: View {
                     }
                 }
                 .toggleStyle(.switch)
+                Toggle(isOn: $settings.strictMode) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("严格模式")
+                            .font(.subheadline.weight(.medium))
+                        Text("禁用跳过（专注钟 / 菜单栏 / 快捷键）。只能完成本段或重置。")
+                            .font(.caption)
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    }
+                }
+                .toggleStyle(.switch)
             }
 
             settingsCard("声音与通知", icon: "speaker.wave.2.fill") {
