@@ -299,24 +299,33 @@ class TimerStore: ObservableObject {
         emitClockTick()
     }
     
-    /// Next mode after a segment finishes (long break every 4th completed work session today).
-    static func nextMode(after completed: TimerMode, workSessionsCompletedToday: Int) -> TimerMode {
+    /// Next mode after a segment finishes (long break every N completed work sessions today).
+    static func nextMode(
+        after completed: TimerMode,
+        workSessionsCompletedToday: Int,
+        longBreakEvery: Int = 4
+    ) -> TimerMode {
+        let every = max(2, longBreakEvery)
         if completed == .work,
            workSessionsCompletedToday > 0,
-           workSessionsCompletedToday % 4 == 0 {
+           workSessionsCompletedToday % every == 0 {
             return .longBreak
         }
         return completed.next
     }
     
-    /// How many more work completions today until the next long break (1...4).
+    /// How many more work completions today until the next long break (1...N).
     var workSessionsUntilLongBreak: Int {
-        Self.workSessionsUntilLongBreak(completedPomodorosToday: completedPomodoros)
+        Self.workSessionsUntilLongBreak(
+            completedPomodorosToday: completedPomodoros,
+            every: settings.longBreakEvery
+        )
     }
     
-    static func workSessionsUntilLongBreak(completedPomodorosToday: Int) -> Int {
-        let mod = max(0, completedPomodorosToday) % 4
-        return mod == 0 ? 4 : 4 - mod
+    static func workSessionsUntilLongBreak(completedPomodorosToday: Int, every: Int = 4) -> Int {
+        let n = max(2, every)
+        let mod = max(0, completedPomodorosToday) % n
+        return mod == 0 ? n : n - mod
     }
     
     static func celebrationText(
@@ -324,15 +333,19 @@ class TimerStore: ObservableObject {
         minutes: Int?,
         nextMode: TimerMode,
         completedPomodorosToday: Int,
-        dailyGoal: Int
+        dailyGoal: Int,
+        longBreakEvery: Int = 4
     ) -> String {
         if wasWork, let minutes {
-            let untilLong = workSessionsUntilLongBreak(completedPomodorosToday: completedPomodorosToday)
+            let untilLong = workSessionsUntilLongBreak(
+                completedPomodorosToday: completedPomodorosToday,
+                every: longBreakEvery
+            )
             if nextMode == .longBreak {
-                return "专注 \(minutes) 分钟完成 · 进入长休息 🌿"
+                return "专注 \(minutes) 分钟完成 · 进入长休息"
             }
             if dailyGoal > 0, completedPomodorosToday >= dailyGoal {
-                return "专注 \(minutes) 分钟 · 今日目标已达成 ✨"
+                return "专注 \(minutes) 分钟 · 今日目标已达成"
             }
             if untilLong == 1 {
                 return "专注 \(minutes) 分钟 · 再 1 个番茄后长休息"
@@ -374,6 +387,8 @@ class TimerStore: ObservableObject {
         updateDockBadge()
         emitClockTick()
         persistDirtySnapshot(force: true)
+        // Industry practice: schedule wall-clock notification so end still fires if UI is throttled.
+        scheduleSegmentEndNotification()
     }
     
     func pause() {
@@ -386,6 +401,7 @@ class TimerStore: ObservableObject {
         timer?.invalidate()
         timer = nil
         targetEndDate = nil
+        cancelSegmentEndNotification()
         // Only watch idle when a session is mid-way (not a fresh full duration sitting idle).
         if isSessionInProgress {
             pauseStartedAt = Date()
@@ -403,6 +419,7 @@ class TimerStore: ObservableObject {
         pauseWatchTimer = nil
         pause()
         clearPauseIdleState()
+        cancelSegmentEndNotification()
         elapsedBeforePause = 0
         segmentStartedAt = nil
         sessionPlannedDuration = nil
@@ -587,19 +604,28 @@ class TimerStore: ObservableObject {
         guard !isCompleting else { return }
         let previousMode = mode
         pause()
+        cancelSegmentEndNotification()
         elapsedBeforePause = 0
         segmentStartedAt = nil
         sessionPlannedDuration = nil
         workSessionContext = nil
         let next = Self.nextMode(
             after: previousMode,
-            workSessionsCompletedToday: previousMode == .work ? completedPomodoros : 0
+            workSessionsCompletedToday: previousMode == .work ? completedPomodoros : 0,
+            longBreakEvery: settings.longBreakEvery
         )
         mode = next
         timeRemaining = next.duration(settings: settings)
         updateDockBadge()
         emitClockTick()
         clearSessionSnapshot()
+    }
+
+    /// Explicit one-tap start of the prepared next segment (when auto-start is off).
+    func startPreparedSegment() {
+        guard !isRunning, !isCompleting else { return }
+        celebrationMessage = nil
+        start()
     }
     
     /// Re-arm pause idle watch when settings change while already paused.
@@ -909,16 +935,20 @@ class TimerStore: ObservableObject {
         
         let nextMode = Self.nextMode(
             after: previousMode,
-            workSessionsCompletedToday: wasWork ? completedPomodoros : 0
+            workSessionsCompletedToday: wasWork ? completedPomodoros : 0,
+            longBreakEvery: settings.longBreakEvery
         )
         celebrationMessage = Self.celebrationText(
             wasWork: wasWork,
             minutes: loggedMinutes,
             nextMode: nextMode,
             completedPomodorosToday: completedPomodoros,
-            dailyGoal: settings.dailyGoal
+            dailyGoal: settings.dailyGoal,
+            longBreakEvery: settings.longBreakEvery
         )
         playCompletionRitual()
+        // Cancel scheduled end fire; send an immediate completion banner instead.
+        cancelSegmentEndNotification()
         sendNotification(
             completed: previousMode,
             next: nextMode,
@@ -937,17 +967,63 @@ class TimerStore: ObservableObject {
         segmentStartedAt = nil
         sessionPlannedDuration = nil
         workSessionContext = nil
-        if settings.autoStartBreaks {
-            mode = nextMode
-            timeRemaining = nextMode.duration(settings: settings)
+        mode = nextMode
+        timeRemaining = nextMode.duration(settings: settings)
+        // Industry-standard split: auto-start breaks vs auto-start work separately.
+        let shouldAutoStart: Bool = {
+            switch nextMode {
+            case .work: return settings.autoStartWork
+            case .shortBreak, .longBreak: return settings.autoStartBreaks
+            }
+        }()
+        if shouldAutoStart {
             start()
         } else {
-            mode = nextMode
-            timeRemaining = nextMode.duration(settings: settings)
             clearSessionSnapshot()
         }
         updateDockBadge()
         emitClockTick()
+    }
+
+    // MARK: - Scheduled end notification (more reliable than in-app timer alone)
+
+    private static let segmentEndNotificationId = "ifocus.timer.segmentEnd"
+
+    private func scheduleSegmentEndNotification() {
+        cancelSegmentEndNotification()
+        guard isPackagedApp else { return }
+        let remaining = max(1, timeRemaining)
+        // Don't schedule multi-hour-ish edges as noisy; still cover normal pomodoro lengths.
+        guard remaining <= 3 * 60 * 60 else { return }
+
+        let content = UNMutableNotificationContent()
+        switch mode {
+        case .work:
+            content.title = "专注即将完成"
+            content.body = "本段专注已到时。打开 iFocus 查看下一段。"
+        case .shortBreak:
+            content.title = "短休息结束"
+            content.body = "准备好了吗？开始下一段专注。"
+        case .longBreak:
+            content.title = "长休息结束"
+            content.body = "准备好了吗？开始下一段专注。"
+        }
+        content.sound = settings.soundEnabled ? .default : nil
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: remaining, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: Self.segmentEndNotificationId,
+            content: content,
+            trigger: trigger
+        )
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: { _ in })
+    }
+
+    private func cancelSegmentEndNotification() {
+        guard isPackagedApp else { return }
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [Self.segmentEndNotificationId])
+        // Also clear delivered banner with same id if user already saw it mid-resume.
+        center.removeDeliveredNotifications(withIdentifiers: [Self.segmentEndNotificationId])
     }
     
     /// Sound + optional Dock bounce when a segment finishes.

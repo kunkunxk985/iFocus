@@ -677,6 +677,10 @@ struct SettingsWindowView: View {
                 StepperRow(title: "长休息", value: $settings.longBreakMinutes, suffix: "分钟", range: 5...60, step: 5) {
                     if timerStore.mode == .longBreak { timerStore.syncDurationFromSettingsIfIdle() }
                 }
+                StepperRow(title: "长休间隔", value: $settings.longBreakEvery, suffix: "个番茄", range: 2...8, step: 1)
+                Text("每完成 \(settings.longBreakEvery) 个专注番茄进入长休息（经典 Pomodoro 为 4）。")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
             
             settingsCard("专注提示", icon: "moon.fill") {
@@ -727,9 +731,19 @@ struct SettingsWindowView: View {
             settingsCard("自动化", icon: "bolt.fill") {
                 Toggle(isOn: $settings.autoStartBreaks) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("自动进入下一段")
+                        Text("专注结束后自动开始休息")
                             .font(.subheadline.weight(.medium))
-                        Text("休息或专注结束后自动开始下一段计时")
+                        Text("完成一个番茄后自动进入短休/长休，无需再点开始。")
+                            .font(.caption)
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    }
+                }
+                .toggleStyle(.switch)
+                Toggle(isOn: $settings.autoStartWork) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("休息结束后自动开始专注")
+                            .font(.subheadline.weight(.medium))
+                        Text("短休/长休结束后自动进入下一轮专注。")
                             .font(.caption)
                             .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                     }

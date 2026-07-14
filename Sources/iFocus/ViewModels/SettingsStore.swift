@@ -64,6 +64,8 @@ class SettingsStore: ObservableObject {
         static let shortBreakMinutes = "shortBreakMinutes"
         static let longBreakMinutes = "longBreakMinutes"
         static let autoStartBreaks = "autoStartBreaks"
+        static let autoStartWork = "autoStartWork"
+        static let longBreakEvery = "longBreakEvery"
         static let soundEnabled = "soundEnabled"
         static let soundName = "soundName"
         static let dailyGoal = "dailyGoal"
@@ -128,8 +130,24 @@ class SettingsStore: ObservableObject {
             defaults.set(longBreakMinutes, forKey: Key.longBreakMinutes)
         }
     }
+    /// When a work segment ends, auto-start the next break.
     @Published var autoStartBreaks: Bool {
         didSet { defaults.set(autoStartBreaks, forKey: Key.autoStartBreaks) }
+    }
+    /// When a break ends, auto-start the next work segment.
+    @Published var autoStartWork: Bool {
+        didSet { defaults.set(autoStartWork, forKey: Key.autoStartWork) }
+    }
+    /// Long break after every N completed work pomodoros today (industry default 4).
+    @Published var longBreakEvery: Int {
+        didSet {
+            let clamped = Self.clampLongBreakEvery(longBreakEvery)
+            guard clamped == longBreakEvery else {
+                longBreakEvery = clamped
+                return
+            }
+            defaults.set(longBreakEvery, forKey: Key.longBreakEvery)
+        }
     }
     @Published var soundEnabled: Bool {
         didSet { defaults.set(soundEnabled, forKey: Key.soundEnabled) }
@@ -369,7 +387,8 @@ class SettingsStore: ObservableObject {
     /// Preference keys included in quiet local backup (not transient UI state).
     static let backupPreferenceKeys: [String] = [
         Key.workMinutes, Key.shortBreakMinutes, Key.longBreakMinutes,
-        Key.autoStartBreaks, Key.soundEnabled, Key.soundName, Key.dailyGoal,
+        Key.autoStartBreaks, Key.autoStartWork, Key.longBreakEvery,
+        Key.soundEnabled, Key.soundName, Key.dailyGoal,
         Key.appearance, Key.username, Key.avatarColorIndex,
         Key.toggleShortcut, Key.showFocusModeHint,
         Key.pauseReminderEnabled, Key.pauseReminderMinutes,
@@ -389,6 +408,8 @@ class SettingsStore: ObservableObject {
             Key.shortBreakMinutes: shortBreakMinutes,
             Key.longBreakMinutes: longBreakMinutes,
             Key.autoStartBreaks: autoStartBreaks,
+            Key.autoStartWork: autoStartWork,
+            Key.longBreakEvery: longBreakEvery,
             Key.soundEnabled: soundEnabled,
             Key.soundName: soundName as String,
             Key.dailyGoal: dailyGoal,
@@ -433,6 +454,8 @@ class SettingsStore: ObservableObject {
         if let v = Self.jsonInt(dict["shortBreakMinutes"]) { shortBreakMinutes = Self.clampShortBreakMinutes(v) }
         if let v = Self.jsonInt(dict["longBreakMinutes"]) { longBreakMinutes = Self.clampLongBreakMinutes(v) }
         if let v = Self.jsonBool(dict["autoStartBreaks"]) { autoStartBreaks = v }
+        if let v = Self.jsonBool(dict["autoStartWork"]) { autoStartWork = v }
+        if let v = Self.jsonInt(dict["longBreakEvery"]) { longBreakEvery = Self.clampLongBreakEvery(v) }
         if let v = Self.jsonBool(dict["soundEnabled"]) { soundEnabled = v }
         if let v = dict["soundName"] as? String { soundName = NSSound.Name(v) }
         if let v = Self.jsonInt(dict["dailyGoal"]) { dailyGoal = Self.clampDailyGoal(v) }
@@ -561,6 +584,10 @@ class SettingsStore: ObservableObject {
         self.shortBreakMinutes = Self.clampShortBreakMinutes(Self.intValue(for: Key.shortBreakMinutes, in: defaults, defaultValue: 5))
         self.longBreakMinutes  = Self.clampLongBreakMinutes(Self.intValue(for: Key.longBreakMinutes, in: defaults, defaultValue: 15))
         self.autoStartBreaks   = defaults.bool(forKey: Key.autoStartBreaks)
+        self.autoStartWork     = defaults.bool(forKey: Key.autoStartWork)
+        self.longBreakEvery    = Self.clampLongBreakEvery(
+            Self.intValue(for: Key.longBreakEvery, in: defaults, defaultValue: 4)
+        )
         self.soundEnabled      = defaults.object(forKey: Key.soundEnabled) as? Bool ?? true
         let saved = defaults.string(forKey: Key.soundName) ?? "Glass"
         self.soundName         = NSSound.Name(saved)
@@ -655,6 +682,10 @@ class SettingsStore: ObservableObject {
     
     static func clampDailyGoal(_ value: Int) -> Int {
         min(20, max(1, value))
+    }
+
+    static func clampLongBreakEvery(_ value: Int) -> Int {
+        min(8, max(2, value))
     }
     
     private static func intValue(for key: String, in defaults: UserDefaults, defaultValue: Int) -> Int {

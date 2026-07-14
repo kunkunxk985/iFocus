@@ -357,7 +357,8 @@ final class MenuBarController: NSObject, ObservableObject {
         menu.item(withTag: MenuTag.nextMode.rawValue)?.isEnabled = true
         let skipTarget = TimerStore.nextMode(
             after: mode,
-            workSessionsCompletedToday: mode == .work ? done : 0
+            workSessionsCompletedToday: mode == .work ? done : 0,
+            longBreakEvery: timerStore.settings.longBreakEvery
         )
         menu.item(withTag: MenuTag.nextMode.rawValue)?.title = "跳过 → \(skipTarget.rawValue)"
 

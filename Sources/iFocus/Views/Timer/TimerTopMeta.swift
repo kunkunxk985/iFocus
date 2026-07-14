@@ -150,24 +150,44 @@ struct TimerTopMeta: View {
                 .buttonStyle(.plain)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             } else if let celebration = timerStore.celebrationMessage {
-                Text(celebration)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(modeColor)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(modeColor.opacity(0.12))
-                            .overlay(Capsule().stroke(modeColor.opacity(0.25), lineWidth: 1))
-                    )
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                    .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) {
-                            if timerStore.celebrationMessage == celebration {
-                                withAnimation { timerStore.celebrationMessage = nil }
-                            }
+                // Industry UX: after a segment ends (auto-start off), offer one-tap next start.
+                VStack(spacing: 8) {
+                    Text(celebration)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(modeColor)
+                        .multilineTextAlignment(.center)
+                    if !timerStore.isRunning, !timerStore.isSessionInProgress {
+                        Button {
+                            timerStore.startPreparedSegment()
+                        } label: {
+                            Text("开始\(timerStore.mode.rawValue)")
+                                .font(.caption.weight(.bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 6)
+                                .background(Capsule().fill(modeColor))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(modeColor.opacity(0.12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(modeColor.opacity(0.25), lineWidth: 1)
+                        )
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+                        if timerStore.celebrationMessage == celebration {
+                            withAnimation { timerStore.celebrationMessage = nil }
                         }
                     }
+                }
             }
         }
         .animation(.easeOut(duration: 0.25), value: timerStore.celebrationMessage)

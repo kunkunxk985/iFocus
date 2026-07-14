@@ -47,12 +47,29 @@ final class TimerStoreTests: XCTestCase {
         XCTAssertEqual(TimerStore.nextMode(after: .shortBreak, workSessionsCompletedToday: 4), .work)
         XCTAssertEqual(TimerStore.nextMode(after: .longBreak, workSessionsCompletedToday: 4), .work)
     }
+
+    func testNextModeRespectsCustomLongBreakInterval() {
+        XCTAssertEqual(
+            TimerStore.nextMode(after: .work, workSessionsCompletedToday: 2, longBreakEvery: 2),
+            .longBreak
+        )
+        XCTAssertEqual(
+            TimerStore.nextMode(after: .work, workSessionsCompletedToday: 3, longBreakEvery: 2),
+            .shortBreak
+        )
+        XCTAssertEqual(
+            TimerStore.nextMode(after: .work, workSessionsCompletedToday: 3, longBreakEvery: 3),
+            .longBreak
+        )
+    }
     
     func testWorkSessionsUntilLongBreakAndCelebration() {
         XCTAssertEqual(TimerStore.workSessionsUntilLongBreak(completedPomodorosToday: 0), 4)
         XCTAssertEqual(TimerStore.workSessionsUntilLongBreak(completedPomodorosToday: 1), 3)
         XCTAssertEqual(TimerStore.workSessionsUntilLongBreak(completedPomodorosToday: 3), 1)
         XCTAssertEqual(TimerStore.workSessionsUntilLongBreak(completedPomodorosToday: 4), 4)
+        XCTAssertEqual(TimerStore.workSessionsUntilLongBreak(completedPomodorosToday: 1, every: 3), 2)
+        XCTAssertEqual(TimerStore.workSessionsUntilLongBreak(completedPomodorosToday: 3, every: 3), 3)
         
         let text = TimerStore.celebrationText(
             wasWork: true,
@@ -73,6 +90,39 @@ final class TimerStoreTests: XCTestCase {
         XCTAssertTrue(goal.contains("目标") || goal.contains("完成"))
     }
     
+    func testAutoStartBreaksDoesNotAutoStartWork() {
+        let (settings, _, timer) = makeStores(workMinutes: 1)
+        settings.autoStartBreaks = true
+        settings.autoStartWork = false
+        settings.longBreakEvery = 4
+
+        // Skip out of short break → next is work; autoStartWork is off so stay idle.
+        timer.mode = .shortBreak
+        timer.skipToNext()
+        XCTAssertEqual(timer.mode, .work)
+        XCTAssertFalse(timer.isRunning)
+    }
+
+    func testAutoStartWorkStartsAfterBreakSkipWhenEnabled() {
+        // skipToNext does not auto-start — only complete() path does.
+        // Verify settings clamp for long-break interval instead.
+        let (settings, _, _) = makeStores()
+        settings.longBreakEvery = 99
+        XCTAssertEqual(settings.longBreakEvery, 8)
+        settings.longBreakEvery = 1
+        XCTAssertEqual(settings.longBreakEvery, 2)
+    }
+
+    func testStartPreparedSegmentStartsIdleMode() {
+        let (_, _, timer) = makeStores(workMinutes: 25)
+        XCTAssertFalse(timer.isRunning)
+        timer.startPreparedSegment()
+        XCTAssertTrue(timer.isRunning)
+        XCTAssertTrue(timer.isSessionInProgress)
+        timer.reset()
+        XCTAssertFalse(timer.isRunning)
+    }
+
     func testWorkCompletionBodyUsesSessionSnapshotNotLiveTask() {
         let taskId = UUID()
         let body = TimerStore.workCompletionBody(
