@@ -2,6 +2,16 @@
 # Smoke-test iFocus: package, launch, confirm process stays alive, no new crash logs.
 set -euo pipefail
 
+REPLACE_RUNNING=0
+case "${1:-}" in
+    "") ;;
+    --replace-running) REPLACE_RUNNING=1 ;;
+    *)
+        echo "Usage: bash Scripts/smoke_test.sh [--replace-running]" >&2
+        exit 64
+        ;;
+esac
+
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
@@ -10,16 +20,37 @@ BIN="$APP/Contents/MacOS/iFocus"
 CRASH_DIR="$HOME/Library/Logs/DiagnosticReports"
 STAMP=$(date +%s)
 
+set +e
+EXISTING_PIDS=$(pgrep -x iFocus 2>/dev/null)
+PGREP_STATUS=$?
+set -e
+
+if (( PGREP_STATUS > 1 )); then
+    echo "REFUSING: unable to inspect running iFocus processes." >&2
+    echo "Run this smoke test from a normal macOS Terminal session." >&2
+    exit 3
+fi
+
+if [[ -n "$EXISTING_PIDS" ]]; then
+    if (( REPLACE_RUNNING == 0 )); then
+        echo "REFUSING: iFocus is already running (pid: ${EXISTING_PIDS//$'\n'/, })." >&2
+        echo "The smoke test will not interrupt an active focus session." >&2
+        echo "Quit iFocus first, or explicitly run:" >&2
+        echo "  bash Scripts/smoke_test.sh --replace-running" >&2
+        exit 3
+    fi
+
+    echo "==> Explicitly replacing running iFocus instance(s)..."
+    pkill -x iFocus
+    sleep 0.5
+fi
+
 echo "==> Packaging..."
 bash "$ROOT/Scripts/package_app.sh"
 
 echo "==> Version:"
 /usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$APP/Contents/Info.plist"
-
-echo "==> Killing any old instance..."
-pkill -x iFocus 2>/dev/null || true
-sleep 0.5
 
 echo "==> Launch via LaunchServices..."
 open "$APP"

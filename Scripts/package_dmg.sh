@@ -42,14 +42,15 @@ ln -s /Applications "$TEMP_DIR/Applications"
 
 echo "Creating disk image (DMG)..."
 rm -f "$DMG_PATH"
-if diskutil image create from --help >/dev/null 2>&1; then
-    diskutil image create from \
+if diskutil image create from \
         --volumeName "${APP_NAME}" \
         --format UDZO \
         "$TEMP_DIR" \
-        "$DMG_PATH"
+        "$DMG_PATH"; then
+    :
 else
     # Compatibility fallback for macOS versions before `diskutil image`.
+    rm -f "$DMG_PATH"
     hdiutil create -volname "${APP_NAME}" -srcfolder "$TEMP_DIR" -format UDZO "$DMG_PATH"
 fi
 

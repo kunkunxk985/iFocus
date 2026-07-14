@@ -4,7 +4,7 @@ macOS 专注 / 番茄钟应用（SwiftUI + AppKit，Swift Package Manager）。
 
 | 项 | 值 |
 |----|-----|
-| 版本 | **1.6.6**（build **66**） |
+| 版本 | **1.9.3**（build **85**） |
 | 平台 | macOS 13+ |
 | 工具链 | Swift tools 5.8+（见 `Package.swift`） |
 | Bundle ID | `com.kun.ifocus` |
@@ -29,7 +29,7 @@ CLANG_MODULE_CACHE_PATH="$(pwd)/.build/clang-module-cache" \
 ## 打包与运行
 
 ```bash
-# 生成 Build/iFocus.app（含 Info.plist 版本 1.6.6 / 66）
+# 生成 Build/iFocus.app（含 Info.plist 版本 1.9.3 / 85）
 bash Scripts/package_app.sh
 
 # 生成 Build/iFocus.dmg（默认会先重新打包 .app）
@@ -52,6 +52,14 @@ bash Scripts/smoke_test.sh
 ```
 
 会执行打包 → LaunchServices 启动 → 确认进程存活 → 检查无新 crash report。
+若检测到 iFocus 已在运行，脚本会安全退出，不会打断专注。确认可以关闭现有实例时，显式运行：
+
+```bash
+bash Scripts/smoke_test.sh --replace-running
+```
+
+完整 QA 同样默认保护运行中的应用；仅在明确允许替换时使用
+`bash Scripts/run_deep_qa.sh --replace-running`。
 
 ## 数据存储
 
@@ -62,10 +70,11 @@ bash Scripts/smoke_test.sh
   tasks.json           # 任务列表
   focus_sessions.json  # 专注会话记录
   app_state.json       # 当前任务等本地状态
+  timer_session.json   # 可恢复的未完成计时
   avatar-*.png         # 可选头像
 ```
 
-损坏的 JSON 加载失败时会备份为 `*.corrupt-<timestamp>.json`，并以空列表启动。
+损坏的 JSON 加载失败时会备份为 `*.corrupt-<timestamp>.json`，并阻止对应数据通道继续覆盖，等待用户恢复或确认从空白开始。
 
 设置项（时长、主题、昵称等）使用 `UserDefaults`。
 
@@ -86,9 +95,10 @@ Tests/iFocusTests/
 Scripts/
   package_app.sh   # 打包 .app
   smoke_test.sh    # 冒烟
+  run_deep_qa.sh   # 全量测试、性能基准与冒烟
 ```
 
 ## 版本一致性
 
 打包版本以 `Scripts/package_app.sh` 中的 `CFBundleShortVersionString` / `CFBundleVersion` 为准。  
-`AppVersion` 的 fallback 应与之保持一致（当前 1.6.6 / 66）。
+`AppVersion` 的 fallback 应与之保持一致（当前 1.9.3 / 85）。

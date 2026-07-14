@@ -9,6 +9,8 @@ cd "$ROOT"
 APP_NAME="iFocus"
 BUNDLE_ID="com.kun.ifocus"
 MACOS_MIN_VERSION="13.0"
+APP_VERSION="1.9.3"
+BUILD_VERSION="85"
 
 echo "Building SwiftPM executable..."
 CLANG_MODULE_CACHE_PATH="${ROOT}/.build/clang-module-cache" \
@@ -29,8 +31,8 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
     <key>CFBundleExecutable</key><string>${APP_NAME}</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.7.3</string>
-    <key>CFBundleVersion</key><string>77</string>
+    <key>CFBundleShortVersionString</key><string>${APP_VERSION}</string>
+    <key>CFBundleVersion</key><string>${BUILD_VERSION}</string>
     <key>LSMinimumSystemVersion</key><string>${MACOS_MIN_VERSION}</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>NSHighResolutionCapable</key><true/>
