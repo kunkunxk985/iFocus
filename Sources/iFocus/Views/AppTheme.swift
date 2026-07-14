@@ -140,7 +140,8 @@ enum AppTheme {
     static let spaceL: CGFloat = 16
     static let spaceXL: CGFloat = 24
     
-    static let cornerRadiusCard: CGFloat = 14
+    /// Shared card radius — analytics / settings / profile / list stats all use this.
+    static let cornerRadiusCard: CGFloat = 15
     static let cornerRadiusControl: CGFloat = 10
     static let cornerRadiusRow: CGFloat = 12
     
@@ -208,8 +209,8 @@ enum AppTheme {
     }
     
     static func softShadow(for colorScheme: ColorScheme) -> Color {
-        // Quieter elevation — less “floating toy cards”
-        colorScheme == .light ? Color.black.opacity(0.045) : Color.black.opacity(0.28)
+        // Barely-there elevation — polish without “floating dashboard”
+        colorScheme == .light ? Color.black.opacity(0.03) : Color.black.opacity(0.22)
     }
     
     static var windowBackgroundColor: NSColor {
@@ -277,22 +278,46 @@ struct SoftCardBackground: View {
 // MARK: - Shared interaction + empty states
 
 /// Soft hover / press for list rows and sidebar-like buttons.
+/// Hover wash only — no scale-on-hover (quiet tool).
 struct SoftHoverButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
     var cornerRadius: CGFloat = 10
-    
+
     func makeBody(configuration: Configuration) -> some View {
+        SoftHoverButtonBody(
+            configuration: configuration,
+            cornerRadius: cornerRadius,
+            colorScheme: colorScheme
+        )
+    }
+}
+
+struct SoftHoverButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let cornerRadius: CGFloat
+    let colorScheme: ColorScheme
+    @State private var hovering = false
+
+    var body: some View {
         configuration.label
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(
-                        configuration.isPressed
-                        ? AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.16)
-                        : Color.clear
-                    )
+                    .fill(fillColor)
             )
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.12), value: hovering)
+            .onHover { hovering = $0 }
+    }
+
+    private var fillColor: Color {
+        if configuration.isPressed {
+            return AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.16)
+        }
+        if hovering {
+            return AppTheme.overlayLow(for: colorScheme)
+        }
+        return .clear
     }
 }
 
@@ -305,17 +330,21 @@ struct SoftScaleButtonStyle: ButtonStyle {
     }
 }
 
-/// Live status dot — soft radial pulse while `isActive`.
+/// Live status dot — soft radial pulse only when active **and** decorative motion is on.
 struct PulseDot: View {
     let color: Color
     var isActive: Bool = true
     var size: CGFloat = 7
-    
+    /// When false, shows a calm solid/glowing dot (default for quiet tool).
+    var allowsPulse: Bool = false
+
     @State private var pulse = false
-    
+
+    private var shouldPulse: Bool { isActive && allowsPulse }
+
     var body: some View {
         ZStack {
-            if isActive {
+            if shouldPulse {
                 Circle()
                     .fill(color.opacity(0.38))
                     .frame(width: size * 2.6, height: size * 2.6)
@@ -325,15 +354,16 @@ struct PulseDot: View {
             Circle()
                 .fill(isActive ? color : color.opacity(0.32))
                 .frame(width: size, height: size)
-                .shadow(color: isActive ? color.opacity(0.55) : .clear, radius: 3.5)
+                .shadow(color: isActive ? color.opacity(0.45) : .clear, radius: shouldPulse ? 3.5 : 2.5)
         }
         .frame(width: size * 2.6, height: size * 2.6)
         .onAppear { syncPulse() }
         .onChange(of: isActive) { _ in syncPulse() }
+        .onChange(of: allowsPulse) { _ in syncPulse() }
     }
-    
+
     private func syncPulse() {
-        if isActive {
+        if shouldPulse {
             pulse = false
             withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) {
                 pulse = true
@@ -403,35 +433,46 @@ struct AppEmptyState: View {
     var subtitle: String? = nil
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
-    
+    /// Compact for in-card voids; full for page-level empty shells.
+    var compact: Bool = false
+
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: compact ? 10 : 14) {
             ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                AppTheme.accent.opacity(0.16),
-                                AppTheme.accent.opacity(0.05)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                if compact {
+                    Circle()
+                        .fill(AppTheme.elevatedBackground(for: colorScheme))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: systemImage)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.75))
+                } else {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    AppTheme.accent.opacity(0.14),
+                                    AppTheme.accent.opacity(0.04)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .frame(width: 72, height: 72)
-                Image(systemName: systemImage)
-                    .font(.system(size: 28, weight: .light))
-                    .foregroundColor(AppTheme.accent)
-                    .symbolRenderingMode(.hierarchical)
+                        .frame(width: 68, height: 68)
+                    Image(systemName: systemImage)
+                        .font(.system(size: 26, weight: .light))
+                        .foregroundColor(AppTheme.accent)
+                        .symbolRenderingMode(.hierarchical)
+                }
             }
-            VStack(spacing: 6) {
+            VStack(spacing: compact ? 4 : 6) {
                 Text(title)
-                    .font(.headline)
+                    .font(compact ? .subheadline.weight(.medium) : .headline)
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
                     .multilineTextAlignment(.center)
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.subheadline)
+                        .font(compact ? .caption : .subheadline)
                         .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
@@ -451,13 +492,14 @@ struct AppEmptyState: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 28)
+        .padding(.vertical, compact ? 16 : 28)
     }
 }
 
 struct PageTitle: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var settings: SettingsStore
+    @Environment(\.windowLayout) private var windowLayout
     let title: String
     var subtitle: String? = nil
     var systemImage: String? = nil
@@ -465,14 +507,15 @@ struct PageTitle: View {
     
     var body: some View {
         let density = settings.uiDensity
-        HStack(alignment: .center, spacing: 12 * density.scale) {
+        // Continuous: density preference × window fluid (never stuck “compact forever”).
+        let titleSize = max(20, min(30, windowLayout.pageTitleSize))
+        let iconBox = 30 * density.scale + windowLayout.eased * 6
+        HStack(alignment: .center, spacing: 10 * density.scale + windowLayout.eased * 4) {
             if let systemImage {
-                // Neutral tile + accent glyph — avoids a second huge brand-colored block
-                // next to the collapsed sidebar logo.
                 Image(systemName: systemImage)
-                    .font(.system(size: 16 * density.scale, weight: .semibold))
+                    .font(.system(size: iconBox * 0.48, weight: .semibold))
                     .foregroundColor(tint)
-                    .frame(width: 34 * density.scale, height: 34 * density.scale)
+                    .frame(width: iconBox, height: iconBox)
                     .background(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .fill(AppTheme.elevatedBackground(for: colorScheme))
@@ -484,15 +527,16 @@ struct PageTitle: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: density.titleFontSize, weight: .bold, design: .rounded))
+                    .font(.system(size: titleSize, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(density == .compact ? .caption : .subheadline)
+                        .font(windowLayout.height < 740 ? .caption : .subheadline)
                         .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                 }
             }
             Spacer(minLength: 0)
         }
+        .animation(.easeInOut(duration: 0.16), value: windowLayout.scale)
     }
 }

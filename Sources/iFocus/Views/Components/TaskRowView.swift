@@ -18,9 +18,15 @@ struct TaskRowView: View {
     let onStartFocus: () -> Void
     
     @EnvironmentObject private var settings: SettingsStore
-    
+    @State private var isHovering = false
+
     private var hasNotes: Bool {
         !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Pin stays visible when pinned; edit + unpinned pin only on hover.
+    private var showSecondaryActions: Bool {
+        isHovering || task.isPinned || isActive
     }
     
     /// Quiet priority rail — higher number = more urgent (matches sort + color helpers).
@@ -175,31 +181,38 @@ struct TaskRowView: View {
                         }
                         
                         Spacer(minLength: 0)
-                        
+
                         if !task.isCompleted && !isSelecting {
-                            Button {
-                                taskStore.togglePin(for: task)
-                            } label: {
-                                Image(systemName: task.isPinned ? "pin.fill" : "pin")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(
-                                        task.isPinned
-                                        ? AppTheme.accent.opacity(0.85)
-                                        : AppTheme.secondaryText(for: colorScheme).opacity(0.28)
-                                    )
-                                    .frame(width: 22, height: 22)
+                            HStack(spacing: 2) {
+                                Button {
+                                    taskStore.togglePin(for: task)
+                                } label: {
+                                    Image(systemName: task.isPinned ? "pin.fill" : "pin")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(
+                                            task.isPinned
+                                            ? AppTheme.accent.opacity(0.85)
+                                            : AppTheme.secondaryText(for: colorScheme).opacity(0.55)
+                                        )
+                                        .frame(width: 22, height: 22)
+                                }
+                                .buttonStyle(.plain)
+                                .help(task.isPinned ? "取消置顶" : "置顶")
+                                .opacity(task.isPinned || isHovering || isActive ? 1 : 0)
+
+                                Button(action: onEdit) {
+                                    Image(systemName: "pencil")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.55))
+                                        .frame(width: 22, height: 22)
+                                }
+                                .buttonStyle(.plain)
+                                .help("编辑（也可双击）")
+                                .opacity(isHovering || isActive ? 1 : 0)
                             }
-                            .buttonStyle(.plain)
-                            .help(task.isPinned ? "取消置顶" : "置顶")
-                            
-                            Button(action: onEdit) {
-                                Image(systemName: "pencil")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.32))
-                                    .frame(width: 22, height: 22)
-                            }
-                            .buttonStyle(.plain)
-                            .help("编辑（也可双击）")
+                            .animation(.easeOut(duration: 0.12), value: isHovering)
+                            // Keep hit targets when hidden so layout doesn't jump.
+                            .allowsHitTesting(showSecondaryActions)
                         }
                     }
                 }
@@ -213,6 +226,7 @@ struct TaskRowView: View {
         .background(rowBackground)
         .softHoverLift(cornerRadius: AppTheme.cornerRadiusRow)
         .contentShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadiusRow, style: .continuous))
+        .onHover { isHovering = $0 }
         .onTapGesture(count: 2) {
             if !isSelecting { onEdit() }
         }

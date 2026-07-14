@@ -64,15 +64,8 @@ struct ProfileHeatmapCard: View {
             }
             .softScroll()
         }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(AppTheme.cardBackground(for: colorScheme))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                )
-        )
+        .padding(18)
+        .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
     }
     
     private func colorForMinutes(_ mins: Int) -> Color {

@@ -72,7 +72,7 @@ struct ProfileView: View {
     var body: some View {
         PageContainer(maxWidth: 900, horizontalPadding: 40) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 32) {
+                VStack(alignment: .leading, spacing: 24) {
                     ProfileHeaderBar(
                         onShare: shareReportViaEmail,
                         onEdit: {

@@ -21,6 +21,7 @@ struct AnalyticsView: View {
     /// Local only — do not put clock ticks on ContentView.
     @State private var clockVersion: UInt = 0
     @State private var range: AnalyticsRange = .today
+    @State private var showCustomizeCards = false
 
     // MARK: - Derived metrics
 
@@ -189,18 +190,6 @@ struct AnalyticsView: View {
         !taskStore.focusSessions.isEmpty
     }
     
-    private var anyAnalyticsCardEnabled: Bool {
-        settings.analyticsShowInsight
-            || settings.analyticsShowKPI
-            || settings.analyticsShowGoal
-            || settings.analyticsShowTrend
-            || settings.analyticsShowTimeline
-            || settings.analyticsShowHours
-            || settings.analyticsShowCategory
-            || settings.analyticsShowTaskBinding
-            || settings.analyticsShowRecent
-    }
-
     // MARK: - Body
 
     var body: some View {
@@ -224,27 +213,29 @@ struct AnalyticsView: View {
                             systemImage: "chart.bar.fill"
                         )
                         Spacer(minLength: 12)
-                        if hasAnyHistory {
-                            Button {
-                                shareWeeklyReport()
-                            } label: {
-                                Label("导出", systemImage: "square.and.arrow.up")
-                                    .font(.caption.weight(.medium))
+                        HStack(spacing: 8) {
+                            customizeCardsButton
+                            if hasAnyHistory {
+                                Button {
+                                    shareWeeklyReport()
+                                } label: {
+                                    Label("导出", systemImage: "square.and.arrow.up")
+                                        .font(.caption.weight(.medium))
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .help("导出摘要（邮件或剪贴板）")
                             }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                            .help("导出摘要（邮件或剪贴板）")
-                            .padding(.top, 8)
                         }
+                        .padding(.top, 8)
                     }
                     
                     rangeChipsBar
-                        .frame(maxWidth: 420)
                     
                     if !hasAnyHistory {
                         analyticsEmptyShell
                     } else {
-                        // Visibility driven by Settings → 统计
+                        // Visibility: 自定义 popover + 设置 → 统计 (same SettingsStore flags)
                         if settings.analyticsShowInsight, let line = headlineInsight {
                             insightBanner(line)
                         }
@@ -296,12 +287,8 @@ struct AnalyticsView: View {
                             .frame(minHeight: 120 * density.scale)
                         }
                         
-                        // If user turned everything off, gentle hint
-                        if !anyAnalyticsCardEnabled {
-                            Text("所有卡片已关闭。可在 设置 → 统计 中打开需要的内容。")
-                                .font(.caption)
-                                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                                .padding(.top, 8)
+                        if !settings.anyAnalyticsCardEnabled {
+                            allCardsOffHint
                         }
                     }
                 }
@@ -312,6 +299,7 @@ struct AnalyticsView: View {
                 .padding(.bottom, 36)
                 .animation(.easeInOut(duration: 0.2), value: settings.analyticsShowGoal)
                 .animation(.easeInOut(duration: 0.2), value: settings.analyticsShowRecent)
+                .animation(.easeInOut(duration: 0.2), value: settings.anyAnalyticsCardEnabled)
             }
             .softScroll()
             .frame(width: geo.size.width, height: contentH + topInset, alignment: .top)
@@ -320,6 +308,51 @@ struct AnalyticsView: View {
             guard timerStore.isRunning, timerStore.mode == .work else { return }
             clockVersion &+= 1
         }
+    }
+
+    private var customizeCardsButton: some View {
+        Button {
+            showCustomizeCards.toggle()
+        } label: {
+            Label("自定义", systemImage: "slider.horizontal.3")
+                .font(.caption.weight(.medium))
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .help("选择数据统计页展示哪些卡片")
+        .popover(isPresented: $showCustomizeCards, arrowEdge: .bottom) {
+            AnalyticsCardVisibilityEditor(settings: settings, style: .compact)
+                .padding(16)
+                .frame(width: 300)
+                .background(AppTheme.menuBackground(for: colorScheme))
+        }
+    }
+
+    private var allCardsOffHint: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("所有卡片已关闭")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+            Text("打开需要的内容，或一键恢复安静默认。")
+                .font(.caption)
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            HStack(spacing: 8) {
+                Button("自定义展示…") {
+                    showCustomizeCards = true
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                Button("恢复安静默认") {
+                    settings.resetAnalyticsCardVisibilityToQuietDefaults()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
+        .padding(.top, 4)
     }
 
     private var rangeSubtitle: String {
@@ -349,19 +382,25 @@ struct AnalyticsView: View {
                 } label: {
                     Text(r.rawValue)
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(selected ? .white : AppTheme.primaryText(for: colorScheme).opacity(0.8))
+                        .foregroundColor(
+                            selected
+                            ? AppTheme.accent
+                            : AppTheme.secondaryText(for: colorScheme)
+                        )
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
                                 .fill(selected
-                                      ? AppTheme.accent
-                                      : AppTheme.cardBackground(for: colorScheme))
+                                      ? AppTheme.accent.opacity(0.12)
+                                      : Color.clear)
                         )
                         .overlay(
                             Capsule()
                                 .stroke(
-                                    selected ? Color.clear : AppTheme.separatorLow(for: colorScheme),
+                                    selected
+                                    ? AppTheme.accent.opacity(0.22)
+                                    : AppTheme.separatorLow(for: colorScheme),
                                     lineWidth: 1
                                 )
                         )
@@ -445,38 +484,39 @@ struct AnalyticsView: View {
     
     /// Zero-history: one calm panel instead of a wall of empty cards.
     private var analyticsEmptyShell: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             Image(systemName: "chart.bar.xaxis")
-                .font(.system(size: 28, weight: .light))
-                .foregroundColor(AppTheme.accent.opacity(0.75))
-                .frame(width: 64, height: 64)
-                .background(Circle().fill(AppTheme.accent.opacity(0.08)))
-            
+                .font(.system(size: 22, weight: .light))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.7))
+                .frame(width: 48, height: 48)
+                .background(
+                    Circle().fill(AppTheme.elevatedBackground(for: colorScheme))
+                )
+
             Text("完成一次专注后，这里会变清晰")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .foregroundColor(AppTheme.primaryText(for: colorScheme))
-            
-            Text("趋势、时间线和分类都会出现。现在只需开始第一个番茄。")
+
+            Text("现在只需开始第一个番茄。")
                 .font(.subheadline)
                 .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 360)
-            
+
             Button {
                 AppNavigation.post(.timer)
             } label: {
                 Text("去专注钟")
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 9)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 8)
                     .background(Capsule().fill(AppTheme.accent))
             }
             .buttonStyle(.plain)
-            .padding(.top, 4)
+            .padding(.top, 2)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 56)
+        .padding(.vertical, 48)
         .padding(.horizontal, 24)
         .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
     }
@@ -489,7 +529,8 @@ struct AnalyticsView: View {
                 systemImage: "timer",
                 value: "\(timerStore.completedPomodoros)/\(settings.dailyGoal)",
                 label: goalRemaining > 0 ? "今日番茄 · 还差 \(goalRemaining)" : "今日番茄",
-                tint: AppTheme.accent
+                tint: AppTheme.accent,
+                emphasizeValue: true
             )
             StatCard(
                 systemImage: "clock",
@@ -497,13 +538,13 @@ struct AnalyticsView: View {
                     .replacingOccurrences(of: "分钟", with: "分")
                     .replacingOccurrences(of: "小时", with: "时"),
                 label: "今日专注",
-                tint: Color(hex: "#3B82F6")
+                tint: AppTheme.accent.opacity(0.75)
             )
             StatCard(
                 systemImage: "flame",
                 value: "\(streakCurrent)",
                 label: streakCurrent > 0 ? "连续天数" : "连续 · 待开启",
-                tint: Color(hex: "#F59E0B")
+                tint: AppTheme.secondaryText(for: colorScheme)
             )
         }
     }
@@ -885,7 +926,7 @@ private struct AnalyticsCard<Content: View>: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(SoftCardBackground(cornerRadius: 16))
+        .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
     }
 }
 
@@ -895,18 +936,29 @@ private struct StatCard: View {
     let value: String
     let label: String
     let tint: Color
+    var emphasizeValue: Bool = false
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: systemImage)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(tint)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(tint.opacity(0.12)))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(tint.opacity(0.9))
+                .frame(width: 34, height: 34)
+                .background(
+                    Circle().fill(
+                        emphasizeValue
+                        ? tint.opacity(0.12)
+                        : AppTheme.elevatedBackground(for: colorScheme)
+                    )
+                )
             VStack(alignment: .leading, spacing: 2) {
                 Text(value)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundColor(tint)
+                    .font(.system(size: 20, weight: .bold, design: .rounded).monospacedDigit())
+                    .foregroundColor(
+                        emphasizeValue
+                        ? AppTheme.accent
+                        : AppTheme.primaryText(for: colorScheme)
+                    )
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Text(label)
@@ -919,11 +971,12 @@ private struct StatCard: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SoftCardBackground(cornerRadius: 16))
+        .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
     }
 }
 
 private struct ProgressRow: View {
+    @Environment(\.colorScheme) private var colorScheme
     let label: String
     let valueText: String
     let color: Color
@@ -931,25 +984,30 @@ private struct ProgressRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Circle().fill(color).frame(width: 8, height: 8)
-            Text(label).font(.subheadline).foregroundColor(.secondary)
+            Text(label)
+                .font(.subheadline)
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             Spacer()
-            Text(valueText).font(.subheadline.weight(.semibold).monospacedDigit())
+            Text(valueText)
+                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .foregroundColor(AppTheme.primaryText(for: colorScheme))
         }
     }
 }
 
 private struct TipRow: View {
+    @Environment(\.colorScheme) private var colorScheme
     let text: String
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "sparkles")
                 .font(.system(size: 13))
-                .foregroundColor(Color(hex: "#F59E0B"))
+                .foregroundColor(AppTheme.accent.opacity(0.85))
                 .padding(.top, 1)
             Text(text)
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -960,7 +1018,7 @@ private struct EmptyStateView: View {
     let title: String
 
     var body: some View {
-        AppEmptyState(systemImage: systemImage, title: title)
+        AppEmptyState(systemImage: systemImage, title: title, compact: true)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

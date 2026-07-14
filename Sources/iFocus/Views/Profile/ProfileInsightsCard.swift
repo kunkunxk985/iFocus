@@ -20,31 +20,25 @@ struct ProfileInsightsCard: View {
             InsightRow(label: "最常专注时段", value: peakHours)
             InsightRow(label: "任务完成率", value: completionRate)
         }
-        .padding(20)
+        .padding(18)
         .frame(minHeight: 200)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(AppTheme.cardBackground(for: colorScheme))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                )
-        )
+        .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
     }
 }
 
 struct InsightRow: View {
+    @Environment(\.colorScheme) private var colorScheme
     let label: String
     let value: String
-    
+
     var body: some View {
         HStack {
             Text(label)
-                .foregroundColor(.secondary)
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             Spacer()
             Text(value)
                 .fontWeight(.semibold)
-                .foregroundColor(.primary)
+                .foregroundColor(AppTheme.primaryText(for: colorScheme))
         }
         .font(.subheadline)
     }

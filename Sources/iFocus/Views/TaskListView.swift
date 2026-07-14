@@ -70,16 +70,35 @@ struct TaskListView: View {
         }
     }
     
+    /// One quiet line under the title — no four mini-cards above the list.
     private var listSubtitle: String {
-        switch viewState.selectedScreen {
-        case .todayTask: return "今天到期与逾期 · 优先处理红色项"
-        case .tomorrowTask: return "提前安排明天要做的事"
-        case .weekTask: return "近 7 天内（不含今天、明天）"
-        case .plannedTask: return "所有带截止日期的未完成任务"
-        case .completedTask: return "已完成任务的回顾"
-        case .inboxTask: return "随手记下，稍后再安排日期"
-        default: return ""
+        if baseTasks.isEmpty {
+            switch viewState.selectedScreen {
+            case .todayTask: return "今天到期与逾期"
+            case .tomorrowTask: return "提前安排明天"
+            case .weekTask: return "近 7 天（不含今明）"
+            case .plannedTask: return "带截止日期的未完成"
+            case .completedTask: return "已完成的回顾"
+            case .inboxTask: return "随手记下，稍后再排期"
+            default: return ""
+            }
         }
+        var parts: [String] = []
+        if viewState.selectedScreen == .todayTask, !overdueTasks.isEmpty {
+            parts.append("\(overdueTasks.count) 逾期")
+        }
+        if viewState.selectedScreen == .completedTask {
+            parts.append("\(completedFiltered.count) 项")
+        } else {
+            parts.append("\(incompleteFiltered.count) 待办")
+            if estimatedMinutes > 0 {
+                parts.append("预计 \(formattedEstimated)")
+            }
+            if totalFocusMinutes > 0 {
+                parts.append("已专注 \(formattedFocusTime)")
+            }
+        }
+        return parts.joined(separator: " · ")
     }
     
     private var listIcon: String {
@@ -192,46 +211,33 @@ struct TaskListView: View {
                         tint: AppTheme.accent
                     )
                     .overlay(alignment: .trailing) {
-                        HStack(spacing: 8) {
-                            if !incompleteFiltered.isEmpty {
-                                Text("\(incompleteFiltered.count) 项")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(Capsule().fill(AppTheme.cardBackground(for: colorScheme)))
-                                    .overlay(Capsule().stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1))
-                            }
-                            if !currentTasks.isEmpty {
-                                Button(isSelecting ? "完成选择" : "批量") {
-                                    withAnimation {
-                                        isSelecting.toggle()
-                                        if !isSelecting { selectedIDs.removeAll() }
-                                    }
+                        if !currentTasks.isEmpty {
+                            Button(isSelecting ? "完成" : "批量") {
+                                withAnimation(.easeOut(duration: 0.15)) {
+                                    isSelecting.toggle()
+                                    if !isSelecting { selectedIDs.removeAll() }
                                 }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
                             }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .padding(.top, 8)
                         }
                     }
 
-                    statsBar
-                        .padding(.top, 18)
-                        .padding(.bottom, 14)
-                    
                     if !baseTasks.isEmpty {
                         filterChipsBar
-                            .padding(.bottom, 16)
+                            .padding(.top, 14)
+                            .padding(.bottom, 12)
                     }
                     
                     if isSelecting {
                         batchToolbar
-                            .padding(.bottom, 16)
+                            .padding(.bottom, 12)
                     }
 
                     if viewState.selectedScreen != .completedTask, !isSelecting {
                         addTaskSection
-                            .padding(.bottom, 20)
+                            .padding(.bottom, 16)
                     }
 
                     taskListSection
@@ -311,20 +317,24 @@ struct TaskListView: View {
                                     .opacity(0.85)
                             }
                         }
-                        .foregroundColor(selected ? .white : AppTheme.primaryText(for: colorScheme).opacity(0.85))
+                        .foregroundColor(
+                            selected
+                            ? AppTheme.accent
+                            : AppTheme.secondaryText(for: colorScheme)
+                        )
                         .padding(.horizontal, 11)
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
                                 .fill(selected
-                                      ? AppTheme.accent
-                                      : AppTheme.cardBackground(for: colorScheme))
+                                      ? AppTheme.accent.opacity(0.12)
+                                      : Color.clear)
                         )
                         .overlay(
                             Capsule()
                                 .stroke(
                                     selected
-                                    ? Color.clear
+                                    ? AppTheme.accent.opacity(0.22)
                                     : AppTheme.separatorLow(for: colorScheme),
                                     lineWidth: 1
                                 )
@@ -405,36 +415,6 @@ struct TaskListView: View {
         .buttonStyle(.bordered)
         .controlSize(.small)
         .tint(destructive ? .red : AppTheme.accent)
-    }
-    
-    private var statsBar: some View {
-        HStack(spacing: 10) {
-            miniStat(value: formattedEstimated, label: "预计", color: AppTheme.accent)
-            miniStat(value: "\(incompleteFiltered.count)", label: "待办", color: Color(hex: "#F59E0B"))
-            miniStat(value: formattedFocusTime, label: "已专注", color: Color(hex: "#3B82F6"))
-            if viewState.selectedScreen == .todayTask && !overdueTasks.isEmpty {
-                miniStat(value: "\(overdueTasks.count)", label: "逾期", color: Color(hex: "#EF4444"))
-            } else {
-                miniStat(value: "\(completedFiltered.count)", label: "完成", color: Color(hex: "#10B981"))
-            }
-        }
-    }
-    
-    private func miniStat(value: String, label: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(value)
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundColor(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(label)
-                .font(.caption2.weight(.medium))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(SoftCardBackground(cornerRadius: 14))
     }
     
     private var formattedEstimated: String {
@@ -557,22 +537,26 @@ struct TaskListView: View {
                 }
             }
             
-            // Due override chips — skip list default without opening the editor.
+            // Due chips — quiet secondary row (not a second card wall)
             HStack(spacing: 6) {
-                Text("排期")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.8))
                 dueChip(title: "跟随列表", override: nil)
                 dueChip(title: "今天", override: .today)
                 dueChip(title: "明天", override: .tomorrow)
                 dueChip(title: "收集箱", override: .inbox)
                 Spacer(minLength: 0)
             }
-            .padding(.leading, 4)
+            .padding(.leading, 2)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(SoftCardBackground(cornerRadius: 14, elevated: true))
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
+                .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.72 : 0.55))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
+                        .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                )
+        )
     }
     
     private func dueChip(title: String, override: TaskStore.DueOverride?) -> some View {
@@ -583,12 +567,20 @@ struct TaskListView: View {
             }
         } label: {
             Text(title)
-                .font(.caption2.weight(.bold))
-                .foregroundColor(selected ? .white : AppTheme.primaryText(for: colorScheme).opacity(0.8))
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(
+                    selected
+                    ? AppTheme.accent
+                    : AppTheme.secondaryText(for: colorScheme)
+                )
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
                 .background(
-                    Capsule().fill(selected ? AppTheme.accent : AppTheme.elevatedBackground(for: colorScheme))
+                    Capsule().fill(
+                        selected
+                        ? AppTheme.accent.opacity(0.12)
+                        : AppTheme.elevatedBackground(for: colorScheme).opacity(0.7)
+                    )
                 )
         }
         .buttonStyle(.plain)
@@ -701,8 +693,9 @@ struct TaskListView: View {
                 .scrollContentBackground(.hidden)
                 // Outer Page ScrollView owns scrolling — avoid nested scroll fight.
                 .scrollDisabled(true)
-                .frame(minHeight: CGFloat(incomplete.count) * (settings.uiDensity == .compact ? 64 : 74))
-                .environment(\.defaultMinListRowHeight, settings.uiDensity == .compact ? 52 : 60)
+                // Row budget ≈ content + vertical padding + card gap (tuned vs TaskRowView).
+                .frame(minHeight: CGFloat(incomplete.count) * (settings.uiDensity == .compact ? 58 : 68))
+                .environment(\.defaultMinListRowHeight, settings.uiDensity == .compact ? 48 : 56)
             }
             ForEach(completed) { task in
                 taskRow(task)
