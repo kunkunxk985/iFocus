@@ -592,7 +592,7 @@ class TaskStore: ObservableObject {
                 blockTasksPersistence = false
             } catch {
                 tasksOK = false
-                print("[TaskStore] reload tasks failed: \(error)")
+                AppLog.tasks.error("reload tasks failed: \(error.localizedDescription, privacy: .public)")
             }
         } else {
             tasks = []
@@ -606,7 +606,7 @@ class TaskStore: ObservableObject {
                 blockSessionsPersistence = false
             } catch {
                 sessionsOK = false
-                print("[TaskStore] reload sessions failed: \(error)")
+                AppLog.tasks.error("reload sessions failed: \(error.localizedDescription, privacy: .public)")
             }
         } else {
             focusSessions = []
@@ -655,7 +655,7 @@ class TaskStore: ObservableObject {
             let data = try Self.makeEncoder().encode(tasks)
             try data.write(to: tasksFileURL, options: .atomic)
         } catch {
-            print("[TaskStore] saveTasks failed: \(error)")
+            AppLog.tasks.error("saveTasks failed: \(error.localizedDescription, privacy: .public)")
         }
     }
     
@@ -669,7 +669,7 @@ class TaskStore: ObservableObject {
             let data = try Data(contentsOf: fileURL)
             self.tasks = try Self.decodeList([FocusTask].self, from: data)
         } catch {
-            print("[TaskStore] loadTasks failed: \(error)")
+            AppLog.tasks.error("loadTasks failed: \(error.localizedDescription, privacy: .public)")
             backupCorruptFile(at: fileURL)
             // Keep original file on disk — do not overwrite with empty until user confirms.
             blockTasksPersistence = true
@@ -684,7 +684,7 @@ class TaskStore: ObservableObject {
             let data = try Self.makeEncoder().encode(focusSessions)
             try data.write(to: sessionsFileURL, options: .atomic)
         } catch {
-            print("[TaskStore] saveSessions failed: \(error)")
+            AppLog.tasks.error("saveSessions failed: \(error.localizedDescription, privacy: .public)")
         }
     }
     
@@ -698,7 +698,7 @@ class TaskStore: ObservableObject {
             let data = try Data(contentsOf: fileURL)
             self.focusSessions = try Self.decodeList([FocusSession].self, from: data)
         } catch {
-            print("[TaskStore] loadSessions failed: \(error)")
+            AppLog.tasks.error("loadSessions failed: \(error.localizedDescription, privacy: .public)")
             backupCorruptFile(at: fileURL)
             blockSessionsPersistence = true
             if dataLoadErrorMessage == nil {
@@ -714,7 +714,7 @@ class TaskStore: ObservableObject {
             let data = try Self.makeEncoder().encode(state)
             try data.write(to: stateFileURL, options: .atomic)
         } catch {
-            print("[TaskStore] saveState failed: \(error)")
+            AppLog.tasks.error("saveState failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -734,7 +734,7 @@ class TaskStore: ObservableObject {
                 activeTaskId = nil
             }
         } catch {
-            print("[TaskStore] loadState failed: \(error)")
+            AppLog.tasks.error("loadState failed: \(error.localizedDescription, privacy: .public)")
             backupCorruptFile(at: fileURL)
             activeTaskId = nil
         }

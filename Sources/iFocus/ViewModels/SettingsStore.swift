@@ -502,7 +502,7 @@ class SettingsStore: ObservableObject {
         do {
             try fileManager.createDirectory(at: avatarStorageDirectory, withIntermediateDirectories: true)
         } catch {
-            print("[SettingsStore] uploadAvatar failed: \(error)")
+            AppLog.settings.error("uploadAvatar failed: \(error.localizedDescription, privacy: .public)")
             return false
         }
 
@@ -510,19 +510,19 @@ class SettingsStore: ObservableObject {
         do {
             sourceData = try Data(contentsOf: url, options: .mappedIfSafe)
         } catch {
-            print("[SettingsStore] uploadAvatar failed: cannot read \(url.path): \(error)")
+            AppLog.settings.error("uploadAvatar cannot read path")
             return false
         }
 
         guard let sourceImage = NSImage(data: sourceData),
               let cgImage = sourceImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            print("[SettingsStore] uploadAvatar failed: cannot decode image from \(url.path)")
+            AppLog.settings.error("uploadAvatar cannot decode image")
             return false
         }
 
         let bitmap = NSBitmapImageRep(cgImage: cgImage)
         guard let pngData = bitmap.representation(using: .png, properties: [.compressionFactor: 1.0]) else {
-            print("[SettingsStore] uploadAvatar failed: cannot encode image as PNG from \(url.path)")
+            AppLog.settings.error("uploadAvatar cannot encode PNG")
             return false
         }
 
@@ -536,7 +536,7 @@ class SettingsStore: ObservableObject {
             }
             return true
         } catch {
-            print("[SettingsStore] uploadAvatar failed: \(error)")
+            AppLog.settings.error("uploadAvatar failed: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }
