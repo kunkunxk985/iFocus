@@ -10,12 +10,8 @@ struct TimerTaskFocusBlock: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("专注任务")
-                .font(.caption.weight(.bold))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                .padding(.horizontal, 4)
-
+        // No section title — the row itself is enough (quieter chrome).
+        Group {
             if let task = taskStore.activeTask {
                 selectedRow(task)
             } else {
@@ -57,36 +53,29 @@ struct TimerTaskFocusBlock: View {
 
     private var emptyPicker: some View {
         let items = taskStore.incompleteTasks
-        let glyph = TimerLayoutMath.lerp(36, 44, layout.eased)
-        let titleSize = TimerLayoutMath.lerp(14, 16, layout.eased)
-        let pad = TimerLayoutMath.lerp(10, 14, layout.eased)
+        let glyph = TimerLayoutMath.lerp(34, 42, layout.eased)
+        let titleSize = TimerLayoutMath.lerp(13.5, 15.5, layout.eased)
+        let pad = TimerLayoutMath.lerp(9, 13, layout.eased)
         return Menu {
             menuContent
         } label: {
             HStack(spacing: 12) {
                 glyphView("list.bullet", color: modeColor, size: glyph)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(items.isEmpty ? "暂无任务 · 可自由专注" : "选择要专注的任务")
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(items.isEmpty ? "自由专注" : "选择任务")
                         .font(.system(size: titleSize, weight: .semibold))
                         .foregroundColor(AppTheme.primaryText(for: colorScheme))
                     Text(items.isEmpty
-                         ? "空格即可开始，或先去清单添加"
-                         : "共 \(items.count) 个未完成 · 点此打开列表")
+                         ? "空格开始，或先去清单添加"
+                         : "\(items.count) 个未完成")
                         .font(.caption)
                         .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                         .lineLimit(1)
                 }
-                Spacer(minLength: 8)
-                Text(items.isEmpty ? "开始" : "选择任务")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule()
-                            .fill(modeColor)
-                            .shadow(color: modeColor.opacity(0.22), radius: 6, y: 2)
-                    )
+                Spacer(minLength: 6)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
             .padding(pad)
             .background(blockBackground(emphasized: false))
@@ -137,18 +126,13 @@ struct TimerTaskFocusBlock: View {
 
     private func blockBackground(emphasized: Bool) -> some View {
         RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
-            .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.96 : 0.78))
+            .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.9 : 0.7))
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
                     .stroke(
-                        emphasized ? modeColor.opacity(0.28) : AppTheme.separator(for: colorScheme),
+                        emphasized ? modeColor.opacity(0.18) : AppTheme.separatorLow(for: colorScheme),
                         lineWidth: 1
                     )
-            )
-            .shadow(
-                color: AppTheme.softShadow(for: colorScheme).opacity(emphasized ? 1 : 0.5),
-                radius: emphasized ? 8 : 4,
-                y: emphasized ? 2 : 1
             )
     }
 }

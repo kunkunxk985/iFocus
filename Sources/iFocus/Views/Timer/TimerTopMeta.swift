@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Status pill + goal card + pause/celebration chips (above the ring).
-/// Pure move from TimerView — layout tokens and visuals unchanged.
+/// Status + goal — one quiet card (no second “rhythm” strip).
 struct TimerTopMeta: View {
     let layout: WindowLayoutMetrics
     let modeColor: Color
@@ -14,75 +13,60 @@ struct TimerTopMeta: View {
     @EnvironmentObject var settings: SettingsStore
     @Environment(\.colorScheme) private var colorScheme
 
-    private var longBreakProgress: (done: Int, total: Int) {
-        let until = timerStore.workSessionsUntilLongBreak
-        return (4 - until, 4)
-    }
+    private var untilLong: Int { timerStore.workSessionsUntilLongBreak }
 
-    private var longBreakHintText: String {
+    private var goalSubtitle: String {
+        let base = "\(timerStore.completedPomodoros)/\(settings.dailyGoal)"
         if timerStore.mode == .longBreak {
-            return "正在长休息"
+            return "\(base) · 长休息"
         }
-        let until = timerStore.workSessionsUntilLongBreak
-        if until == 4 && timerStore.completedPomodoros > 0 && timerStore.completedPomodoros % 4 == 0 {
-            return "刚完成一轮 · 下一轮 4 个"
+        if untilLong == 1 {
+            return "\(base) · 再 1 个长休"
         }
-        if until == 1 {
-            return "再 1 个进入长休息"
-        }
-        return "再 \(until) 个进入长休息"
+        return "\(base) · 再 \(untilLong) 个长休"
     }
 
     var body: some View {
-        VStack(spacing: TimerLayoutMath.lerp(8, 12, layout.eased)) {
-            // Status pill — centered
+        VStack(spacing: TimerLayoutMath.lerp(10, 14, layout.eased)) {
+            // Single quiet status line (no heavy capsule chrome when idle)
             HStack(spacing: 8) {
                 PulseDot(
                     color: timerStore.isRunning
                         ? modeColor
                         : AppTheme.secondaryText(for: colorScheme),
                     isActive: timerStore.isRunning,
-                    size: 7,
+                    size: 6,
                     allowsPulse: settings.decorativeMotionEnabled
                 )
-
                 Text(statusLabel)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundColor(timerStore.isRunning ? modeColor : AppTheme.secondaryText(for: colorScheme))
-
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundColor(
+                        timerStore.isRunning
+                        ? modeColor
+                        : AppTheme.secondaryText(for: colorScheme)
+                    )
                 if timerStore.mode == .work {
                     let mins = timerStore.totalSecondsToday / 60
-                    Text("· 今日 \(mins) 分")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    Text("· \(mins) 分")
+                        .font(.system(size: 11, weight: .medium).monospacedDigit())
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.7 : 0.48))
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .stroke(
-                                timerStore.isRunning
-                                ? modeColor.opacity(0.18)
-                                : AppTheme.separatorLow(for: colorScheme),
-                                lineWidth: 1
-                            )
-                    )
-            )
 
-            // Goal card
-            VStack(spacing: TimerLayoutMath.lerp(8, 10, layout.eased)) {
+            // Goal — progress only, secondary line carries long-break context
+            VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(goalProgress >= 1 ? "今日目标已达成" : "今日目标")
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(goalProgress >= 1 ? modeColor : AppTheme.secondaryText(for: colorScheme))
+                        .foregroundColor(
+                            goalProgress >= 1
+                            ? modeColor
+                            : AppTheme.secondaryText(for: colorScheme)
+                        )
                     Spacer()
-                    Text("\(timerStore.completedPomodoros) / \(settings.dailyGoal) 番茄")
-                        .font(.caption.weight(.bold).monospacedDigit())
-                        .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                    Text(goalSubtitle)
+                        .font(.caption.weight(.medium).monospacedDigit())
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                 }
 
                 GeometryReader { g in
@@ -95,37 +79,14 @@ struct TimerTopMeta: View {
                             .animation(.easeInOut(duration: 0.35), value: goalProgress)
                     }
                 }
-                .frame(height: 5)
-
-                if layout.showLongBreakRow {
-                    HStack(spacing: 8) {
-                        Text("长休息")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                        HStack(spacing: 5) {
-                            ForEach(0..<4, id: \.self) { index in
-                                Circle()
-                                    .fill(index < longBreakProgress.done
-                                          ? AppTheme.accent
-                                          : AppTheme.separator(for: colorScheme))
-                                    .frame(width: 8, height: 8)
-                            }
-                        }
-                        Spacer()
-                        Text(longBreakHintText)
-                            .font(.caption2.weight(.medium))
-                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                            .lineLimit(1)
-                    }
-                    .transition(.opacity)
-                }
+                .frame(height: 4)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, layout.goalCardPaddingV)
             .frame(maxWidth: layout.goalCardMaxWidth)
             .background(
                 RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
-                    .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.7 : 0.45))
+                    .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.65 : 0.4))
                     .overlay(
                         RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
                             .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
@@ -136,53 +97,35 @@ struct TimerTopMeta: View {
                 Button {
                     timerStore.start()
                 } label: {
-                    Text("已暂停 \(timerStore.pauseIdleMinutes) 分钟 · 点此继续")
+                    Text("已暂停 \(timerStore.pauseIdleMinutes) 分钟 · 继续")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(Color(hex: "#D97706"))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(Color(hex: "#F59E0B").opacity(0.15))
-                                .overlay(Capsule().stroke(Color(hex: "#F59E0B").opacity(0.35), lineWidth: 1))
-                        )
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                 }
                 .buttonStyle(.plain)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(.opacity)
             } else if let celebration = timerStore.celebrationMessage {
-                // Industry UX: after a segment ends (auto-start off), offer one-tap next start.
-                VStack(spacing: 8) {
+                HStack(spacing: 10) {
                     Text(celebration)
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(modeColor)
-                        .multilineTextAlignment(.center)
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        .lineLimit(2)
                     if !timerStore.isRunning, !timerStore.isSessionInProgress {
                         Button {
                             timerStore.startPreparedSegment()
                         } label: {
                             Text("开始\(timerStore.mode.rawValue)")
-                                .font(.caption.weight(.bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 6)
-                                .background(Capsule().fill(modeColor))
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(modeColor)
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(modeColor.opacity(0.12))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(modeColor.opacity(0.25), lineWidth: 1)
-                        )
-                )
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .frame(maxWidth: layout.goalCardMaxWidth)
+                .transition(.opacity)
                 .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
                         if timerStore.celebrationMessage == celebration {
                             withAnimation { timerStore.celebrationMessage = nil }
                         }
@@ -190,8 +133,8 @@ struct TimerTopMeta: View {
                 }
             }
         }
-        .animation(.easeOut(duration: 0.25), value: timerStore.celebrationMessage)
-        .animation(.easeOut(duration: 0.25), value: timerStore.isPauseIdleTooLong)
+        .animation(.easeOut(duration: 0.2), value: timerStore.celebrationMessage)
+        .animation(.easeOut(duration: 0.2), value: timerStore.isPauseIdleTooLong)
         .onChange(of: timerStore.celebrationMessage) { message in
             guard message != nil, settings.decorativeMotionEnabled else { return }
             celebratePulse = true
@@ -205,7 +148,6 @@ struct TimerTopMeta: View {
     }
 }
 
-/// Compact status when immersive mode hides the full meta stack.
 struct TimerImmersiveStatusPill: View {
     let modeColor: Color
     let statusLabel: String
@@ -217,29 +159,22 @@ struct TimerImmersiveStatusPill: View {
     var body: some View {
         HStack(spacing: 8) {
             PulseDot(
-                color: timerStore.isRunning
-                    ? modeColor
-                    : AppTheme.secondaryText(for: colorScheme),
+                color: timerStore.isRunning ? modeColor : AppTheme.secondaryText(for: colorScheme),
                 isActive: timerStore.isRunning,
-                size: 7,
+                size: 6,
                 allowsPulse: settings.decorativeMotionEnabled
             )
             Text(statusLabel)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .foregroundColor(timerStore.isRunning ? modeColor : AppTheme.secondaryText(for: colorScheme))
             if timerStore.mode == .work, let title = taskStore.activeTask?.title {
                 Text("·")
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.5))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.45))
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.85))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.8))
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 5)
-        .background(
-            Capsule().fill(AppTheme.cardBackground(for: colorScheme).opacity(0.7))
-        )
     }
 }

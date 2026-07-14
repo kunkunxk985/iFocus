@@ -45,9 +45,9 @@ struct TimerModeSwitcher: View {
 
     private func durationLabel(for mode: TimerMode) -> String {
         switch mode {
-        case .work: return "\(settings.workMinutes) 分钟"
-        case .shortBreak: return "\(settings.shortBreakMinutes) 分钟"
-        case .longBreak: return "\(settings.longBreakMinutes) 分钟"
+        case .work: return "\(settings.workMinutes)′"
+        case .shortBreak: return "\(settings.shortBreakMinutes)′"
+        case .longBreak: return "\(settings.longBreakMinutes)′"
         }
     }
 }

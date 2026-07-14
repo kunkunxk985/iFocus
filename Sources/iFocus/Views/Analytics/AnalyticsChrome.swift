@@ -9,14 +9,14 @@ struct AnalyticsCard<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             Label(title, systemImage: icon)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                .font(.caption.weight(.semibold))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .padding(16)
+        .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
     }
@@ -31,39 +31,29 @@ struct StatCard: View {
     var emphasizeValue: Bool = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(tint.opacity(0.9))
-                .frame(width: 34, height: 34)
-                .background(
-                    Circle().fill(
-                        emphasizeValue
-                        ? tint.opacity(0.12)
-                        : AppTheme.elevatedBackground(for: colorScheme)
-                    )
+        // Value-first KPI chip — `systemImage` retained for call-site stability.
+        VStack(alignment: .leading, spacing: 6) {
+            Text(value)
+                .font(.system(size: 22, weight: .bold, design: .rounded).monospacedDigit())
+                .foregroundColor(
+                    emphasizeValue
+                    ? tint
+                    : AppTheme.primaryText(for: colorScheme)
                 )
-            VStack(alignment: .leading, spacing: 2) {
-                Text(value)
-                    .font(.system(size: 20, weight: .bold, design: .rounded).monospacedDigit())
-                    .foregroundColor(
-                        emphasizeValue
-                        ? AppTheme.accent
-                        : AppTheme.primaryText(for: colorScheme)
-                    )
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                Text(label)
-                    .font(.caption2)
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(14)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
+        .accessibilityLabel("\(label)，\(value)")
+        .accessibilityValue(systemImage)
     }
 }
 

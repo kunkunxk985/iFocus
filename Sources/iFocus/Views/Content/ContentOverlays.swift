@@ -58,7 +58,7 @@ struct FloatingFocusPill: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(AppTheme.primaryText(for: colorScheme))
                             .lineLimit(1)
-                        Text(timerStore.isRunning ? "进行中 · 点此返回" : "已暂停 · 点此返回")
+                        Text(timerStore.isRunning ? "进行中" : "已暂停")
                             .font(.caption2)
                             .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                     }

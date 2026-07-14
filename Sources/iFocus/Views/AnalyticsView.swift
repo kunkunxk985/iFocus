@@ -28,18 +28,18 @@ struct AnalyticsView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let pad: CGFloat = 44
+            let pad: CGFloat = 36
             let topInset = AppTheme.detailTopInset
             let availableW = max(0, geo.size.width - pad * 2)
             let contentW = min(availableW, min(1100, max(720, availableW * 0.88)))
             let contentH = max(0, geo.size.height - topInset)
-            let primaryRowHeight = min(280, max(200, contentH * 0.32))
-            let detailHeight = min(160, max(120, contentH * 0.14)) * settings.uiDensity.scale
+            let primaryRowHeight = min(260, max(180, contentH * 0.30))
+            let detailHeight = min(148, max(110, contentH * 0.13)) * settings.uiDensity.scale
             let m = model
 
             ScrollView {
                 let density = settings.uiDensity
-                VStack(alignment: .leading, spacing: max(20, density.sectionSpacing + 6)) {
+                VStack(alignment: .leading, spacing: max(16, density.sectionSpacing + 2)) {
                     header(model: m)
 
                     rangeChipsBar
@@ -60,7 +60,7 @@ struct AnalyticsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, pad * density.scale)
                 .padding(.top, topInset)
-                .padding(.bottom, 36)
+                .padding(.bottom, 28)
                 .animation(.easeInOut(duration: 0.2), value: settings.analyticsShowGoal)
                 .animation(.easeInOut(duration: 0.2), value: settings.analyticsShowRecent)
                 .animation(.easeInOut(duration: 0.2), value: settings.anyAnalyticsCardEnabled)
@@ -82,19 +82,21 @@ struct AnalyticsView: View {
                 systemImage: "chart.bar.fill"
             )
             Spacer(minLength: 12)
-            HStack(spacing: 8) {
+            HStack(spacing: 4) {
                 customizeCardsButton
                 if model.hasAnyHistory {
                     Button(action: shareReport) {
-                        Label("导出", systemImage: "square.and.arrow.up")
-                            .font(.caption.weight(.medium))
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(.plain)
                     .help("导出摘要（邮件或剪贴板）")
                 }
             }
-            .padding(.top, 8)
+            .padding(.top, 6)
         }
     }
 
@@ -172,12 +174,14 @@ struct AnalyticsView: View {
         Button {
             showCustomizeCards.toggle()
         } label: {
-            Label("自定义", systemImage: "slider.horizontal.3")
-                .font(.caption.weight(.medium))
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .help("选择数据统计页展示哪些卡片")
+        .buttonStyle(.plain)
+        .help("自定义展示卡片")
         .popover(isPresented: $showCustomizeCards, arrowEdge: .bottom) {
             AnalyticsCardVisibilityEditor(settings: settings, style: .compact)
                 .padding(16)
@@ -212,29 +216,23 @@ struct AnalyticsView: View {
     }
 
     private var rangeChipsBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             ForEach(AnalyticsTimeRange.allCases) { r in
                 let selected = range == r
                 Button {
                     withAnimation(.easeOut(duration: 0.18)) { range = r }
                 } label: {
                     Text(r.rawValue)
-                        .font(.caption.weight(.semibold))
+                        .font(.caption.weight(selected ? .semibold : .medium))
                         .foregroundColor(
-                            selected ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme)
+                            selected
+                            ? AppTheme.accent
+                            : AppTheme.secondaryText(for: colorScheme).opacity(0.9)
                         )
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
                         .background(
-                            Capsule().fill(selected ? AppTheme.accent.opacity(0.12) : Color.clear)
-                        )
-                        .overlay(
-                            Capsule().stroke(
-                                selected
-                                ? AppTheme.accent.opacity(0.22)
-                                : AppTheme.separatorLow(for: colorScheme),
-                                lineWidth: 1
-                            )
+                            Capsule().fill(selected ? AppTheme.accent.opacity(0.10) : Color.clear)
                         )
                 }
                 .buttonStyle(.plain)

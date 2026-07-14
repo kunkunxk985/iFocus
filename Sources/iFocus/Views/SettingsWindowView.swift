@@ -841,15 +841,15 @@ struct SettingsWindowView: View {
     }
 
     private func settingsCard<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             Label(title, systemImage: icon)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(AppTheme.primaryText(for: colorScheme))
-            VStack(alignment: .leading, spacing: 12) {
+                .font(.caption.weight(.semibold))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            VStack(alignment: .leading, spacing: 10) {
                 content()
             }
         }
-        .padding(16)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
     }

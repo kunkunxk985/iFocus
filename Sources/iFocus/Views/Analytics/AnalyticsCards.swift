@@ -6,67 +6,41 @@ import iFocusCore
 enum AnalyticsCards {
     @ViewBuilder
     static func insightBanner(_ line: String, colorScheme: ColorScheme) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "text.alignleft")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.65))
-                .padding(.top, 2)
-            Text(line)
-                .font(.subheadline)
-                .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.9))
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
-                .fill(AppTheme.cardBackground(for: colorScheme))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
-                        .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                )
-        )
+        Text(line)
+            .font(.subheadline)
+            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 2)
     }
 
     static func emptyShell(colorScheme: ColorScheme) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: "chart.bar.xaxis")
-                .font(.system(size: 22, weight: .light))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.7))
-                .frame(width: 48, height: 48)
-                .background(Circle().fill(AppTheme.elevatedBackground(for: colorScheme)))
-
+        VStack(spacing: 10) {
             Text("完成一次专注后，这里会变清晰")
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundColor(AppTheme.primaryText(for: colorScheme))
 
-            Text("现在只需开始第一个番茄。")
+            Text("先去打一个番茄即可。")
                 .font(.subheadline)
                 .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                .multilineTextAlignment(.center)
 
             Button {
                 AppNavigation.post(.timer)
             } label: {
                 Text("去专注钟")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(AppTheme.accent))
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(AppTheme.accent)
             }
             .buttonStyle(.plain)
-            .padding(.top, 2)
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 48)
-        .padding(.horizontal, 24)
-        .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
+        .padding(.vertical, 40)
+        .padding(.horizontal, 20)
     }
 
     static func summaryGrid(model: AnalyticsDashboardModel, colorScheme: ColorScheme) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             StatCard(
                 systemImage: "timer",
                 value: "\(model.completedPomodoros)/\(model.dailyGoal)",
@@ -87,7 +61,7 @@ enum AnalyticsCards {
             StatCard(
                 systemImage: "flame",
                 value: "\(model.streakCurrent)",
-                label: model.streakCurrent > 0 ? "连续天数" : "连续 · 待开启",
+                label: model.streakCurrent > 0 ? "连续天数" : "连续天数",
                 tint: AppTheme.secondaryText(for: colorScheme)
             )
         }

@@ -31,13 +31,17 @@ final class WindowLayoutMetricsTests: XCTestCase {
 
     func testHintsAppearAsHeightGrows() {
         let short = WindowLayoutMetrics(width: 1024, height: 700)
-        let mid = WindowLayoutMetrics(width: 1100, height: 730)
-        let tall = WindowLayoutMetrics(width: 1280, height: 860)
+        let mid = WindowLayoutMetrics(width: 1100, height: 800)
+        let tall = WindowLayoutMetrics(width: 1280, height: 880)
+        // Quieter stage: control labels ≥820, session hint ≥860.
         XCTAssertFalse(short.showSessionHint)
-        XCTAssertTrue(tall.showSessionHint)
         XCTAssertFalse(short.showControlLabels)
-        XCTAssertTrue(mid.showControlLabels || tall.showControlLabels)
+        XCTAssertFalse(mid.showSessionHint)
+        XCTAssertFalse(mid.showControlLabels)
+        XCTAssertTrue(tall.showSessionHint)
         XCTAssertTrue(tall.showControlLabels)
+        XCTAssertFalse(short.showLongBreakRow)
+        XCTAssertFalse(tall.showLongBreakRow)
     }
 
     func testDensityScaleMultiplies() {

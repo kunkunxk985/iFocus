@@ -56,15 +56,19 @@ struct AppSidebar: View {
                     .font(.system(size: 17, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
             }
-            Text(timeOfDayGreeting)
-                .font(.caption)
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                .lineLimit(1)
-                .padding(.leading, 2)
+            // Greeting omitted when username is default — quieter brand mark.
+            if !settings.username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               settings.username != "小番茄" {
+                Text(timeOfDayGreeting)
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.9))
+                    .lineLimit(1)
+                    .padding(.leading, 2)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
-        .padding(.bottom, 14)
+        .padding(.bottom, 10)
     }
     
     private var timeOfDayGreeting: String {
@@ -98,36 +102,36 @@ struct AppSidebar: View {
                 }
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: sidebarCollapsed ? 8 : 20) {
-                        // Primary focus entry first — main product loop
-                        sidebarSection(sidebarCollapsed ? "" : "专注") {
-                            sidebarRow(
-                                title: "专注钟",
-                                screen: .timer,
-                                badge: timerStore.isRunning ? "进行中" : (timerStore.isSessionInProgress ? "暂停" : nil),
-                                icon: "timer",
-                                tint: AppTheme.accent,
-                                emphasizeRunning: timerStore.isRunning
-                            )
-                            sidebarRow(
-                                title: "数据统计",
-                                screen: .analytics,
-                                badge: timerStore.completedPomodoros > 0 ? "\(timerStore.completedPomodoros)" : nil,
-                                icon: "chart.bar.fill",
-                                tint: .orange
-                            )
+                    // Flat list — no section headers (less chrome noise).
+                    VStack(alignment: .leading, spacing: sidebarCollapsed ? 6 : 4) {
+                        sidebarRow(
+                            title: "专注钟",
+                            screen: .timer,
+                            badge: timerStore.isRunning ? "…" : (timerStore.isSessionInProgress ? "‖" : nil),
+                            icon: "timer",
+                            tint: AppTheme.accent,
+                            emphasizeRunning: timerStore.isRunning
+                        )
+                        sidebarRow(
+                            title: "数据统计",
+                            screen: .analytics,
+                            badge: nil,
+                            icon: "chart.bar.fill",
+                            tint: Color(hex: "#6B7280")
+                        )
+
+                        if !sidebarCollapsed {
+                            Color.clear.frame(height: 10)
                         }
-                        
-                        sidebarSection(sidebarCollapsed ? "" : "清单") {
-                            ForEach(smartItems) { item in
-                                sidebarRow(
-                                    title: item.title,
-                                    screen: item.screen,
-                                    badge: item.badge,
-                                    icon: item.icon,
-                                    tint: item.tint
-                                )
-                            }
+
+                        ForEach(smartItems) { item in
+                            sidebarRow(
+                                title: item.title,
+                                screen: item.screen,
+                                badge: item.badge,
+                                icon: item.icon,
+                                tint: item.tint
+                            )
                         }
                     }
                     .padding(.horizontal, sidebarCollapsed ? 8 : 12)
@@ -181,18 +185,17 @@ struct AppSidebar: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             } else {
-                HStack(spacing: 8) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 10, weight: .bold))
-                    Text("收起侧栏")
-                        .font(.caption.weight(.semibold))
-                    Spacer(minLength: 0)
-                }
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
+                    .frame(width: 30, height: 30)
+                    .background(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(AppTheme.elevatedBackground(for: colorScheme).opacity(0.6))
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
             }
         }
         .buttonStyle(SoftScaleButtonStyle())

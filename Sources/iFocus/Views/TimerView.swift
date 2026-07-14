@@ -76,23 +76,16 @@ struct TimerView: View {
                                 immersiveMode.toggle()
                             }
                         } label: {
-                            Label(
-                                immersiveMode ? "退出沉浸" : "沉浸模式",
-                                systemImage: immersiveMode
-                                    ? "arrow.down.right.and.arrow.up.left"
-                                    : "arrow.up.left.and.arrow.down.right"
-                            )
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule().fill(AppTheme.cardBackground(for: colorScheme).opacity(0.75))
-                                    .overlay(Capsule().stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1))
-                            )
+                            Image(systemName: immersiveMode
+                                  ? "arrow.down.right.and.arrow.up.left"
+                                  : "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.75))
+                                .frame(width: 28, height: 28)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(SoftScaleButtonStyle())
-                        .help(immersiveMode ? "显示任务与模式" : "只保留环与控制")
+                        .help(immersiveMode ? "退出沉浸" : "沉浸模式：只保留环与控制")
                     }
                     .padding(.top, layout.stageTopChrome)
 
@@ -105,9 +98,6 @@ struct TimerView: View {
                             celebratePulse: $celebratePulse,
                             onDecorativeMotionChange: syncAmbientMotion
                         )
-
-                        TimerRhythmStrip(layout: layout, modeColor: modeColor)
-                            .transition(.opacity)
 
                         TimerTaskFocusBlock(layout: layout, modeColor: modeColor)
                             .frame(maxWidth: min(layout.taskBlockMaxWidth, layout.width - layout.horizontalPadding * 2))

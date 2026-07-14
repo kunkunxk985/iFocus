@@ -119,19 +119,19 @@ struct WindowLayoutMetrics: Equatable {
         lerp(320, 420, eased)
     }
 
-    /// Labels under skip/reset — hide only when truly short so layout stays calm.
+    /// Labels under skip/reset — prefer icon-only for a quieter stage.
     var showControlLabels: Bool {
-        height >= 720
+        height >= 820
     }
 
-    /// Keyboard hint row under controls.
+    /// Keyboard hint row under controls — only on tall stages.
     var showSessionHint: Bool {
-        height >= 740
+        height >= 860
     }
 
-    /// Long-break dots row inside goal card.
+    /// Reserved for legacy callers; long-break context is folded into the goal line.
     var showLongBreakRow: Bool {
-        height >= 710
+        false
     }
 
     /// Slightly tighter goal padding at small heights.

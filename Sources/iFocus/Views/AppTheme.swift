@@ -513,26 +513,18 @@ struct PageTitle: View {
         HStack(alignment: .center, spacing: 10 * density.scale + windowLayout.eased * 4) {
             if let systemImage {
                 Image(systemName: systemImage)
-                    .font(.system(size: iconBox * 0.48, weight: .semibold))
-                    .foregroundColor(tint)
-                    .frame(width: iconBox, height: iconBox)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(AppTheme.elevatedBackground(for: colorScheme))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                    )
+                    .font(.system(size: iconBox * 0.46, weight: .semibold))
+                    .foregroundColor(tint.opacity(0.9))
+                    .frame(width: iconBox * 0.9, height: iconBox * 0.9)
             }
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: titleSize, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(windowLayout.height < 740 ? .caption : .subheadline)
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        .font(.caption)
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.9))
                 }
             }
             Spacer(minLength: 0)

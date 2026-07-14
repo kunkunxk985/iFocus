@@ -83,22 +83,14 @@ struct TaskListView: View {
             default: return ""
             }
         }
-        var parts: [String] = []
-        if viewState.selectedScreen == .todayTask, !overdueTasks.isEmpty {
-            parts.append("\(overdueTasks.count) 逾期")
-        }
+        // One quiet line — count only (no multi-metric stack under the title).
         if viewState.selectedScreen == .completedTask {
-            parts.append("\(completedFiltered.count) 项")
-        } else {
-            parts.append("\(incompleteFiltered.count) 待办")
-            if estimatedMinutes > 0 {
-                parts.append("预计 \(formattedEstimated)")
-            }
-            if totalFocusMinutes > 0 {
-                parts.append("已专注 \(formattedFocusTime)")
-            }
+            return "\(completedFiltered.count) 项"
         }
-        return parts.joined(separator: " · ")
+        if viewState.selectedScreen == .todayTask, !overdueTasks.isEmpty {
+            return "\(incompleteFiltered.count) 待办 · \(overdueTasks.count) 逾期"
+        }
+        return "\(incompleteFiltered.count) 待办"
     }
     
     private var listIcon: String {
@@ -153,15 +145,13 @@ struct TaskListView: View {
         return incompleteFiltered.filter { !$0.isOverdue }
     }
     
-    private var estimatedMinutes: Int {
-        incompleteFiltered.reduce(0) { $0 + $1.estimatedPomodoros * settings.workMinutes }
-    }
-    private var totalFocusMinutes: Int {
-        currentTasks.reduce(0) { $0 + $1.timeSpentMinutes }
-    }
-    
     private var availableChips: [TaskListChip] {
-        var chips: [TaskListChip] = [.all, .highPriority, .pinned, .hasNotes, .hasLink]
+        // Only chips that match something — hide empty filters (less chrome).
+        var chips: [TaskListChip] = [.all]
+        let candidates: [TaskListChip] = [.highPriority, .pinned, .hasNotes, .hasLink]
+        for chip in candidates where chipCount(chip) > 0 {
+            chips.append(chip)
+        }
         let cats = Set(baseTasks.map(\.category))
         for cat in TaskCategory.allCases where cats.contains(cat) {
             chips.append(.category(cat))
@@ -299,51 +289,32 @@ struct TaskListView: View {
     
     private var filterChipsBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(availableChips) { chip in
                     let selected = activeChip == chip
-                    let count = chipCount(chip)
                     Button {
                         withAnimation(.easeOut(duration: 0.15)) {
                             activeChip = chip
                         }
                     } label: {
-                        HStack(spacing: 4) {
-                            Text(chip.title)
-                                .font(.caption.weight(.semibold))
-                            if chip != .all, count > 0 {
-                                Text("\(count)")
-                                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                                    .opacity(0.85)
-                            }
-                        }
-                        .foregroundColor(
-                            selected
-                            ? AppTheme.accent
-                            : AppTheme.secondaryText(for: colorScheme)
-                        )
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(selected
-                                      ? AppTheme.accent.opacity(0.12)
-                                      : Color.clear)
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(
-                                    selected
-                                    ? AppTheme.accent.opacity(0.22)
-                                    : AppTheme.separatorLow(for: colorScheme),
-                                    lineWidth: 1
-                                )
-                        )
+                        Text(chip.title)
+                            .font(.caption.weight(selected ? .semibold : .medium))
+                            .foregroundColor(
+                                selected
+                                ? AppTheme.accent
+                                : AppTheme.secondaryText(for: colorScheme).opacity(0.9)
+                            )
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule()
+                                    .fill(selected ? AppTheme.accent.opacity(0.10) : Color.clear)
+                            )
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.vertical, 2)
+            .padding(.vertical, 1)
         }
     }
     
@@ -415,26 +386,6 @@ struct TaskListView: View {
         .buttonStyle(.bordered)
         .controlSize(.small)
         .tint(destructive ? .red : AppTheme.accent)
-    }
-    
-    private var formattedEstimated: String {
-        let mins = estimatedMinutes
-        if mins >= 60 {
-            let h = mins / 60
-            let m = mins % 60
-            return m > 0 ? "\(h)h\(m)m" : "\(h)h"
-        }
-        return "\(mins)分"
-    }
-    
-    private var formattedFocusTime: String {
-        let mins = totalFocusMinutes
-        let h = mins / 60
-        let m = mins % 60
-        if mins == 0 { return "0" }
-        if h > 0 && m > 0 { return "\(h)h\(m)m" }
-        if h > 0 { return "\(h)h" }
-        return "\(m)m"
     }
     
     private var addTaskSection: some View {
