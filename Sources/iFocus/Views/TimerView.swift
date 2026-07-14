@@ -70,7 +70,7 @@ struct TimerView: View {
                 densityScale: density.scale
             )
             // Ring must fit *this* pane, not the full window.
-            let ringSize = resolvedRingSize(
+            let ringSize = TimerLayoutMath.ringSize(
                 layout: layout,
                 stageWidth: geo.size.width,
                 stageHeight: geo.size.height,
@@ -118,7 +118,16 @@ struct TimerView: View {
 
                     Spacer(minLength: max(2, layout.sectionSpacing * 0.35))
 
-                    timerRing(size: ringSize)
+                    TimerRingView(
+                        size: ringSize,
+                        progress: progress,
+                        displayTime: displayTime,
+                        modeTitle: modeTitle,
+                        modeColor: modeColor,
+                        isRunning: timerStore.isRunning,
+                        decorativeMotion: settings.decorativeMotionEnabled,
+                        ringBreath: ringBreath
+                    )
                         .scaleEffect(
                             settings.decorativeMotionEnabled && celebratePulse
                             ? 1.04
@@ -149,10 +158,10 @@ struct TimerView: View {
 
                     if !immersiveMode, layout.showSessionHint {
                         sessionHint
-                            .padding(.bottom, lerp(10, 18, layout.eased))
+                            .padding(.bottom, TimerLayoutMath.lerp(10, 18, layout.eased))
                             .transition(.opacity)
                     } else {
-                        Color.clear.frame(height: lerp(8, 16, layout.eased))
+                        Color.clear.frame(height: TimerLayoutMath.lerp(8, 16, layout.eased))
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -273,37 +282,6 @@ struct TimerView: View {
         .animation(.easeInOut(duration: quiet ? 0.2 : 0.4), value: timerStore.mode)
     }
     
-    // MARK: - Layout helpers
-
-    private func resolvedRingSize(
-        layout: WindowLayoutMetrics,
-        stageWidth: CGFloat,
-        stageHeight: CGFloat,
-        immersive: Bool
-    ) -> CGFloat {
-        let preferred = layout.ringPreferred * (immersive ? 1.12 : 1)
-        // Reserve chrome continuously so the ring always fits with room for controls.
-        let reserved =
-            layout.stageTopChrome
-            + layout.sectionSpacing
-            + (immersive ? 40 : lerp(88, 120, layout.eased)) // status + goal
-            + (immersive ? 0 : layout.sectionSpacing)
-            + (immersive ? 0 : lerp(56, 78, layout.eased)) // task
-            + layout.sectionSpacing * 0.7
-            + (immersive ? 0 : lerp(48, 68, layout.eased)) // mode
-            + layout.sectionSpacing * 0.7
-            + layout.controlMainSize + (layout.showControlLabels ? 22 : 4)
-            + (layout.showSessionHint && !immersive ? 28 : 12)
-            + layout.sectionSpacing
-        let budget = max(160, stageHeight - reserved)
-        let widthCap = stageWidth * (immersive ? 0.55 : layout.ringMaxFractionOfWidth)
-        return min(preferred, budget, widthCap)
-    }
-
-    private func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat {
-        a + (b - a) * min(1, max(0, t))
-    }
-
     private var immersiveStatusPill: some View {
         HStack(spacing: 8) {
             PulseDot(
@@ -336,7 +314,7 @@ struct TimerView: View {
     // MARK: - Top meta
     
     private func topMeta(layout: WindowLayoutMetrics) -> some View {
-        VStack(spacing: lerp(8, 12, layout.eased)) {
+        VStack(spacing: TimerLayoutMath.lerp(8, 12, layout.eased)) {
             // Status pill — centered
             HStack(spacing: 8) {
                 PulseDot(
@@ -376,7 +354,7 @@ struct TimerView: View {
             )
             
             // Goal card — single unified block (label + bar + count inside)
-            VStack(spacing: lerp(8, 10, layout.eased)) {
+            VStack(spacing: TimerLayoutMath.lerp(8, 10, layout.eased)) {
                 HStack {
                     Text(goalProgress >= 1 ? "今日目标已达成" : "今日目标")
                         .font(.caption.weight(.semibold))
@@ -518,9 +496,9 @@ struct TimerView: View {
     }
     
     private func selectedTaskRow(_ task: FocusTask, layout: WindowLayoutMetrics) -> some View {
-        let glyph = lerp(34, 42, layout.eased)
-        let titleSize = lerp(13.5, 15.5, layout.eased)
-        let pad = lerp(9, 13, layout.eased)
+        let glyph = TimerLayoutMath.lerp(34, 42, layout.eased)
+        let titleSize = TimerLayoutMath.lerp(13.5, 15.5, layout.eased)
+        let pad = TimerLayoutMath.lerp(9, 13, layout.eased)
         return Menu {
             taskMenuContent
         } label: {
@@ -553,9 +531,9 @@ struct TimerView: View {
 
     private func emptyTaskPicker(layout: WindowLayoutMetrics) -> some View {
         let items = taskStore.incompleteTasks
-        let glyph = lerp(36, 44, layout.eased)
-        let titleSize = lerp(14, 16, layout.eased)
-        let pad = lerp(10, 14, layout.eased)
+        let glyph = TimerLayoutMath.lerp(36, 44, layout.eased)
+        let titleSize = TimerLayoutMath.lerp(14, 16, layout.eased)
+        let pad = TimerLayoutMath.lerp(10, 14, layout.eased)
         return Menu {
             taskMenuContent
         } label: {
@@ -701,69 +679,6 @@ struct TimerView: View {
         }
     }
     
-    // MARK: - Ring
-    
-    private func timerRing(size: CGFloat) -> some View {
-        let line = max(12, size * 0.06)
-        let motion = settings.decorativeMotionEnabled
-        let glowBoost = timerStore.isRunning ? (motion ? 1.0 : 0.7) : 0.45
-        
-        return ZStack {
-            // Soft bloom — only breathes when decorative motion is on
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            modeColor.opacity((colorScheme == .light ? 0.10 : 0.16) * glowBoost),
-                            modeColor.opacity((colorScheme == .light ? 0.03 : 0.06) * glowBoost),
-                            .clear
-                        ],
-                        center: .center,
-                        startRadius: size * 0.18,
-                        endRadius: size * 0.55
-                    )
-                )
-                .frame(width: size * 1.18, height: size * 1.18)
-                .scaleEffect(motion && timerStore.isRunning && ringBreath ? 1.04 : 1)
-            
-            Circle()
-                .stroke(modeColor.opacity(colorScheme == .light ? 0.10 : 0.14), lineWidth: line)
-                .frame(width: size, height: size)
-            
-            Circle()
-                .trim(from: 0, to: CGFloat(min(max(progress, 0.001), 1)))
-                .stroke(
-                    // Quiet default: solid arc. Gradient only with decorative motion.
-                    motion
-                    ? AnyShapeStyle(AngularGradient(
-                        colors: [modeColor.opacity(0.55), modeColor, modeColor.opacity(0.85)],
-                        center: .center
-                    ))
-                    : AnyShapeStyle(modeColor),
-                    style: StrokeStyle(lineWidth: line, lineCap: .round)
-                )
-                .frame(width: size, height: size)
-                .rotationEffect(.degrees(-90))
-                .animation(.linear(duration: 0.9), value: progress)
-                .shadow(
-                    color: modeColor.opacity(timerStore.isRunning ? (motion ? 0.28 : 0.10) : 0.06),
-                    radius: timerStore.isRunning ? (motion ? 12 : 5) : 3,
-                    y: 0
-                )
-            
-            VStack(spacing: 6) {
-                Text(displayTime)
-                    .font(.system(size: max(48, size * 0.26), weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                
-                Text(modeTitle)
-                    .font(.system(size: max(12, size * 0.048), weight: .medium))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-            }
-        }
-        .frame(width: size * 1.18, height: size * 1.18)
-    }
     
     // MARK: - Controls
     
