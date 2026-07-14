@@ -68,4 +68,31 @@ final class MenuBarCountdownTests: XCTestCase {
         XCTAssertEqual(attr.string, text)
         XCTAssertGreaterThan(attr.length, 0)
     }
+
+    func testToggleAndRunStateLabels() {
+        XCTAssertEqual(MenuBarController.toggleTitle(mode: .work, isRunning: false), "开始专注")
+        XCTAssertEqual(MenuBarController.toggleTitle(mode: .work, isRunning: true), "暂停专注")
+        XCTAssertEqual(MenuBarController.toggleTitle(mode: .shortBreak, isRunning: true), "暂停休息")
+        XCTAssertEqual(
+            MenuBarController.runStateLabel(isRunning: true, isSessionInProgress: true, pauseIdleTooLong: false),
+            "进行中"
+        )
+        XCTAssertEqual(
+            MenuBarController.runStateLabel(isRunning: false, isSessionInProgress: true, pauseIdleTooLong: true),
+            "暂停过久"
+        )
+        XCTAssertEqual(
+            MenuBarController.runStateLabel(isRunning: false, isSessionInProgress: false, pauseIdleTooLong: false),
+            "待开始"
+        )
+    }
+
+    func testModeImageRenders() {
+        let idle = MenuBarController.modeImage(for: .work, isRunning: false)
+        let work = MenuBarController.modeImage(for: .work, isRunning: true)
+        let brk = MenuBarController.modeImage(for: .shortBreak, isRunning: true)
+        XCTAssertEqual(idle.size.width, 18)
+        XCTAssertEqual(work.size.width, 18)
+        XCTAssertEqual(brk.size.width, 18)
+    }
 }

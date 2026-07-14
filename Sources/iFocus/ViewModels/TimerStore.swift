@@ -629,6 +629,12 @@ class TimerStore: ObservableObject {
         // Idle / empty snapshot left on disk — drop so we start fresh.
         TimerSessionPersistence.clear(in: sessionDirectory())
     }
+
+    /// Refresh a restored timer snapshot after a backup import.
+    func reloadPendingResumeFromDisk() {
+        pendingResumeSnapshot = nil
+        loadPendingResumeIfNeeded()
+    }
     
     /// Build current session state for disk (always dirty while process is alive).
     func makeSessionSnapshot(cleanExit: Bool) -> TimerSessionSnapshot {
@@ -836,7 +842,9 @@ class TimerStore: ObservableObject {
     
     private func updateDockBadge() {
         DispatchQueue.main.async {
-            let tile = NSApp.dockTile
+            // Unit tests and early teardown can run without an NSApplication instance.
+            guard let app = NSApp else { return }
+            let tile = app.dockTile
             if self.isRunning {
                 tile.badgeLabel = self.timeString
             } else if self.completedPomodoros > 0 {
