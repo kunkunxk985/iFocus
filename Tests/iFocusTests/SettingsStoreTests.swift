@@ -78,6 +78,77 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(defaults.string(forKey: "username"), "小番茄")
     }
 
+    func testImportSettingsJSONBridgesNSNumberFromJSONSerialization() throws {
+        let store = SettingsStore(defaults: defaults, applyAppearance: false)
+        store.workMinutes = 25
+        store.dailyGoal = 8
+        store.decorativeMotionEnabled = false
+        store.analyticsShowRecent = false
+
+        // Mimic real export → re-import through JSONSerialization (NSNumber boxing).
+        let raw: [String: Any] = [
+            "workMinutes": 40,
+            "dailyGoal": 12,
+            "decorativeMotionEnabled": true,
+            "analyticsShowRecentCards": true,
+            "username": "测试用户"
+        ]
+        let data = try JSONSerialization.data(withJSONObject: raw, options: [])
+        try store.importSettingsJSON(data)
+
+        XCTAssertEqual(store.workMinutes, 40)
+        XCTAssertEqual(store.dailyGoal, 12)
+        XCTAssertTrue(store.decorativeMotionEnabled)
+        XCTAssertTrue(store.analyticsShowRecent)
+        XCTAssertEqual(store.username, "测试用户")
+    }
+
+    func testExportImportSettingsRoundTrip() throws {
+        let store = SettingsStore(defaults: defaults, applyAppearance: false)
+        store.workMinutes = 33
+        store.shortBreakMinutes = 7
+        store.dailyGoal = 10
+        store.smartLaunchLanding = false
+        store.analyticsShowTimeline = true
+
+        let data = try store.exportSettingsJSON()
+        store.workMinutes = 25
+        store.shortBreakMinutes = 5
+        store.dailyGoal = 8
+        store.smartLaunchLanding = true
+        store.analyticsShowTimeline = false
+
+        try store.importSettingsJSON(data)
+        XCTAssertEqual(store.workMinutes, 33)
+        XCTAssertEqual(store.shortBreakMinutes, 7)
+        XCTAssertEqual(store.dailyGoal, 10)
+        XCTAssertFalse(store.smartLaunchLanding)
+        XCTAssertTrue(store.analyticsShowTimeline)
+    }
+
+    func testAnalyticsCardVisibilityQuietDefaultsAndFullPreset() {
+        let store = SettingsStore(defaults: defaults, applyAppearance: false)
+
+        // Quiet-tool defaults when keys missing
+        XCTAssertTrue(store.isAnalyticsQuietDefault)
+        XCTAssertTrue(store.anyAnalyticsCardEnabled)
+        XCTAssertFalse(store.isAnalyticsFullLayout)
+
+        store.enableAllAnalyticsCards()
+        XCTAssertTrue(store.isAnalyticsFullLayout)
+        XCTAssertTrue(store.analyticsShowRecent)
+        XCTAssertTrue(store.analyticsShowTimeline)
+
+        store.analyticsShowInsight = false
+        XCTAssertFalse(store.isAnalyticsFullLayout)
+        XCTAssertTrue(store.anyAnalyticsCardEnabled)
+
+        store.resetAnalyticsCardVisibilityToQuietDefaults()
+        XCTAssertTrue(store.isAnalyticsQuietDefault)
+        XCTAssertFalse(store.analyticsShowRecent)
+        XCTAssertEqual(defaults.bool(forKey: "analyticsShowRecentCards"), false)
+    }
+
     func testUploadAvatarConvertsAndReloadsImage() throws {
         let sourceURL = avatarDirectory.appendingPathComponent("source.png")
         let image = NSImage(size: NSSize(width: 24, height: 24))

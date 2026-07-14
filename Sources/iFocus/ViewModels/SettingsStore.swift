@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import SwiftUI
+import iFocusCore
 
 enum AppearanceMode: String, CaseIterable, Identifiable {
     case light = "浅色"
@@ -277,6 +278,55 @@ class SettingsStore: ObservableObject {
         analyticsShowTaskBinding = false
         analyticsShowRecent = false
     }
+
+    /// Power-user layout: every analytics card visible.
+    func enableAllAnalyticsCards() {
+        analyticsShowInsight = true
+        analyticsShowKPI = true
+        analyticsShowGoal = true
+        analyticsShowTrend = true
+        analyticsShowTimeline = true
+        analyticsShowHours = true
+        analyticsShowCategory = true
+        analyticsShowTaskBinding = true
+        analyticsShowRecent = true
+    }
+
+    var anyAnalyticsCardEnabled: Bool {
+        analyticsShowInsight
+            || analyticsShowKPI
+            || analyticsShowGoal
+            || analyticsShowTrend
+            || analyticsShowTimeline
+            || analyticsShowHours
+            || analyticsShowCategory
+            || analyticsShowTaskBinding
+            || analyticsShowRecent
+    }
+
+    var isAnalyticsQuietDefault: Bool {
+        analyticsShowInsight
+            && analyticsShowKPI
+            && analyticsShowGoal
+            && analyticsShowTrend
+            && !analyticsShowTimeline
+            && !analyticsShowHours
+            && !analyticsShowCategory
+            && !analyticsShowTaskBinding
+            && !analyticsShowRecent
+    }
+
+    var isAnalyticsFullLayout: Bool {
+        analyticsShowInsight
+            && analyticsShowKPI
+            && analyticsShowGoal
+            && analyticsShowTrend
+            && analyticsShowTimeline
+            && analyticsShowHours
+            && analyticsShowCategory
+            && analyticsShowTaskBinding
+            && analyticsShowRecent
+    }
     
     /// Reflect OS login-item state in the toggle (read-only sync).
     /// Does **not** register the app — only the Settings switch calls `applyLaunchAtLoginPreference()`.
@@ -311,6 +361,139 @@ class SettingsStore: ObservableObject {
         let url = avatarStorageDirectory
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         NSWorkspace.shared.open(url)
+    }
+
+    /// Feedback line for backup export/import (settings panel).
+    @Published var backupFeedback: String?
+
+    /// Preference keys included in quiet local backup (not transient UI state).
+    static let backupPreferenceKeys: [String] = [
+        Key.workMinutes, Key.shortBreakMinutes, Key.longBreakMinutes,
+        Key.autoStartBreaks, Key.soundEnabled, Key.soundName, Key.dailyGoal,
+        Key.appearance, Key.username, Key.avatarColorIndex,
+        Key.toggleShortcut, Key.showFocusModeHint,
+        Key.pauseReminderEnabled, Key.pauseReminderMinutes,
+        Key.accentPreset, Key.menuBarDisplayStyle, Key.uiDensity,
+        Key.dockBounceOnComplete, Key.decorativeMotionEnabled, Key.smartLaunchLanding,
+        Key.analyticsShowInsight, Key.analyticsShowKPI, Key.analyticsShowGoal,
+        Key.analyticsShowTrend, Key.analyticsShowTimeline, Key.analyticsShowHours,
+        Key.analyticsShowCategory, Key.analyticsShowTaskBinding, Key.analyticsShowRecent
+        // launchAtLogin intentionally omitted — OS registration is separate.
+    ]
+
+    func exportSettingsJSON() throws -> Data {
+        // Export the effective values, including defaults that have never been written.
+        // This makes a backup deterministic and lets a failed restore fully roll back.
+        let dict: [String: Any] = [
+            Key.workMinutes: workMinutes,
+            Key.shortBreakMinutes: shortBreakMinutes,
+            Key.longBreakMinutes: longBreakMinutes,
+            Key.autoStartBreaks: autoStartBreaks,
+            Key.soundEnabled: soundEnabled,
+            Key.soundName: soundName as String,
+            Key.dailyGoal: dailyGoal,
+            Key.appearance: appearance.rawValue,
+            Key.username: username,
+            Key.avatarColorIndex: avatarColorIndex,
+            Key.toggleShortcut: toggleShortcut.rawValue,
+            Key.showFocusModeHint: showFocusModeHintOnStart,
+            Key.pauseReminderEnabled: pauseReminderEnabled,
+            Key.pauseReminderMinutes: pauseReminderMinutes,
+            Key.accentPreset: accentPreset.rawValue,
+            Key.menuBarDisplayStyle: menuBarDisplayStyle.rawValue,
+            Key.uiDensity: uiDensity.rawValue,
+            Key.dockBounceOnComplete: dockBounceOnComplete,
+            Key.decorativeMotionEnabled: decorativeMotionEnabled,
+            Key.smartLaunchLanding: smartLaunchLanding,
+            Key.analyticsShowInsight: analyticsShowInsight,
+            Key.analyticsShowKPI: analyticsShowKPI,
+            Key.analyticsShowGoal: analyticsShowGoal,
+            Key.analyticsShowTrend: analyticsShowTrend,
+            Key.analyticsShowTimeline: analyticsShowTimeline,
+            Key.analyticsShowHours: analyticsShowHours,
+            Key.analyticsShowCategory: analyticsShowCategory,
+            Key.analyticsShowTaskBinding: analyticsShowTaskBinding,
+            Key.analyticsShowRecent: analyticsShowRecent
+        ]
+        return try JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys])
+    }
+
+    func importSettingsJSON(_ data: Data) throws {
+        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw LocalBackup.BackupError.readFailed("settings.json")
+        }
+        for key in Self.backupPreferenceKeys {
+            if let value = dict[key] {
+                defaults.set(value, forKey: key)
+            }
+        }
+        // Re-apply into published properties.
+        // JSONSerialization boxes numbers as NSNumber — never cast with `as? Int` alone.
+        if let v = Self.jsonInt(dict["workMinutes"]) { workMinutes = Self.clampWorkMinutes(v) }
+        if let v = Self.jsonInt(dict["shortBreakMinutes"]) { shortBreakMinutes = Self.clampShortBreakMinutes(v) }
+        if let v = Self.jsonInt(dict["longBreakMinutes"]) { longBreakMinutes = Self.clampLongBreakMinutes(v) }
+        if let v = Self.jsonBool(dict["autoStartBreaks"]) { autoStartBreaks = v }
+        if let v = Self.jsonBool(dict["soundEnabled"]) { soundEnabled = v }
+        if let v = dict["soundName"] as? String { soundName = NSSound.Name(v) }
+        if let v = Self.jsonInt(dict["dailyGoal"]) { dailyGoal = Self.clampDailyGoal(v) }
+        if let v = dict["appearance"] as? String, let mode = AppearanceMode(rawValue: v) {
+            appearance = mode
+        }
+        if let v = dict["username"] as? String {
+            username = v
+            sanitizeUsername()
+        }
+        if let v = Self.jsonInt(dict["avatarColorIndex"]) { avatarColorIndex = v }
+        if let v = dict[Key.toggleShortcut] as? String,
+           let preset = ToggleShortcutPreset(rawValue: v) {
+            toggleShortcut = preset
+        }
+        if let v = Self.jsonBool(dict[Key.showFocusModeHint]) { showFocusModeHintOnStart = v }
+        if let v = Self.jsonBool(dict["pauseReminderEnabled"]) { pauseReminderEnabled = v }
+        if let v = Self.jsonInt(dict["pauseReminderMinutes"]) { pauseReminderMinutes = v }
+        if let v = dict["accentPreset"] as? String, let preset = AccentPreset(rawValue: v) {
+            accentPreset = preset
+        }
+        if let v = dict["menuBarDisplayStyle"] as? String,
+           let style = MenuBarDisplayStyle(rawValue: v) {
+            menuBarDisplayStyle = style
+        }
+        if let v = dict["uiDensity"] as? String, let density = UIDensity(rawValue: v) {
+            uiDensity = density
+        }
+        if let v = Self.jsonBool(dict["dockBounceOnComplete"]) { dockBounceOnComplete = v }
+        if let v = Self.jsonBool(dict["decorativeMotionEnabled"]) { decorativeMotionEnabled = v }
+        if let v = Self.jsonBool(dict["smartLaunchLanding"]) { smartLaunchLanding = v }
+        if let v = Self.jsonBool(dict["analyticsShowInsight"]) { analyticsShowInsight = v }
+        if let v = Self.jsonBool(dict["analyticsShowKPI"]) { analyticsShowKPI = v }
+        if let v = Self.jsonBool(dict["analyticsShowGoal"]) { analyticsShowGoal = v }
+        if let v = Self.jsonBool(dict["analyticsShowTrend"]) { analyticsShowTrend = v }
+        if let v = Self.jsonBool(dict["analyticsShowTimeline"]) { analyticsShowTimeline = v }
+        if let v = Self.jsonBool(dict["analyticsShowHours"]) { analyticsShowHours = v }
+        if let v = Self.jsonBool(dict["analyticsShowCategory"]) { analyticsShowCategory = v }
+        if let v = Self.jsonBool(dict["analyticsShowTaskBinding"]) { analyticsShowTaskBinding = v }
+        if let v = Self.jsonBool(dict["analyticsShowRecentCards"]) { analyticsShowRecent = v }
+    }
+
+    /// `JSONSerialization` yields `NSNumber` for ints/bools — bridge safely.
+    static func jsonInt(_ value: Any?) -> Int? {
+        if let i = value as? Int { return i }
+        if let n = value as? NSNumber { return n.intValue }
+        if let s = value as? String, let i = Int(s) { return i }
+        return nil
+    }
+
+    static func jsonBool(_ value: Any?) -> Bool? {
+        if let b = value as? Bool { return b }
+        if let n = value as? NSNumber { return n.boolValue }
+        if let s = value as? String {
+            switch s.lowercased() {
+            case "true", "1", "yes": return true
+            case "false", "0", "no": return false
+            default: return nil
+            }
+        }
+        return nil
     }
     
     @discardableResult

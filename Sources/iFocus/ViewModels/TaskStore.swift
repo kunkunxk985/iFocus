@@ -447,6 +447,73 @@ class TaskStore: ObservableObject {
         try? fm.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
+
+    /// Live storage directory (tasks / sessions / state). Used by backup export/import.
+    var storageDirectory: URL { appSupportDir }
+
+    /// Read raw file payloads for backup (empty Data if missing).
+    func backupFilePayloads() -> [String: Data] {
+        flushPendingSaves()
+        var result: [String: Data] = [:]
+        let fm = FileManager.default
+        let mapping: [(String, URL)] = [
+            (LocalBackup.tasksFileName, tasksFileURL),
+            (LocalBackup.sessionsFileName, sessionsFileURL),
+            (LocalBackup.stateFileName, stateFileURL),
+            (
+                LocalBackup.timerSessionFileName,
+                appSupportDir.appendingPathComponent(LocalBackup.timerSessionFileName)
+            )
+        ]
+        for (name, url) in mapping {
+            if fm.fileExists(atPath: url.path), let data = try? Data(contentsOf: url) {
+                result[name] = data
+            } else {
+                // Always include valid empty arrays / objects so restore is consistent.
+                switch name {
+                case LocalBackup.tasksFileName, LocalBackup.sessionsFileName:
+                    result[name] = Data("[]".utf8)
+                case LocalBackup.stateFileName:
+                    result[name] = Data("{}".utf8)
+                default:
+                    // A missing timer snapshot means there is no unfinished session.
+                    break
+                }
+            }
+        }
+        return result
+    }
+
+    /// Decode app-owned payloads before a restore touches live files.
+    static func validateBackupPayloads(in package: LocalBackup.Package) throws {
+        for name in package.presentDataFiles {
+            let url = package.directory.appendingPathComponent(name)
+            let data: Data
+            do {
+                data = try Data(contentsOf: url)
+            } catch {
+                throw LocalBackup.BackupError.readFailed(name)
+            }
+            do {
+                switch name {
+                case LocalBackup.tasksFileName:
+                    _ = try decodeList([FocusTask].self, from: data)
+                case LocalBackup.sessionsFileName:
+                    _ = try decodeList([FocusSession].self, from: data)
+                case LocalBackup.stateFileName:
+                    _ = try decodeList(PersistedState.self, from: data)
+                case LocalBackup.timerSessionFileName:
+                    let decoder = JSONDecoder()
+                    decoder.dateDecodingStrategy = .iso8601
+                    _ = try decoder.decode(TimerSessionSnapshot.self, from: data)
+                default:
+                    break
+                }
+            } catch {
+                throw LocalBackup.BackupError.invalidFile(name)
+            }
+        }
+    }
     
     private static func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
