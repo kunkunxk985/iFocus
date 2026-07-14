@@ -8,6 +8,7 @@ struct TimerView: View {
     @EnvironmentObject var settings: SettingsStore
     @EnvironmentObject var taskStore: TaskStore
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.windowLayout) private var stageLayout
     @EnvironmentObject var viewState: ContentViewState
     /// Local clock surface — driven by `clockTick`, not full store publishes.
     @State private var clockVersion: UInt = 0
@@ -61,39 +62,25 @@ struct TimerView: View {
     
     var body: some View {
         GeometryReader { geo in
-            // Layout budget for min height ~640 (content ≈ 640, minus chrome).
-            let h = geo.size.height
-            let w = geo.size.width
-            let compact = h < 680
-            let topChrome: CGFloat = 48
-            let stageScale = compact
-                ? 1
-                : min(1.5, max(1, min(w / 1200, h / 820)))
-            
-            let d = density.scale
-            // Reserve vertical space for fixed chrome so the ring absorbs the rest.
-            let reserved: CGFloat =
-                topChrome
-                + (compact ? 8 : 14) * d
-                + (immersiveMode ? 36 : (compact ? 64 : 78)) * d  // status (+ goal when not immersive)
-                + (immersiveMode ? 0 : (compact ? 14 : 18) * d)
-                + (immersiveMode ? 0 : (compact ? 68 : 78) * d)  // task block
-                + (immersiveMode ? 0 : (compact ? 10 : 14) * d)
-                + (immersiveMode ? 0 : (compact ? 56 : 72) * d)  // mode chips
-                + (compact ? 10 : 14) * d
-                + (compact ? 72 : 88) * d  // controls
-                + (compact ? 20 : 28) * d
-            
-            let ringBudget = max(160, h - reserved)
-            let ringSize = min(
-                (compact ? 240 : 300 * stageScale) * (immersiveMode ? 1.12 : 1),
-                min(ringBudget, w * (immersiveMode ? 0.55 : 0.48))
+            // Full-window fluid tokens come from ContentView; local geo is the stage bounds
+            // (sidebar already subtracted). Blend so widthFluid isn't stuck at 0 on the pane.
+            let layout = WindowLayoutMetrics(
+                width: max(geo.size.width, stageLayout.width * 0.78),
+                height: max(geo.size.height, stageLayout.height * 0.96),
+                densityScale: density.scale
             )
-            
+            // Ring must fit *this* pane, not the full window.
+            let ringSize = resolvedRingSize(
+                layout: layout,
+                stageWidth: geo.size.width,
+                stageHeight: geo.size.height,
+                immersive: immersiveMode
+            )
+
             ZStack {
                 ambientBackground
-                
-                VStack(spacing: (compact ? 12 : 16) * d) {
+
+                VStack(spacing: layout.sectionSpacing) {
                     HStack {
                         Spacer()
                         Button {
@@ -117,45 +104,20 @@ struct TimerView: View {
                         .buttonStyle(SoftScaleButtonStyle())
                         .help(immersiveMode ? "显示任务与模式" : "只保留环与控制")
                     }
-                    .padding(.top, topChrome + (compact ? 4 : 6))
-                    
+                    .padding(.top, layout.stageTopChrome)
+
                     if !immersiveMode {
-                        topMeta(compact: compact, scale: stageScale)
-                        
-                        taskFocusBlock(compact: compact)
-                            .frame(maxWidth: min(480 * stageScale, w - 40))
+                        topMeta(layout: layout)
+
+                        taskFocusBlock(layout: layout)
+                            .frame(maxWidth: min(layout.taskBlockMaxWidth, layout.width - layout.horizontalPadding * 2))
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     } else {
-                        // Minimal status pill only
-                        HStack(spacing: 8) {
-                            PulseDot(
-                                color: timerStore.isRunning
-                                    ? modeColor
-                                    : AppTheme.secondaryText(for: colorScheme),
-                                isActive: timerStore.isRunning,
-                                size: 7
-                            )
-                            Text(statusLabel)
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
-                                .foregroundColor(timerStore.isRunning ? modeColor : AppTheme.secondaryText(for: colorScheme))
-                            if timerStore.mode == .work, let title = taskStore.activeTask?.title {
-                                Text("·")
-                                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.5))
-                                Text(title)
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.85))
-                                    .lineLimit(1)
-                            }
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 5)
-                        .background(
-                            Capsule().fill(AppTheme.cardBackground(for: colorScheme).opacity(0.7))
-                        )
+                        immersiveStatusPill
                     }
-                    
-                    Spacer(minLength: 4)
-                    
+
+                    Spacer(minLength: max(2, layout.sectionSpacing * 0.35))
+
                     timerRing(size: ringSize)
                         .scaleEffect(
                             settings.decorativeMotionEnabled && celebratePulse
@@ -174,29 +136,33 @@ struct TimerView: View {
                             : .easeOut(duration: 0.2),
                             value: ringBreath
                         )
-                    
-                    Spacer(minLength: 4)
-                    
+
+                    Spacer(minLength: max(2, layout.sectionSpacing * 0.35))
+
                     if !immersiveMode {
-                        modeSwitcher(compact: compact)
-                            .frame(maxWidth: min(400 * stageScale, w - 48))
+                        modeSwitcher(layout: layout)
+                            .frame(maxWidth: min(layout.modeSwitcherMaxWidth, layout.width - layout.horizontalPadding * 2))
                             .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
-                    
-                    controlButtons(compact: compact, scale: stageScale)
-                    
-                    if !immersiveMode {
+
+                    controlButtons(layout: layout)
+
+                    if !immersiveMode, layout.showSessionHint {
                         sessionHint
-                            .padding(.bottom, compact ? 12 : 18)
+                            .padding(.bottom, lerp(10, 18, layout.eased))
+                            .transition(.opacity)
                     } else {
-                        Color.clear.frame(height: compact ? 12 : 18)
+                        Color.clear.frame(height: lerp(8, 16, layout.eased))
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.horizontal, (compact ? 20 : 28) * d)
+                .padding(.horizontal, layout.horizontalPadding)
                 .animation(.easeInOut(duration: 0.22), value: immersiveMode)
+                // Fluid resize — continuous, not snap-to-compact.
+                .animation(.easeInOut(duration: 0.18), value: layout.scale)
+                .animation(.easeInOut(duration: 0.18), value: ringSize)
             }
-            .frame(width: w, height: h)
+            .frame(width: layout.width, height: layout.height)
         }
         .ignoresSafeArea()
         .onReceive(timerStore.clockTick) { _ in
@@ -307,10 +273,70 @@ struct TimerView: View {
         .animation(.easeInOut(duration: quiet ? 0.2 : 0.4), value: timerStore.mode)
     }
     
+    // MARK: - Layout helpers
+
+    private func resolvedRingSize(
+        layout: WindowLayoutMetrics,
+        stageWidth: CGFloat,
+        stageHeight: CGFloat,
+        immersive: Bool
+    ) -> CGFloat {
+        let preferred = layout.ringPreferred * (immersive ? 1.12 : 1)
+        // Reserve chrome continuously so the ring always fits with room for controls.
+        let reserved =
+            layout.stageTopChrome
+            + layout.sectionSpacing
+            + (immersive ? 40 : lerp(88, 120, layout.eased)) // status + goal
+            + (immersive ? 0 : layout.sectionSpacing)
+            + (immersive ? 0 : lerp(56, 78, layout.eased)) // task
+            + layout.sectionSpacing * 0.7
+            + (immersive ? 0 : lerp(48, 68, layout.eased)) // mode
+            + layout.sectionSpacing * 0.7
+            + layout.controlMainSize + (layout.showControlLabels ? 22 : 4)
+            + (layout.showSessionHint && !immersive ? 28 : 12)
+            + layout.sectionSpacing
+        let budget = max(160, stageHeight - reserved)
+        let widthCap = stageWidth * (immersive ? 0.55 : layout.ringMaxFractionOfWidth)
+        return min(preferred, budget, widthCap)
+    }
+
+    private func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat {
+        a + (b - a) * min(1, max(0, t))
+    }
+
+    private var immersiveStatusPill: some View {
+        HStack(spacing: 8) {
+            PulseDot(
+                color: timerStore.isRunning
+                    ? modeColor
+                    : AppTheme.secondaryText(for: colorScheme),
+                isActive: timerStore.isRunning,
+                size: 7,
+                allowsPulse: settings.decorativeMotionEnabled
+            )
+            Text(statusLabel)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundColor(timerStore.isRunning ? modeColor : AppTheme.secondaryText(for: colorScheme))
+            if timerStore.mode == .work, let title = taskStore.activeTask?.title {
+                Text("·")
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.5))
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.85))
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .background(
+            Capsule().fill(AppTheme.cardBackground(for: colorScheme).opacity(0.7))
+        )
+    }
+
     // MARK: - Top meta
     
-    private func topMeta(compact: Bool, scale: CGFloat) -> some View {
-        VStack(spacing: compact ? 10 : 12) {
+    private func topMeta(layout: WindowLayoutMetrics) -> some View {
+        VStack(spacing: lerp(8, 12, layout.eased)) {
             // Status pill — centered
             HStack(spacing: 8) {
                 PulseDot(
@@ -318,9 +344,10 @@ struct TimerView: View {
                         ? modeColor
                         : AppTheme.secondaryText(for: colorScheme),
                     isActive: timerStore.isRunning,
-                    size: 7
+                    size: 7,
+                    allowsPulse: settings.decorativeMotionEnabled
                 )
-                
+
                 Text(statusLabel)
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundColor(timerStore.isRunning ? modeColor : AppTheme.secondaryText(for: colorScheme))
@@ -336,20 +363,20 @@ struct TimerView: View {
             .padding(.vertical, 5)
             .background(
                 Capsule(style: .continuous)
-                    .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.78 : 0.55))
+                    .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.7 : 0.48))
                     .overlay(
                         Capsule(style: .continuous)
                             .stroke(
                                 timerStore.isRunning
-                                ? modeColor.opacity(0.28)
-                                : AppTheme.separator(for: colorScheme),
+                                ? modeColor.opacity(0.18)
+                                : AppTheme.separatorLow(for: colorScheme),
                                 lineWidth: 1
                             )
                     )
             )
             
             // Goal card — single unified block (label + bar + count inside)
-            VStack(spacing: 10) {
+            VStack(spacing: lerp(8, 10, layout.eased)) {
                 HStack {
                     Text(goalProgress >= 1 ? "今日目标已达成" : "今日目标")
                         .font(.caption.weight(.semibold))
@@ -363,52 +390,46 @@ struct TimerView: View {
                 GeometryReader { g in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(AppTheme.separator(for: colorScheme))
+                            .fill(AppTheme.separatorLow(for: colorScheme))
                         Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: goalProgress >= 1
-                                    ? [Color(hex: "#10B981").opacity(0.85), Color(hex: "#10B981")]
-                                    : [modeColor.opacity(0.75), modeColor],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                            .fill(goalProgress >= 1 ? Color(hex: "#10B981") : modeColor)
                             .frame(width: max(goalProgress > 0 ? 6 : 0, g.size.width * goalProgress))
-                            .animation(.easeInOut(duration: 0.4), value: goalProgress)
+                            .animation(.easeInOut(duration: 0.35), value: goalProgress)
                     }
                 }
-                .frame(height: 6)
+                .frame(height: 5)
                 
-                // Long-break cycle: visual “4 tomatoes then long rest”
-                HStack(spacing: 8) {
-                    Text("长休息")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                    HStack(spacing: 5) {
-                        ForEach(0..<4, id: \.self) { index in
-                            Circle()
-                                .fill(index < longBreakProgress.done
-                                      ? AppTheme.accent
-                                      : AppTheme.separator(for: colorScheme))
-                                .frame(width: 8, height: 8)
+                if layout.showLongBreakRow {
+                    HStack(spacing: 8) {
+                        Text("长休息")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        HStack(spacing: 5) {
+                            ForEach(0..<4, id: \.self) { index in
+                                Circle()
+                                    .fill(index < longBreakProgress.done
+                                          ? AppTheme.accent
+                                          : AppTheme.separator(for: colorScheme))
+                                    .frame(width: 8, height: 8)
+                            }
                         }
+                        Spacer()
+                        Text(longBreakHintText)
+                            .font(.caption2.weight(.medium))
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                            .lineLimit(1)
                     }
-                    Spacer()
-                    Text(longBreakHintText)
-                        .font(.caption2.weight(.medium))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                        .lineLimit(1)
+                    .transition(.opacity)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .frame(maxWidth: 420 * scale)
+            .padding(.horizontal, 14)
+            .padding(.vertical, layout.goalCardPaddingV)
+            .frame(maxWidth: layout.goalCardMaxWidth)
             .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.82 : 0.55))
+                RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
+                    .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.7 : 0.45))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
                             .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
                     )
             )
@@ -481,7 +502,7 @@ struct TimerView: View {
     
     // MARK: - Task
     
-    private func taskFocusBlock(compact: Bool) -> some View {
+    private func taskFocusBlock(layout: WindowLayoutMetrics) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("专注任务")
                 .font(.caption.weight(.bold))
@@ -489,55 +510,61 @@ struct TimerView: View {
                 .padding(.horizontal, 4)
             
             if let task = taskStore.activeTask {
-                selectedTaskRow(task, compact: compact)
+                selectedTaskRow(task, layout: layout)
             } else {
-                emptyTaskPicker(compact: compact)
+                emptyTaskPicker(layout: layout)
             }
         }
     }
     
-    private func selectedTaskRow(_ task: FocusTask, compact: Bool) -> some View {
-        Menu {
+    private func selectedTaskRow(_ task: FocusTask, layout: WindowLayoutMetrics) -> some View {
+        let glyph = lerp(34, 42, layout.eased)
+        let titleSize = lerp(13.5, 15.5, layout.eased)
+        let pad = lerp(9, 13, layout.eased)
+        return Menu {
             taskMenuContent
         } label: {
             HStack(spacing: 12) {
-                categoryGlyph(task.category.icon, color: task.category.color, size: compact ? 36 : 40)
-                
+                categoryGlyph(task.category.icon, color: task.category.color, size: glyph)
+
                 VStack(alignment: .leading, spacing: 3) {
                     Text(task.title)
-                        .font(.system(size: compact ? 14 : 15, weight: .semibold))
+                        .font(.system(size: titleSize, weight: .semibold))
                         .foregroundColor(AppTheme.primaryText(for: colorScheme))
                         .lineLimit(1)
                     Text("\(task.category.rawValue) · \(task.completedPomodoros)/\(task.estimatedPomodoros) 番茄")
                         .font(.caption)
                         .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                 }
-                
+
                 Spacer(minLength: 6)
-                
+
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
-            .padding(compact ? 10 : 12)
+            .padding(pad)
             .background(taskBlockBackground(emphasized: true))
         }
         .menuStyle(.borderlessButton)
         .disabled(timerStore.isRunning)
         .opacity(timerStore.isRunning ? 0.85 : 1)
     }
-    
-    private func emptyTaskPicker(compact: Bool) -> some View {
+
+    private func emptyTaskPicker(layout: WindowLayoutMetrics) -> some View {
         let items = taskStore.incompleteTasks
+        let glyph = lerp(36, 44, layout.eased)
+        let titleSize = lerp(14, 16, layout.eased)
+        let pad = lerp(10, 14, layout.eased)
         return Menu {
             taskMenuContent
         } label: {
             HStack(spacing: 12) {
-                categoryGlyph("list.bullet", color: modeColor, size: compact ? 38 : 44)
-                
+                categoryGlyph("list.bullet", color: modeColor, size: glyph)
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(items.isEmpty ? "暂无任务 · 可自由专注" : "选择要专注的任务")
-                        .font(.system(size: compact ? 14.5 : 16, weight: .semibold))
+                        .font(.system(size: titleSize, weight: .semibold))
                         .foregroundColor(AppTheme.primaryText(for: colorScheme))
                     Text(items.isEmpty
                          ? "空格即可开始，或先去清单添加"
@@ -546,9 +573,9 @@ struct TimerView: View {
                         .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                         .lineLimit(1)
                 }
-                
+
                 Spacer(minLength: 8)
-                
+
                 Text(items.isEmpty ? "开始" : "选择任务")
                     .font(.subheadline.weight(.bold))
                     .foregroundColor(.white)
@@ -557,10 +584,10 @@ struct TimerView: View {
                     .background(
                         Capsule()
                             .fill(modeColor)
-                            .shadow(color: modeColor.opacity(0.35), radius: 8, y: 3)
+                            .shadow(color: modeColor.opacity(0.22), radius: 6, y: 2)
                     )
             }
-            .padding(compact ? 12 : 14)
+            .padding(pad)
             .background(taskBlockBackground(emphasized: false))
         }
         .menuStyle(.borderlessButton)
@@ -611,21 +638,27 @@ struct TimerView: View {
     }
     
     private func taskBlockBackground(emphasized: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.95 : 0.75))
+        RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
+            .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.96 : 0.78))
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
                     .stroke(
-                        emphasized ? modeColor.opacity(0.5) : modeColor.opacity(0.32),
-                        style: StrokeStyle(lineWidth: emphasized ? 1.5 : 1.25, dash: emphasized ? [] : [5, 4])
+                        emphasized
+                        ? modeColor.opacity(0.28)
+                        : AppTheme.separator(for: colorScheme),
+                        lineWidth: 1
                     )
             )
-            .shadow(color: modeColor.opacity(emphasized ? 0.12 : 0.10), radius: 14, y: 5)
+            .shadow(
+                color: AppTheme.softShadow(for: colorScheme).opacity(emphasized ? 1 : 0.5),
+                radius: emphasized ? 8 : 4,
+                y: emphasized ? 2 : 1
+            )
     }
     
     // MARK: - Mode
     
-    private func modeSwitcher(compact: Bool) -> some View {
+    private func modeSwitcher(layout: WindowLayoutMetrics) -> some View {
         HStack(spacing: 8) {
             ForEach(TimerMode.allCases) { mode in
                 let selected = timerStore.mode == mode
@@ -634,22 +667,21 @@ struct TimerView: View {
                 } label: {
                     VStack(spacing: 2) {
                         Text(mode.rawValue)
-                            .font(.system(size: compact ? 12 : 13, weight: .semibold))
+                            .font(.system(size: layout.modeChipFont, weight: .semibold))
                         Text(durationLabel(for: mode))
                             .font(.system(size: 10, weight: .medium).monospacedDigit())
                             .opacity(0.75)
                     }
                     .foregroundColor(selected ? .white : AppTheme.primaryText(for: colorScheme))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, compact ? 8 : 10)
+                    .padding(.vertical, layout.modeChipVerticalPadding)
                     .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(selected ? mode.accent : AppTheme.cardBackground(for: colorScheme).opacity(0.75))
-                            .shadow(color: selected ? mode.accent.opacity(0.28) : .clear, radius: 8, y: 3)
+                        RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
+                            .fill(selected ? mode.accent : AppTheme.cardBackground(for: colorScheme).opacity(0.7))
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(selected ? Color.clear : AppTheme.separator(for: colorScheme), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
+                            .stroke(selected ? Color.clear : AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
                     )
                 }
                 .buttonStyle(SoftScaleButtonStyle())
@@ -701,18 +733,21 @@ struct TimerView: View {
             Circle()
                 .trim(from: 0, to: CGFloat(min(max(progress, 0.001), 1)))
                 .stroke(
-                    AngularGradient(
+                    // Quiet default: solid arc. Gradient only with decorative motion.
+                    motion
+                    ? AnyShapeStyle(AngularGradient(
                         colors: [modeColor.opacity(0.55), modeColor, modeColor.opacity(0.85)],
                         center: .center
-                    ),
+                    ))
+                    : AnyShapeStyle(modeColor),
                     style: StrokeStyle(lineWidth: line, lineCap: .round)
                 )
                 .frame(width: size, height: size)
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 0.9), value: progress)
                 .shadow(
-                    color: modeColor.opacity(timerStore.isRunning ? (motion ? 0.35 : 0.18) : 0.12),
-                    radius: timerStore.isRunning ? (motion ? 14 : 8) : 6,
+                    color: modeColor.opacity(timerStore.isRunning ? (motion ? 0.28 : 0.10) : 0.06),
+                    radius: timerStore.isRunning ? (motion ? 12 : 5) : 3,
                     y: 0
                 )
             
@@ -732,16 +767,17 @@ struct TimerView: View {
     
     // MARK: - Controls
     
-    private func controlButtons(compact: Bool, scale: CGFloat) -> some View {
-        let controlScale = min(1.25, scale)
-        let main: CGFloat = (compact ? 64 : 72) * controlScale
-        let side: CGFloat = (compact ? 44 : 50) * controlScale
-        
-        return HStack(spacing: (compact ? 24 : 30) * controlScale) {
+    private func controlButtons(layout: WindowLayoutMetrics) -> some View {
+        let main = layout.controlMainSize
+        let side = layout.controlSideSize
+        let showLabels = layout.showControlLabels
+
+        return HStack(spacing: layout.controlSpacing) {
             controlCircle(
                 systemName: "forward.end.fill",
                 title: "跳过",
                 size: side,
+                showTitle: showLabels,
                 tint: AppTheme.secondaryText(for: colorScheme),
                 fill: AppTheme.cardBackground(for: colorScheme).opacity(0.75)
             ) {
@@ -749,7 +785,7 @@ struct TimerView: View {
             }
             .keyboardShortcut(.rightArrow, modifiers: [.command])
             .help("立即跳过当前段 (⌘→)")
-            
+
             Button {
                 requestStartOrToggle()
             } label: {
@@ -761,16 +797,16 @@ struct TimerView: View {
                             .scaleEffect(playInvite ? 1.06 : 0.98)
                             .opacity(playInvite ? 0.2 : 0.45)
                     }
-                    
+
                     Circle()
                         .fill(modeColor)
                         .frame(width: main, height: main)
                         .shadow(
-                            color: modeColor.opacity(settings.decorativeMotionEnabled ? 0.35 : 0.18),
-                            radius: settings.decorativeMotionEnabled ? 12 : 6,
-                            y: 4
+                            color: modeColor.opacity(settings.decorativeMotionEnabled ? 0.28 : 0.12),
+                            radius: settings.decorativeMotionEnabled ? 10 : 4,
+                            y: 3
                         )
-                    
+
                     Image(systemName: timerStore.isRunning ? "pause.fill" : "play.fill")
                         .font(.system(size: main * 0.34, weight: .bold))
                         .foregroundColor(.white)
@@ -780,11 +816,12 @@ struct TimerView: View {
             .buttonStyle(SoftScaleButtonStyle())
             .keyboardShortcut(.space, modifiers: [])
             .help(timerStore.isRunning ? "暂停 (空格)" : "开始 (空格)")
-            
+
             controlCircle(
                 systemName: "arrow.clockwise",
                 title: "重置",
                 size: side,
+                showTitle: showLabels,
                 tint: AppTheme.secondaryText(for: colorScheme),
                 fill: AppTheme.cardBackground(for: colorScheme).opacity(0.75)
             ) {
@@ -821,6 +858,7 @@ struct TimerView: View {
         systemName: String,
         title: String,
         size: CGFloat,
+        showTitle: Bool = true,
         tint: Color,
         fill: Color,
         action: @escaping () -> Void
@@ -836,9 +874,11 @@ struct TimerView: View {
                         .font(.system(size: size * 0.32, weight: .semibold))
                         .foregroundColor(tint)
                 }
-                Text(title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(tint)
+                if showTitle {
+                    Text(title)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(tint)
+                }
             }
         }
         .buttonStyle(.plain)

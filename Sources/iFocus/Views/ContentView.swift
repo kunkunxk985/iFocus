@@ -41,7 +41,10 @@ struct ContentView: View {
 
     private func sidebarWidth(for availableWidth: CGFloat) -> CGFloat {
         if sidebarCollapsed { return AppTheme.collapsedSidebarWidth }
-        return min(252, max(216, availableWidth * 0.10))
+        // Fluid sidebar: narrower on small stages, roomier when wide.
+        let fluid = min(1, max(0, (availableWidth - WindowLayoutMetrics.minimum.width)
+                               / max(1, WindowLayoutMetrics.reference.width - WindowLayoutMetrics.minimum.width)))
+        return 208 + fluid * 44 // 208…252
     }
 
     private var smartItems: [SidebarItem] {
@@ -73,6 +76,11 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geometry in
+            let layout = WindowLayoutMetrics(
+                width: geometry.size.width,
+                height: geometry.size.height,
+                densityScale: settings.uiDensity.scale
+            )
             ZStack(alignment: .topLeading) {
                 AppTheme.contentBackground(for: colorScheme)
                     .ignoresSafeArea()
@@ -83,8 +91,10 @@ struct ContentView: View {
                         .animation(.easeInOut(duration: 0.2), value: sidebarCollapsed)
 
                     detailPane
+                        .environment(\.windowLayout, layout)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(.easeInOut(duration: 0.16), value: layout.scale)
 
                 if isAccountMenuPresented {
                     // Tap-catcher above content, below popover — dismiss account menu.
@@ -483,7 +493,12 @@ struct ContentView: View {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: icon)
                         .font(.system(size: sidebarCollapsed ? 14 : 13, weight: .semibold))
-                        .foregroundColor(isSelected ? AppTheme.accent : (emphasizeRunning ? AppTheme.accent : tint))
+                        .foregroundColor(
+                            isSelected || emphasizeRunning
+                            ? AppTheme.accent
+                            // Whisper of smart-list color — not full chroma when idle.
+                            : tint.opacity(colorScheme == .light ? 0.48 : 0.55)
+                        )
                         .frame(width: sidebarCollapsed ? 22 : 20, height: sidebarCollapsed ? 22 : 20)
                     if sidebarCollapsed, let badge, !badge.isEmpty {
                         Circle()
@@ -853,6 +868,7 @@ private struct FloatingFocusPill: View {
     @EnvironmentObject var timerStore: TimerStore
     @EnvironmentObject var taskStore: TaskStore
     @EnvironmentObject var viewState: ContentViewState
+    @EnvironmentObject var settings: SettingsStore
     @Environment(\.colorScheme) private var colorScheme
     @State private var clockVersion: UInt = 0
     
@@ -865,9 +881,10 @@ private struct FloatingFocusPill: View {
                     PulseDot(
                         color: timerStore.mode.accent,
                         isActive: timerStore.isRunning,
-                        size: 8
+                        size: 8,
+                        allowsPulse: settings.decorativeMotionEnabled
                     )
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text(primaryTitle)
                             .font(.subheadline.weight(.semibold))
@@ -893,16 +910,14 @@ private struct FloatingFocusPill: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 30, height: 30)
-                    .background(
-                        Circle().fill(
-                            LinearGradient(
-                                colors: [timerStore.mode.accent, timerStore.mode.accent.opacity(0.85)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                    .background(Circle().fill(timerStore.mode.accent))
+                    .shadow(
+                        color: settings.decorativeMotionEnabled && timerStore.isRunning
+                            ? timerStore.mode.accent.opacity(0.28)
+                            : .clear,
+                        radius: 5,
+                        y: 2
                     )
-                    .shadow(color: timerStore.mode.accent.opacity(0.35), radius: 6, y: 2)
             }
             .buttonStyle(SoftScaleButtonStyle())
             .help(timerStore.isRunning ? "暂停" : "继续")
@@ -915,11 +930,11 @@ private struct FloatingFocusPill: View {
                 .overlay(
                     Capsule(style: .continuous)
                         .stroke(
-                            timerStore.mode.accent.opacity(timerStore.isRunning ? 0.26 : 0.12),
+                            timerStore.mode.accent.opacity(timerStore.isRunning ? 0.20 : 0.10),
                             lineWidth: 1
                         )
                 )
-                .shadow(color: AppTheme.softShadow(for: colorScheme), radius: 14, y: 5)
+                .shadow(color: AppTheme.softShadow(for: colorScheme), radius: 12, y: 4)
         )
         .padding(.horizontal, 28)
         .padding(.bottom, 22)
@@ -1147,17 +1162,12 @@ private struct OnboardingOverlay: View {
 /// Soft hover / press for account menu rows (no hard system flash).
 private struct AccountMenuRowButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
-    
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(
-                        configuration.isPressed
-                        ? AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.16)
-                        : Color.clear
-                    )
-            )
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+        SoftHoverButtonBody(
+            configuration: configuration,
+            cornerRadius: 10,
+            colorScheme: colorScheme
+        )
     }
 }

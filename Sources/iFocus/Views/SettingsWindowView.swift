@@ -3,6 +3,7 @@ import AppKit
 
 private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
     case general = "常规"
+    case data = "数据"
     case appearance = "外观"
     case analytics = "统计"
     case timer = "计时"
@@ -14,6 +15,7 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .general: return "gearshape.fill"
+        case .data: return "externaldrive.fill"
         case .appearance: return "paintpalette.fill"
         case .analytics: return "chart.bar.fill"
         case .timer: return "timer"
@@ -25,6 +27,7 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .general: return "版本信息与窗口说明"
+        case .data: return "本地备份与恢复"
         case .appearance: return "主题与界面外观"
         case .analytics: return "数据页展示哪些卡片"
         case .timer: return "番茄节奏与每日目标"
@@ -36,8 +39,10 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
 
 struct SettingsWindowView: View {
     @State private var selectedPanel: SettingsWindowPanel = .general
+    @State private var pendingRestorePreview: DataBackupService.RestorePreview?
     @EnvironmentObject var settings: SettingsStore
     @EnvironmentObject var timerStore: TimerStore
+    @EnvironmentObject var taskStore: TaskStore
     @Environment(\.colorScheme) private var colorScheme
 
     private let sidebarWidth: CGFloat = 200
@@ -58,6 +63,7 @@ struct SettingsWindowView: View {
                     Group {
                         switch selectedPanel {
                         case .general: generalPanel
+                        case .data: dataPanel
                         case .appearance: appearancePanel
                         case .analytics: analyticsPanel
                         case .timer: timerPanel
@@ -81,6 +87,16 @@ struct SettingsWindowView: View {
         }
         .onDisappear {
             settings.sanitizeUsername()
+        }
+        .alert(item: $pendingRestorePreview) { preview in
+            Alert(
+                title: Text("确认覆盖当前数据？"),
+                message: Text(restorePreviewMessage(preview)),
+                primaryButton: .destructive(Text("覆盖并恢复")) {
+                    performRestore(preview)
+                },
+                secondaryButton: .cancel(Text("取消"))
+            )
         }
     }
 
@@ -169,12 +185,16 @@ struct SettingsWindowView: View {
     private var panelHeader: some View {
         HStack(spacing: 14) {
             Image(systemName: selectedPanel.icon)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(AppTheme.accent)
-                .frame(width: 40, height: 40)
+                .frame(width: 36, height: 36)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(AppTheme.accent.opacity(0.12))
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(AppTheme.elevatedBackground(for: colorScheme))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
                 )
 
             VStack(alignment: .leading, spacing: 3) {
@@ -256,6 +276,7 @@ struct SettingsWindowView: View {
                     settingsCard("窗口", icon: "macwindow") {
                         SettingsLine(title: "最小尺寸", value: "\(Int(AppWindowMetrics.minimum.width)) × \(Int(AppWindowMetrics.minimum.height))")
                         SettingsLine(title: "默认尺寸", value: "\(Int(AppWindowMetrics.defaultSize.width)) × \(Int(AppWindowMetrics.defaultSize.height))")
+                        SettingsLine(title: "布局", value: "随窗口连续缩放（非固定紧凑）")
                         SettingsLine(title: "平台", value: "macOS 13+")
                     }
                     settingsCard("数据路径", icon: "internaldrive.fill") {
@@ -274,6 +295,130 @@ struct SettingsWindowView: View {
         }
     }
     
+    private var dataPanel: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            settingsCard("说明", icon: "info.circle") {
+                Text("数据只在本机。导出为普通文件夹，可拷到 U 盘、云盘或另一台 Mac。导入会先自动备份当前数据，再覆盖。")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            settingsCard("备份", icon: "square.and.arrow.up") {
+                Text("包含任务、专注记录、应用状态、偏好设置、头像与未完成计时。")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                Button {
+                    switch DataBackupService.exportBackup(
+                        taskStore: taskStore,
+                        settings: settings,
+                        appVersion: AppVersion.short
+                    ) {
+                    case .success(let url):
+                        settings.backupFeedback = "已导出到 \(url.lastPathComponent)"
+                    case .failure(let error):
+                        if error is DataBackupService.CancelError {
+                            settings.backupFeedback = nil
+                        } else {
+                            settings.backupFeedback = error.localizedDescription
+                        }
+                    }
+                } label: {
+                    Text("导出备份…")
+                        .font(.subheadline.weight(.medium))
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+            }
+
+            settingsCard("恢复", icon: "square.and.arrow.down") {
+                Text("选择此前导出的备份文件夹。导入前会自动把当前数据拷到数据目录的 pre-import 子文件夹。")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    switch DataBackupService.selectBackup() {
+                    case .success(let preview):
+                        settings.backupFeedback = nil
+                        pendingRestorePreview = preview
+                    case .failure(let error):
+                        if error is DataBackupService.CancelError {
+                            settings.backupFeedback = nil
+                        } else {
+                            settings.backupFeedback = error.localizedDescription
+                        }
+                    }
+                } label: {
+                    Text("从备份恢复…")
+                        .font(.subheadline.weight(.medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+            }
+
+            settingsCard("本机位置", icon: "folder") {
+                Button("在 Finder 中显示数据文件夹") {
+                    settings.openDataFolderInFinder()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            if let feedback = settings.backupFeedback {
+                Text(feedback)
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func restorePreviewMessage(_ preview: DataBackupService.RestorePreview) -> String {
+        let summary = preview.summary
+        var lines = [
+            "备份：\(preview.package.directory.lastPathComponent)",
+            "任务：\(summary.taskCount.map(String.init) ?? "未包含")",
+            "专注记录：\(summary.sessionCount.map(String.init) ?? "未包含")"
+        ]
+        if let manifest = preview.package.manifest {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "zh_CN")
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            lines.append("导出版本：\(manifest.appVersion) · \(formatter.string(from: manifest.exportedAt))")
+        }
+        var extras: [String] = []
+        if summary.hasSettings { extras.append("偏好设置") }
+        if summary.hasAvatar { extras.append("头像") }
+        if summary.hasTimerSession { extras.append("未完成计时") }
+        if !extras.isEmpty {
+            lines.append("附加内容：\(extras.joined(separator: "、"))")
+        }
+        if timerStore.isSessionInProgress {
+            lines.append("当前计时会停止；恢复失败时会保留为可恢复会话。")
+        }
+        lines.append("当前数据会先保存到 pre-import 文件夹，恢复失败将自动回滚。")
+        return lines.joined(separator: "\n")
+    }
+
+    private func performRestore(_ preview: DataBackupService.RestorePreview) {
+        switch DataBackupService.restoreBackup(
+            preview,
+            taskStore: taskStore,
+            settings: settings,
+            timerStore: timerStore
+        ) {
+        case .success(let outcome):
+            let summary = outcome.preview.summary
+            let tasks = summary.taskCount.map { "\($0) 任务" } ?? "任务未变"
+            let sessions = summary.sessionCount.map { "\($0) 条记录" } ?? "记录未变"
+            settings.backupFeedback = "已恢复（\(tasks) · \(sessions)）；原数据：\(outcome.safetySnapshotDirectory.lastPathComponent)"
+            timerStore.updateStatsFromHistory(taskStore: taskStore)
+        case .failure(let error):
+            settings.backupFeedback = "恢复未完成：\(error.localizedDescription)；当前数据已保留。"
+        }
+    }
+
     private var shortcutsPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             settingsCard("开始 / 暂停（可自定义）", icon: "keyboard") {
@@ -362,58 +507,21 @@ struct SettingsWindowView: View {
     private var analyticsPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             settingsCard("展示说明", icon: "info.circle") {
-                Text("在「数据统计」页按需显示卡片。默认只开核心几项，保持界面安静；需要时再打开细节。")
-                    .font(.caption)
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            
-            settingsCard("核心", icon: "square.grid.2x2") {
-                analyticsToggle("一句话洞察", subtitle: "顶部的智能摘要", isOn: $settings.analyticsShowInsight)
-                Divider().opacity(0.5)
-                analyticsToggle("今日概览", subtitle: "番茄 / 时长 / 连续天数", isOn: $settings.analyticsShowKPI)
-                Divider().opacity(0.5)
-                analyticsToggle("今日目标", subtitle: "目标完成环", isOn: $settings.analyticsShowGoal)
-                Divider().opacity(0.5)
-                analyticsToggle("趋势图", subtitle: "范围内每日专注趋势", isOn: $settings.analyticsShowTrend)
-            }
-            
-            settingsCard("细节", icon: "rectangle.split.3x1") {
-                analyticsToggle("今日时间线", subtitle: "仅「今日」范围有效", isOn: $settings.analyticsShowTimeline)
-                Divider().opacity(0.5)
-                analyticsToggle("时段分布", subtitle: "仅「今日」范围有效", isOn: $settings.analyticsShowHours)
-                Divider().opacity(0.5)
-                analyticsToggle("分类 Top", subtitle: "按分类统计专注", isOn: $settings.analyticsShowCategory)
-                Divider().opacity(0.5)
-                analyticsToggle("任务绑定", subtitle: "自由专注占比", isOn: $settings.analyticsShowTaskBinding)
-                Divider().opacity(0.5)
-                analyticsToggle("最近记录", subtitle: "近期专注会话列表", isOn: $settings.analyticsShowRecent)
-            }
-            
-            settingsCard("预设", icon: "arrow.counterclockwise") {
-                Button {
-                    settings.resetAnalyticsCardVisibilityToQuietDefaults()
-                } label: {
-                    Text("恢复安静默认（核心开、细节关）")
-                        .font(.subheadline.weight(.medium))
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("选择「数据统计」页展示哪些卡片。默认安静布局；也可在统计页右上角「自定义」即时调整。")
+                        .font(.caption)
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("不做拖拽排序：卡片顺序固定，读起来更省心。")
+                        .font(.caption)
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
+            }
+
+            settingsCard("卡片开关", icon: "square.grid.2x2") {
+                AnalyticsCardVisibilityEditor(settings: settings, style: .full)
             }
         }
-    }
-    
-    private func analyticsToggle(_ title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline.weight(.medium))
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-            }
-        }
-        .toggleStyle(.switch)
     }
     
     private var appearancePanel: some View {
@@ -511,7 +619,7 @@ struct SettingsWindowView: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.radioGroup)
-                Text("仅图标最省空间；进度适合盯每日目标。")
+                Text("左键开始/暂停，右键打开菜单。仅图标最省空间；进度适合盯每日目标。")
                     .font(.caption)
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
@@ -717,25 +825,26 @@ struct SettingsWindowView: View {
                 content()
             }
         }
-        .padding(18)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(SoftCardBackground(cornerRadius: 16))
+        .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
     }
 }
 
 // Shared with main window metrics (keep settings text in sync).
 enum AppWindowMetrics {
-    static let minimum = CGSize(width: 1100, height: 720)
-    static let defaultSize = CGSize(width: 1280, height: 820)
+    /// Keep in sync with `WindowLayoutMetrics.minimum` / `defaultSize`.
+    static let minimum = WindowLayoutMetrics.minimum
+    static let defaultSize = WindowLayoutMetrics.defaultSize
 }
 
 enum AppVersion {
-    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.7.3 / 77).
+    /// Keep fallbacks in sync with `Scripts/package_app.sh` (1.9.3 / 85).
     static var short: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.7.3"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.9.3"
     }
     static var build: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "77"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "85"
     }
 }
 
