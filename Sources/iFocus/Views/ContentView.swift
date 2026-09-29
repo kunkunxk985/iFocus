@@ -67,9 +67,9 @@ struct ContentView: View {
                 .animation(.easeInOut(duration: 0.16), value: layout.scale)
 
                 if sidebarCollapsed {
-                    HStack(alignment: .center, spacing: 8) {
+                    HStack(alignment: .center, spacing: 14) {
                         Color.clear
-                            .frame(width: 52, height: 1)
+                            .frame(width: 58, height: 1)
                             .accessibilityHidden(true)
                         SidebarToggleButton(sidebarCollapsed: $sidebarCollapsed)
                         Spacer(minLength: 0)
@@ -77,7 +77,7 @@ struct ContentView: View {
                     .padding(.leading, AppTheme.trafficLightLeading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(height: AppTheme.topHeaderHeight)
-                    .offset(y: -AppTheme.titlebarControlOffset)
+                    .offset(y: -AppTheme.collapsedTitlebarControlOffset)
                     .zIndex(25)
                     .transition(
                         .asymmetric(

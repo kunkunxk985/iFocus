@@ -386,8 +386,8 @@ extension AppearanceMode {
 /// solid “white strip” between the traffic lights and the app surface.
 enum WindowChrome {
     private static let trafficLightOriginalFrames = NSMapTable<NSButton, NSValue>.weakToStrongObjects()
-    private static let trafficLightOffsetX: CGFloat = 4
-    private static let trafficLightOffsetY: CGFloat = 3
+    private static let trafficLightOffsetX: CGFloat = 8
+    private static let trafficLightOffsetY: CGFloat = 6
 
     static func applyAll() {
         for window in NSApplication.shared.windows where isManagedAppWindow(window) {
