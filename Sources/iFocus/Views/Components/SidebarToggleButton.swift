@@ -1,9 +1,6 @@
 import SwiftUI
 
-/// Sleek, native macOS toolbar button for collapsing and expanding the sidebar.
-///
-/// The AppKit window owns the native traffic lights; each host applies a small
-/// layout offset to align this control with the system titlebar baseline.
+/// Sleek macOS toolbar button paired with the custom glass traffic-light cluster.
 struct SidebarToggleButton: View {
     @Binding var sidebarCollapsed: Bool
     @Environment(\.colorScheme) private var colorScheme

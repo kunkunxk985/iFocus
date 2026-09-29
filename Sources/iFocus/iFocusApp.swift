@@ -450,7 +450,8 @@ enum WindowChrome {
         // Clear opaque titlebar container fills that can still flash as a white strip.
         clearTitlebarOpaqueFills(in: window)
         
-        // Gemini-style hiddenInset traffic lights (not flush to the corner).
+        // Main-window traffic lights are rendered as a SwiftUI glass cluster;
+        // Settings keeps AppKit's native controls.
         layoutTrafficLights(in: window)
         // System often re-applies default frames after style changes — reassert once.
         DispatchQueue.main.async {
@@ -467,13 +468,13 @@ enum WindowChrome {
         return window.title == "iFocus" || window.title == "设置"
     }
     
-    /// Keep AppKit's real traffic lights visible so macOS owns their placement,
-    /// hover glyphs, inactive appearance, and accessibility behavior.
+    /// Use the custom glass cluster in the main window; keep native traffic lights in Settings.
     static func layoutTrafficLights(in window: NSWindow) {
         guard isManagedAppWindow(window) else { return }
-        window.standardWindowButton(.closeButton)?.isHidden = false
-        window.standardWindowButton(.miniaturizeButton)?.isHidden = false
-        window.standardWindowButton(.zoomButton)?.isHidden = false
+        let keepsNativeControls = window.title == "设置"
+        window.standardWindowButton(.closeButton)?.isHidden = !keepsNativeControls
+        window.standardWindowButton(.miniaturizeButton)?.isHidden = !keepsNativeControls
+        window.standardWindowButton(.zoomButton)?.isHidden = !keepsNativeControls
     }
     
     /// Reaffirm native traffic-light visibility on managed windows after layout or appearance changes.

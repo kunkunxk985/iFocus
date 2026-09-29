@@ -136,9 +136,13 @@ struct AppSidebar: View {
         .padding(.vertical, 8)
     }
 
-    /// AppKit draws the native lights in the transparent titlebar; this row keeps the sidebar toggle aligned.
+    /// Glass window controls and the sidebar toggle share the transparent titlebar band.
     private var sidebarHeader: some View {
         HStack(alignment: .center, spacing: 0) {
+            TrafficLightsView(windowTitle: "iFocus")
+                .padding(.leading, AppTheme.trafficLightLeading - AppTheme.spaceS)
+                .offset(y: -AppTheme.spaceM)
+
             Spacer(minLength: 0)
 
             SidebarToggleButton(sidebarCollapsed: $sidebarCollapsed)

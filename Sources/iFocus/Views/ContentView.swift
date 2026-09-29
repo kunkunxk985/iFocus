@@ -67,10 +67,8 @@ struct ContentView: View {
                 .animation(.easeInOut(duration: 0.16), value: layout.scale)
 
                 if sidebarCollapsed {
-                    HStack(alignment: .center, spacing: 14) {
-                        Color.clear
-                            .frame(width: 58, height: 1)
-                            .accessibilityHidden(true)
+                    HStack(alignment: .center, spacing: 8) {
+                        TrafficLightsView(windowTitle: "iFocus", showsBackdrop: false)
                         SidebarToggleButton(sidebarCollapsed: $sidebarCollapsed)
                         Spacer(minLength: 0)
                     }
@@ -80,7 +78,7 @@ struct ContentView: View {
                     .background(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 17, style: .continuous)
                             .fill(Color.clear)
-                            .frame(width: 132, height: 36)
+                            .frame(width: 154, height: 36)
                             .adaptiveGlass(cornerRadius: 17, fallbackMaterial: .titlebar)
                             .padding(.leading, 7)
                     }
