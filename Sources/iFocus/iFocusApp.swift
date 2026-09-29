@@ -385,6 +385,10 @@ extension AppearanceMode {
 /// Content draws edge-to-edge under a transparent titlebar so there is no
 /// solid “white strip” between the traffic lights and the app surface.
 enum WindowChrome {
+    private static let trafficLightOriginalFrames = NSMapTable<NSButton, NSValue>.weakToStrongObjects()
+    private static let trafficLightOffsetX: CGFloat = 4
+    private static let trafficLightOffsetY: CGFloat = 3
+
     static func applyAll() {
         for window in NSApplication.shared.windows where isManagedAppWindow(window) {
             apply(to: window)
@@ -476,13 +480,25 @@ enum WindowChrome {
             window.standardWindowButton(.miniaturizeButton),
             window.standardWindowButton(.zoomButton)
         ]
-        for button in buttons {
-            button?.isHidden = false
-            if #available(macOS 26.0, *) {
-                button?.alphaValue = 0.78
+        for case let button? in buttons {
+            button.isHidden = false
+            let originalFrame: NSRect
+            if let cachedFrame = trafficLightOriginalFrames.object(forKey: button) {
+                originalFrame = cachedFrame.rectValue
             } else {
-                button?.alphaValue = 1
+                originalFrame = button.frame
+                trafficLightOriginalFrames.setObject(NSValue(rect: originalFrame), forKey: button)
             }
+
+            var frame = originalFrame
+            if #available(macOS 26.0, *) {
+                button.alphaValue = 0.78
+                frame.origin.x += trafficLightOffsetX
+                frame.origin.y += (button.superview?.isFlipped == true ? trafficLightOffsetY : -trafficLightOffsetY)
+            } else {
+                button.alphaValue = 1
+            }
+            button.frame = frame
         }
     }
     
