@@ -120,7 +120,7 @@ final class WindowStateTests: XCTestCase {
         XCTAssertEqual(AppTheme.trafficLightLeading, 18)
         XCTAssertEqual(AppTheme.topHeaderHeight, 48)
         XCTAssertEqual(AppTheme.titlebarControlOffset, 13)
-        XCTAssertEqual(AppTheme.collapsedTitlebarControlOffset, 6)
+        XCTAssertEqual(AppTheme.collapsedTitlebarControlOffset, 4)
     }
 
     func testViewMenuSanitizerRemovesDuplicateItems() {
