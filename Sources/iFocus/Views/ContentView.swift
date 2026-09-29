@@ -84,7 +84,7 @@ struct ContentView: View {
                             .adaptiveGlass(cornerRadius: 17, fallbackMaterial: .titlebar)
                             .padding(.leading, 7)
                     }
-                    .offset(y: -AppTheme.spaceM)
+                    .offset(y: -AppTheme.titlebarControlOffset)
                     .zIndex(25)
                     .transition(
                         .asymmetric(

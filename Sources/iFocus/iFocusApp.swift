@@ -467,12 +467,23 @@ enum WindowChrome {
         return window.title == "iFocus" || window.title == "设置"
     }
     
-    /// Keep native traffic lights visible on all managed windows so macOS renders its current style.
+    /// Keep AppKit's native traffic lights and actions, with a subtle translucent finish
+    /// on recent macOS releases to sit naturally in the Liquid Glass titlebar.
     static func layoutTrafficLights(in window: NSWindow) {
         guard isManagedAppWindow(window) else { return }
-        window.standardWindowButton(.closeButton)?.isHidden = false
-        window.standardWindowButton(.miniaturizeButton)?.isHidden = false
-        window.standardWindowButton(.zoomButton)?.isHidden = false
+        let buttons = [
+            window.standardWindowButton(.closeButton),
+            window.standardWindowButton(.miniaturizeButton),
+            window.standardWindowButton(.zoomButton)
+        ]
+        for button in buttons {
+            button?.isHidden = false
+            if #available(macOS 26.0, *) {
+                button?.alphaValue = 0.78
+            } else {
+                button?.alphaValue = 1
+            }
+        }
     }
     
     /// Reaffirm native traffic-light visibility on managed windows after layout or appearance changes.

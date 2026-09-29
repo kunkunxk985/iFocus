@@ -309,6 +309,7 @@ extension AppTheme {
     static let trafficLightLeading: CGFloat = 18
     static let trafficLightTop: CGFloat = 18
     static let trafficLightSpacing: CGFloat = 8
+    static let titlebarControlOffset: CGFloat = 13
 }
 
 // MARK: - Depth & Multi-Layer Shadow System

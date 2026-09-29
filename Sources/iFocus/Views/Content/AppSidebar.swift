@@ -143,7 +143,7 @@ struct AppSidebar: View {
 
             SidebarToggleButton(sidebarCollapsed: $sidebarCollapsed)
                 .padding(.trailing, 12)
-                .offset(y: -AppTheme.spaceM)
+                .offset(y: -AppTheme.titlebarControlOffset)
         }
         .frame(height: AppTheme.topHeaderHeight)
     }
