@@ -9,17 +9,20 @@ struct SidebarAccountStatusLine: View {
     @State private var clockVersion: UInt = 0
     
     var body: some View {
-        Text(statusText)
-            .font(.caption2)
-            .foregroundColor(timerStore.isRunning ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme))
-            .lineLimit(1)
-            .onReceive(timerStore.clockTick) { _ in
-                guard timerStore.isRunning else { return }
-                clockVersion &+= 1
-            }
+        if let statusText {
+            Text(statusText)
+                .font(.caption2)
+                .foregroundColor(timerStore.isRunning ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme))
+                .lineLimit(1)
+                .onReceive(timerStore.clockTick) { _ in
+                    guard timerStore.isRunning else { return }
+                    clockVersion &+= 1
+                }
+        }
     }
     
-    private var statusText: String {
+    /// Idle shows the name only. A live timer is status, not a caption.
+    private var statusText: String? {
         _ = clockVersion
         if timerStore.isRunning {
             return "专注中 · \(timerStore.timeString)"
@@ -27,100 +30,7 @@ struct SidebarAccountStatusLine: View {
         if timerStore.isSessionInProgress {
             return "已暂停 · \(timerStore.timeString)"
         }
-        return "本地账号"
-    }
-}
-
-/// Floating timer pill — owns its own clock subscription so task list / sheets stay calm.
-struct FloatingFocusPill: View {
-    @EnvironmentObject var timerStore: TimerStore
-    @EnvironmentObject var taskStore: TaskStore
-    @EnvironmentObject var viewState: ContentViewState
-    @EnvironmentObject var settings: SettingsStore
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var clockVersion: UInt = 0
-    
-    var body: some View {
-        HStack(spacing: 14) {
-            Button {
-                viewState.selectedScreen = .timer
-            } label: {
-                HStack(spacing: 10) {
-                    PulseDot(
-                        color: timerStore.mode.accent,
-                        isActive: timerStore.isRunning,
-                        size: 8,
-                        allowsPulse: settings.decorativeMotionEnabled
-                    )
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(primaryTitle)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                            .lineLimit(1)
-                        Text(timerStore.isRunning ? "进行中" : "已暂停")
-                            .font(.caption2)
-                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .buttonStyle(.plain)
-
-            Text(liveTimeString)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .monospacedDigit()
-                .foregroundColor(timerStore.mode.accent)
-                .frame(minWidth: 56, alignment: .center)
-
-            Button(action: { timerStore.toggle() }) {
-                Image(systemName: timerStore.isRunning ? "pause.fill" : "play.fill")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(timerStore.mode.accent))
-                    .shadow(
-                        color: settings.decorativeMotionEnabled && timerStore.isRunning
-                            ? timerStore.mode.accent.opacity(0.28)
-                            : .clear,
-                        radius: 5,
-                        y: 2
-                    )
-            }
-            .buttonStyle(SoftScaleButtonStyle())
-            .help(timerStore.isRunning ? "暂停" : "继续")
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .background(
-            Capsule(style: .continuous)
-                .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.97))
-                .overlay(
-                    Capsule(style: .continuous)
-                        .stroke(
-                            timerStore.mode.accent.opacity(timerStore.isRunning ? 0.20 : 0.10),
-                            lineWidth: 1
-                        )
-                )
-                .shadow(color: AppTheme.softShadow(for: colorScheme), radius: 12, y: 4)
-        )
-        .padding(.horizontal, 28)
-        .padding(.bottom, 22)
-        .onReceive(timerStore.clockTick) { _ in
-            clockVersion &+= 1
-        }
-    }
-    
-    private var liveTimeString: String {
-        _ = clockVersion
-        return timerStore.timeString
-    }
-    
-    private var primaryTitle: String {
-        if timerStore.mode == .work {
-            return taskStore.activeTask?.title ?? "自由专注"
-        }
-        return timerStore.mode.rawValue
+        return nil
     }
 }
 
@@ -359,14 +269,10 @@ struct AccountMenuPopover: View {
                     username: settings.username.isEmpty ? "小番茄" : settings.username,
                     size: 36
                 )
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(settings.username.isEmpty ? "小番茄" : settings.username)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                    Text("本地账号")
-                        .font(.caption)
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                }
+                Text(settings.username.isEmpty ? "小番茄" : settings.username)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                    .lineLimit(1)
             }
             .padding(.horizontal, 4)
             .padding(.bottom, 6)

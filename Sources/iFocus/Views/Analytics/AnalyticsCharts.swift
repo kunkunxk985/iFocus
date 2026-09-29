@@ -17,16 +17,27 @@ struct TodayTimelineView: View {
                 let h = max(36, geo.size.height - 18)
                 ZStack(alignment: .topLeading) {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(AppTheme.separator(for: colorScheme).opacity(0.35))
+                        .fill(AppTheme.separatorLow(for: colorScheme).opacity(colorScheme == .light ? 0.7 : 0.3))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.5)
+                        )
                         .frame(height: h)
                     
                     ForEach(blocks) { block in
                         let prog = block.dayProgress()
                         let x = prog.start * w
-                        let width = max(8, (prog.end - prog.start) * w)
+                        let width = max(10, (prog.end - prog.start) * w)
                         VStack(spacing: 2) {
                             RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(AppTheme.accent.opacity(0.85))
+                                .fill(
+                                    LinearGradient(
+                                        colors: [AppTheme.accent, AppTheme.accent.opacity(0.85)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .shadow(color: AppTheme.accent.opacity(0.25), radius: 2, x: 0, y: 1)
                                 .frame(width: width, height: h * 0.72)
                                 .overlay(
                                     Text(block.title)
@@ -46,7 +57,7 @@ struct TodayTimelineView: View {
             HStack {
                 ForEach(hourLabels, id: \.self) { hour in
                     Text(String(format: "%02d", hour == 24 ? 24 : hour))
-                        .font(.system(size: 9, weight: .medium).monospacedDigit())
+                        .font(.system(size: 9, weight: .medium, design: .rounded).monospacedDigit())
                         .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                     if hour < 24 { Spacer(minLength: 0) }
                 }
@@ -59,6 +70,7 @@ struct TodayTimelineView: View {
 
 struct TodayHourChart: View {
     let hourMinutes: [Int]
+    @Environment(\.colorScheme) private var colorScheme
     
     private struct HourBar: Identifiable {
         let id: Int
@@ -82,8 +94,14 @@ struct TodayHourChart: View {
                 x: .value("时", item.id),
                 y: .value("分钟", item.minutes)
             )
-            .foregroundStyle(AppTheme.accent.gradient)
-            .cornerRadius(2)
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [AppTheme.accent, AppTheme.accent.opacity(0.68)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .cornerRadius(3, style: .continuous)
         }
         .chartXScale(domain: 0...23)
         .chartXAxis {
@@ -91,13 +109,24 @@ struct TodayHourChart: View {
                 AxisValueLabel {
                     if let h = value.as(Int.self) {
                         Text(String(format: "%02d", h))
-                            .font(.caption2)
+                            .font(.system(size: 9, weight: .medium, design: .rounded).monospacedDigit())
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                     }
                 }
             }
         }
         .chartYAxis {
-            AxisMarks(position: .leading)
+            AxisMarks(position: .leading) { value in
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+                    .foregroundStyle(AppTheme.separatorLow(for: colorScheme))
+                AxisValueLabel {
+                    if let m = value.as(Int.self) {
+                        Text("\(m)")
+                            .font(.system(size: 9, weight: .medium, design: .rounded).monospacedDigit())
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.8))
+                    }
+                }
+            }
         }
     }
 }
@@ -110,9 +139,29 @@ struct WeeklyFocusChart: View {
     @Environment(\.colorScheme) private var colorScheme
 
     struct DayFocus: Identifiable {
-        var id: String { label }
+        var id: Date { date }
+        let date: Date
         let label: String
         let minutes: Int
+    }
+
+    private var strideDays: Int {
+        if dayCount >= 45 {
+            return 10
+        } else if dayCount >= 20 {
+            return 5
+        } else if dayCount >= 10 {
+            return 2
+        } else {
+            return 1
+        }
+    }
+
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = dayCount > 14 ? "M/d" : "MM-dd"
+        formatter.locale = Locale(identifier: "zh_CN")
+        return formatter
     }
 
     private var chartData: [DayFocus] {
@@ -120,38 +169,57 @@ struct WeeklyFocusChart: View {
         var data: [DayFocus] = []
         let today = calendar.startOfDay(for: Date())
         let days = max(1, min(dayCount, 62))
-
-        let formatter = DateFormatter()
-        formatter.dateFormat = days > 14 ? "M/d" : "MM-dd"
-        formatter.locale = Locale(identifier: "zh_CN")
+        let formatter = dateFormatter
 
         for i in (0..<days).reversed() {
             guard let day = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
             let daySessions = sessions.filter { calendar.isDate($0.timestamp, inSameDayAs: day) }
             let mins = daySessions.reduce(0) { $0 + $1.durationMinutes }
-            data.append(DayFocus(label: formatter.string(from: day), minutes: mins))
+            data.append(DayFocus(date: day, label: formatter.string(from: day), minutes: mins))
         }
         return data
     }
 
     var body: some View {
+        let formatter = dateFormatter
         Chart {
             ForEach(chartData) { item in
                 BarMark(
-                    x: .value("日期", item.label),
+                    x: .value("日期", item.date, unit: .day),
                     y: .value("分钟", item.minutes)
                 )
-                .foregroundStyle(AppTheme.accent.gradient)
-                .cornerRadius(4)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [AppTheme.accent, AppTheme.accent.opacity(0.72)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .cornerRadius(4, style: .continuous)
             }
         }
         .chartYAxis {
-            AxisMarks(position: .leading)
+            AxisMarks(position: .leading) { value in
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+                    .foregroundStyle(AppTheme.separatorLow(for: colorScheme))
+                AxisValueLabel {
+                    if let m = value.as(Int.self) {
+                        Text("\(m)")
+                            .font(.system(size: 9, weight: .medium, design: .rounded).monospacedDigit())
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.8))
+                    }
+                }
+            }
         }
         .chartXAxis {
-            AxisMarks { _ in
-                AxisValueLabel()
-                    .font(.caption2)
+            AxisMarks(values: .stride(by: .day, count: strideDays)) { value in
+                AxisValueLabel {
+                    if let d = value.as(Date.self) {
+                        Text(formatter.string(from: d))
+                            .font(.system(size: 9.5, weight: .medium, design: .rounded))
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    }
+                }
             }
         }
     }

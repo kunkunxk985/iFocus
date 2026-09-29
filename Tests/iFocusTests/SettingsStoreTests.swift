@@ -32,6 +32,7 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.longBreakMinutes, 15)
         XCTAssertEqual(store.dailyGoal, 8)
         XCTAssertTrue(store.soundEnabled)
+        XCTAssertTrue(store.hapticsEnabled)
         XCTAssertEqual(store.username, "小番茄")
         XCTAssertEqual(store.appearance, .system)
     }
@@ -178,5 +179,28 @@ final class SettingsStoreTests: XCTestCase {
         store.removeAvatar()
         XCTAssertNil(store.avatarPath)
         XCTAssertFalse(FileManager.default.fileExists(atPath: savedPath))
+    }
+
+    func testHapticsSettingPersistenceAndExportImport() throws {
+        let store = SettingsStore(defaults: defaults, applyAppearance: false)
+        XCTAssertTrue(store.hapticsEnabled)
+        store.hapticsEnabled = false
+        XCTAssertFalse(defaults.bool(forKey: "hapticsEnabled"))
+
+        let data = try store.exportSettingsJSON()
+        let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(dict?["hapticsEnabled"] as? Bool, false)
+
+        let newStore = SettingsStore(defaults: defaults, applyAppearance: false)
+        XCTAssertFalse(newStore.hapticsEnabled)
+    }
+
+    func testAppHapticsTracksSettings() {
+        UserDefaults.standard.set(true, forKey: "hapticsEnabled")
+        XCTAssertTrue(AppHaptics.isEnabled)
+        UserDefaults.standard.set(false, forKey: "hapticsEnabled")
+        XCTAssertFalse(AppHaptics.isEnabled)
+        UserDefaults.standard.removeObject(forKey: "hapticsEnabled")
+        XCTAssertTrue(AppHaptics.isEnabled)
     }
 }

@@ -70,6 +70,7 @@ class SettingsStore: ObservableObject {
         static let strictMode = "strictMode"
         static let soundEnabled = "soundEnabled"
         static let soundName = "soundName"
+        static let hapticsEnabled = "hapticsEnabled"
         static let dailyGoal = "dailyGoal"
         static let appearance = "appearance"
         static let username = "username"
@@ -160,6 +161,9 @@ class SettingsStore: ObservableObject {
     }
     @Published var soundName: NSSound.Name {
         didSet { defaults.set(soundName as String, forKey: Key.soundName) }
+    }
+    @Published var hapticsEnabled: Bool {
+        didSet { defaults.set(hapticsEnabled, forKey: Key.hapticsEnabled) }
     }
     @Published var dailyGoal: Int {
         didSet {
@@ -394,7 +398,7 @@ class SettingsStore: ObservableObject {
     static let backupPreferenceKeys: [String] = [
         Key.workMinutes, Key.shortBreakMinutes, Key.longBreakMinutes,
         Key.autoStartBreaks, Key.autoStartWork, Key.longBreakEvery, Key.strictMode,
-        Key.soundEnabled, Key.soundName, Key.dailyGoal,
+        Key.soundEnabled, Key.soundName, Key.hapticsEnabled, Key.dailyGoal,
         Key.appearance, Key.username, Key.avatarColorIndex,
         Key.toggleShortcut, Key.showFocusModeHint,
         Key.pauseReminderEnabled, Key.pauseReminderMinutes,
@@ -419,6 +423,7 @@ class SettingsStore: ObservableObject {
             Key.strictMode: strictMode,
             Key.soundEnabled: soundEnabled,
             Key.soundName: soundName as String,
+            Key.hapticsEnabled: hapticsEnabled,
             Key.dailyGoal: dailyGoal,
             Key.appearance: appearance.rawValue,
             Key.username: username,
@@ -466,6 +471,7 @@ class SettingsStore: ObservableObject {
         if let v = Self.jsonBool(dict["strictMode"]) { strictMode = v }
         if let v = Self.jsonBool(dict["soundEnabled"]) { soundEnabled = v }
         if let v = dict["soundName"] as? String { soundName = NSSound.Name(v) }
+        if let v = Self.jsonBool(dict[Key.hapticsEnabled]) { hapticsEnabled = v }
         if let v = Self.jsonInt(dict["dailyGoal"]) { dailyGoal = Self.clampDailyGoal(v) }
         if let v = dict["appearance"] as? String, let mode = AppearanceMode(rawValue: v) {
             appearance = mode
@@ -600,6 +606,7 @@ class SettingsStore: ObservableObject {
         self.soundEnabled      = defaults.object(forKey: Key.soundEnabled) as? Bool ?? true
         let saved = defaults.string(forKey: Key.soundName) ?? "Glass"
         self.soundName         = NSSound.Name(saved)
+        self.hapticsEnabled    = defaults.object(forKey: Key.hapticsEnabled) as? Bool ?? true
         self.dailyGoal         = Self.clampDailyGoal(Self.intValue(for: Key.dailyGoal, in: defaults, defaultValue: 8))
         
         let savedAppearance = defaults.string(forKey: Key.appearance) ?? AppearanceMode.system.rawValue

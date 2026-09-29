@@ -1,4 +1,5 @@
 import SwiftUI
+import iFocusCore
 
 /// In-list refinement chips (orthogonal to sidebar smart lists).
 private enum TaskListChip: Hashable, Identifiable {
@@ -43,8 +44,12 @@ struct TaskListView: View {
     @State private var isSelecting = false
     @State private var selectedIDs: Set<UUID> = []
     @State private var activeChip: TaskListChip = .all
+    @FocusState private var isQuickAddFocused: Bool
+    @FocusState private var isSearchFocused: Bool
+    @State private var searchText = ""
     /// nil = follow current list defaults; else force today / tomorrow / inbox.
     @State private var dueOverride: TaskStore.DueOverride? = nil
+    @Namespace private var filterAnimation
     
     private func filter(for screen: AppScreen) -> TaskStore.TaskFilter {
         switch screen {
@@ -70,18 +75,10 @@ struct TaskListView: View {
         }
     }
     
-    /// One quiet line under the title — no four mini-cards above the list.
+    /// Count only. Empty lists don't get an explanatory caption under the title.
     private var listSubtitle: String {
         if baseTasks.isEmpty {
-            switch viewState.selectedScreen {
-            case .todayTask: return "今天到期与逾期"
-            case .tomorrowTask: return "提前安排明天"
-            case .weekTask: return "近 7 天（不含今明）"
-            case .plannedTask: return "带截止日期的未完成"
-            case .completedTask: return "已完成的回顾"
-            case .inboxTask: return "随手记下，稍后再排期"
-            default: return ""
-            }
+            return ""
         }
         // One quiet line — count only (no multi-metric stack under the title).
         if viewState.selectedScreen == .completedTask {
@@ -125,7 +122,14 @@ struct TaskListView: View {
     }
     
     private var currentTasks: [FocusTask] {
-        baseTasks.filter { matchesChip($0) }
+        baseTasks.filter { matchesChip($0) && matchesSearch($0) }
+    }
+
+    private func matchesSearch(_ task: FocusTask) -> Bool {
+        TaskSearch.matches(
+            searchText,
+            in: [task.title, task.notes, task.category.rawValue, task.linkURL, task.recurrence.rawValue]
+        )
     }
     
     private var incompleteFiltered: [FocusTask] {
@@ -202,16 +206,45 @@ struct TaskListView: View {
                     )
                     .overlay(alignment: .trailing) {
                         if !currentTasks.isEmpty {
-                            Button(isSelecting ? "完成" : "批量") {
-                                withAnimation(.easeOut(duration: 0.15)) {
+                            Button {
+                                withAnimation(AppTheme.springInteractive) {
                                     isSelecting.toggle()
                                     if !isSelecting { selectedIDs.removeAll() }
                                 }
+                            } label: {
+                                Text(isSelecting ? "完成" : "批量")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(isSelecting ? AppTheme.accent : AppTheme.primaryText(for: colorScheme))
+                                    .padding(.horizontal, 11)
+                                    .padding(.vertical, 5)
+                                    .background(
+                                        Capsule()
+                                            .fill(AppTheme.cardBackground(for: colorScheme))
+                                            .overlay(
+                                                Capsule()
+                                                    .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                                            )
+                                            .overlay(
+                                                Capsule()
+                                                    .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.75)
+                                            )
+                                            .multiLayerShadow(elevation: .row, colorScheme: colorScheme)
+                                    )
                             }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                            .padding(.top, 8)
+                            .buttonStyle(SpringScaleButtonStyle(pressedScale: 0.94))
+                            .padding(.top, 6)
                         }
+                    }
+
+                    if viewState.selectedScreen == .todayTask {
+                        TodayFocusOverview()
+                            .padding(.top, 14)
+                            .padding(.bottom, 2)
+                    }
+
+                    if !baseTasks.isEmpty || !searchText.isEmpty || isSearchFocused {
+                        taskSearchField
+                            .padding(.top, 12)
                     }
 
                     if !baseTasks.isEmpty {
@@ -231,7 +264,7 @@ struct TaskListView: View {
                     }
 
                     taskListSection
-                        .padding(.bottom, 48)
+                        .padding(.bottom, timerStore.isSessionInProgress ? 96 : 32)
                 }
             }
             .softScroll()
@@ -255,6 +288,8 @@ struct TaskListView: View {
             selectedIDs.removeAll()
             activeChip = .all
             dueOverride = nil
+            searchText = ""
+            isSearchFocused = false
         }
         .onChange(of: activeChip) { _ in
             // Avoid deleting off-screen tasks that were selected under another chip.
@@ -285,6 +320,95 @@ struct TaskListView: View {
             // Force full re-init of @State when reopening the same task after save.
             .id("\(session.id)-\(session.notes)-\(session.linkURL)-\(session.title)-\(session.priority)")
         }
+        .onExitCommand {
+            if isSelecting {
+                withAnimation(AppTheme.springInteractive) {
+                    isSelecting = false
+                    selectedIDs.removeAll()
+                }
+            } else if isSearchFocused {
+                isSearchFocused = false
+            } else if isQuickAddFocused {
+                isQuickAddFocused = false
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppNavigation.newTask)) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                isQuickAddFocused = true
+            }
+        }
+        .onAppear {
+            if viewState.shouldFocusQuickAdd {
+                viewState.shouldFocusQuickAdd = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    isQuickAddFocused = true
+                }
+            }
+        }
+        .onChange(of: viewState.shouldFocusQuickAdd) { shouldFocus in
+            if shouldFocus {
+                viewState.shouldFocusQuickAdd = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    isQuickAddFocused = true
+                }
+            }
+        }
+        .onAppear {
+            if viewState.shouldFocusSearch {
+                viewState.shouldFocusSearch = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    isSearchFocused = true
+                }
+            }
+        }
+        .onChange(of: viewState.shouldFocusSearch) { shouldFocus in
+            if shouldFocus {
+                viewState.shouldFocusSearch = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    isSearchFocused = true
+                }
+            }
+        }
+    }
+
+    private var taskSearchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.78))
+            TextField("搜索标题、备注、分类或链接", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12.5))
+                .focused($isSearchFocused)
+                .accessibilityLabel("搜索当前任务列表")
+                .accessibilityHint("搜索任务标题、备注、分类、链接和重复周期")
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                    isSearchFocused = true
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.72))
+                }
+                .buttonStyle(.plain)
+                .help("清除搜索")
+                .accessibilityLabel("清除搜索")
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 34)
+        .background(
+            Capsule().fill(AppTheme.cardBackground(for: colorScheme))
+        )
+        .overlay(
+            Capsule().strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+        )
+        .overlay(
+            Capsule().strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.75)
+        )
+        .frame(maxWidth: 360, alignment: .leading)
+        .help("搜索当前列表中的标题、备注、分类或链接（⌘F）")
     }
     
     private var filterChipsBar: some View {
@@ -292,29 +416,64 @@ struct TaskListView: View {
             HStack(spacing: 6) {
                 ForEach(availableChips) { chip in
                     let selected = activeChip == chip
+                    let count = chipCount(chip)
                     Button {
-                        withAnimation(.easeOut(duration: 0.15)) {
+                        withAnimation(AppTheme.springInteractive) {
                             activeChip = chip
                         }
                     } label: {
-                        Text(chip.title)
-                            .font(.caption.weight(selected ? .semibold : .medium))
-                            .foregroundColor(
-                                selected
-                                ? AppTheme.accent
-                                : AppTheme.secondaryText(for: colorScheme).opacity(0.9)
-                            )
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(
+                        HStack(spacing: 5) {
+                            Text(chip.title)
+                                .font(.system(size: 12, weight: selected ? .semibold : .medium))
+                                .foregroundColor(
+                                    selected
+                                    ? AppTheme.primaryText(for: colorScheme)
+                                    : AppTheme.secondaryText(for: colorScheme).opacity(0.85)
+                                )
+
+                            // Subtle count badge
+                            Text("\(count)")
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .foregroundColor(
+                                    selected
+                                    ? AppTheme.accent
+                                    : AppTheme.secondaryText(for: colorScheme).opacity(0.55)
+                                )
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1.5)
+                                .background(
+                                    Capsule()
+                                        .fill(
+                                            selected
+                                            ? AppTheme.accent.opacity(colorScheme == .light ? 0.12 : 0.20)
+                                            : AppTheme.elevatedBackground(for: colorScheme).opacity(0.6)
+                                        )
+                                )
+                        }
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                        .background {
+                            if selected {
                                 Capsule()
-                                    .fill(selected ? AppTheme.accent.opacity(0.10) : Color.clear)
-                            )
+                                    .fill(AppTheme.cardBackground(for: colorScheme))
+                                    .overlay(
+                                        Capsule()
+                                            .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                                    )
+                                    .overlay(
+                                        Capsule()
+                                            .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.75)
+                                    )
+                                    .multiLayerShadow(elevation: .row, colorScheme: colorScheme)
+                                    .matchedGeometryEffect(id: "activeFilterPill", in: filterAnimation)
+                            }
+                        }
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.vertical, 1)
+            .padding(.horizontal, 2)
+            .padding(.vertical, 3)
         }
     }
     
@@ -341,6 +500,10 @@ struct TaskListView: View {
                     .disabled(selectedIDs.isEmpty)
                 } else {
                     batchButton("完成") {
+                        AppHaptics.taskCompleted()
+                        if settings.soundEnabled {
+                            NSSound(named: "Pop")?.play()
+                        }
                         taskStore.completeTasks(ids: selectedIDs)
                         selectedIDs.removeAll()
                     }
@@ -369,6 +532,41 @@ struct TaskListView: View {
                 .disabled(selectedIDs.isEmpty)
                 Spacer()
             }
+
+            // Hidden keyboard shortcut triggers for batch mode
+            Group {
+                Button("") {
+                    selectedIDs = Set(currentTasks.map(\.id))
+                }
+                .keyboardShortcut("a", modifiers: .command)
+
+                Button("") {
+                    if !selectedIDs.isEmpty {
+                        taskStore.deleteTasks(ids: selectedIDs)
+                        selectedIDs.removeAll()
+                    }
+                }
+                .keyboardShortcut(.delete, modifiers: [])
+
+                Button("") {
+                    if !selectedIDs.isEmpty {
+                        taskStore.deleteTasks(ids: selectedIDs)
+                        selectedIDs.removeAll()
+                    }
+                }
+                .keyboardShortcut(.deleteForward, modifiers: [])
+
+                Button("") {
+                    withAnimation(AppTheme.springInteractive) {
+                        isSelecting = false
+                        selectedIDs.removeAll()
+                    }
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+            .opacity(0)
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
         }
         .padding(14)
         .background(SoftCardBackground(cornerRadius: 14))
@@ -391,169 +589,230 @@ struct TaskListView: View {
     private var addTaskSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                Image(systemName: "plus")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                    .padding(.leading, 4)
+                ZStack {
+                    Circle()
+                        .fill(
+                            taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            ? AppTheme.elevatedBackground(for: colorScheme)
+                            : AppTheme.accent.opacity(colorScheme == .light ? 0.12 : 0.20)
+                        )
+                        .frame(width: 26, height: 26)
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(
+                            taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            ? AppTheme.secondaryText(for: colorScheme).opacity(0.60)
+                            : AppTheme.accent
+                        )
+                }
+                .animation(AppTheme.springInteractive, value: taskStore.newTaskTitle.isEmpty)
                 
                 TextField(placeholderText, text: $taskStore.newTaskTitle)
                     .textFieldStyle(.plain)
-                    .font(.body)
+                    .font(.system(size: 13.5, weight: .regular))
+                    .focused($isQuickAddFocused)
+                    .onExitCommand {
+                        isQuickAddFocused = false
+                    }
                     .onSubmit { addTask(openEditor: false) }
                 
-                HStack(spacing: 6) {
-                    compactMenu(help: "番茄") {
-                        Picker("预估番茄", selection: $taskStore.newTaskPomodoros) {
-                            ForEach(1...8, id: \.self) { n in
-                                Text("\(n) 番茄").tag(n)
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: "timer")
-                            Text("\(taskStore.newTaskPomodoros)")
-                                .fontWeight(.bold)
-                        }
-                        .foregroundColor(AppTheme.accent)
-                    }
-                    
-                    compactMenu(help: "优先级") {
-                        Picker("优先级", selection: $taskStore.newTaskPriority) {
-                            ForEach(1...4, id: \.self) { n in
-                                Text("\(n) 级").tag(n)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: priorityIcon(taskStore.newTaskPriority))
-                            .foregroundColor(priorityColor(taskStore.newTaskPriority))
-                    }
-                    
-                    compactMenu(help: "分类") {
-                        Picker("分类", selection: $taskStore.newTaskCategory) {
-                            ForEach(TaskCategory.allCases) { cat in
-                                Text(cat.rawValue).tag(cat)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: taskStore.newTaskCategory.icon)
-                            .foregroundColor(taskStore.newTaskCategory.color)
-                    }
-                    
-                    compactMenu(help: "重复") {
-                        Picker("重复", selection: $taskStore.newTaskRecurrence) {
-                            ForEach(TaskRecurrence.allCases) { r in
-                                Text(r.rawValue).tag(r)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: taskStore.newTaskRecurrence == .none ? "repeat" : "repeat.circle.fill")
-                            .foregroundColor(
-                                taskStore.newTaskRecurrence == .none
-                                ? AppTheme.secondaryText(for: colorScheme)
-                                : Color(hex: "#8B5CF6")
-                            )
-                    }
+                HStack(spacing: 7) {
+                    taskOptionsMenu
                     
                     Button(action: { addTask(openEditor: false) }) {
-                        Text("添加")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 7)
-                            .background(
-                                Capsule().fill(
+                        HStack(spacing: 3.5) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("添加")
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 5.5)
+                        .background(
+                            Capsule()
+                                .fill(
                                     taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                     ? AppTheme.accent.opacity(0.35)
                                     : AppTheme.accent
                                 )
-                            )
+                        )
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.5)
+                        )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SpringScaleButtonStyle())
                     .disabled(taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .help("回车添加")
+                    .help("回车添加任务")
                     
                     Button(action: { addTask(openEditor: true) }) {
                         Image(systemName: "square.and.pencil")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(AppTheme.accent)
-                            .frame(width: 28, height: 28)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(
+                                taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                ? AppTheme.secondaryText(for: colorScheme).opacity(0.35)
+                                : AppTheme.accent
+                            )
+                            .frame(width: 26, height: 26)
                             .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(AppTheme.elevatedBackground(for: colorScheme))
+                                Circle()
+                                    .fill(AppTheme.elevatedBackground(for: colorScheme).opacity(0.75))
+                            )
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.75)
                             )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SpringScaleButtonStyle())
                     .disabled(taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .help("添加并编辑备注 / 链接")
+                    .help("添加并打开详情编辑 (备注/链接)")
                 }
             }
             
-            // Due chips — quiet secondary row (not a second card wall)
+            // Due date shortcuts — integrated secondary shelf
             HStack(spacing: 6) {
+                HStack(spacing: 3.5) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 9.5, weight: .medium))
+                    Text("日期")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.70))
+                .padding(.trailing, 2)
+
                 dueChip(title: "跟随列表", override: nil)
                 dueChip(title: "今天", override: .today)
                 dueChip(title: "明天", override: .tomorrow)
                 dueChip(title: "收集箱", override: .inbox)
                 Spacer(minLength: 0)
             }
-            .padding(.leading, 2)
+            .padding(.leading, 3)
+            .padding(.top, 2)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
-                .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.72 : 0.55))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
-                        .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                )
+            AppTheme.squircle(radius: AppTheme.radiusCard)
+                .fill(AppTheme.cardBackground(for: colorScheme))
+        )
+        .overlay(
+            AppTheme.squircle(radius: AppTheme.radiusCard)
+                .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+        )
+        .overlay(
+            AppTheme.squircle(radius: AppTheme.radiusCard)
+                .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 1)
+        )
+        .multiLayerShadow(elevation: .card, colorScheme: colorScheme)
+    }
+
+    private var taskOptionsMenu: some View {
+        Menu {
+            Section("任务属性") {
+                Picker("分类", selection: $taskStore.newTaskCategory) {
+                    ForEach(TaskCategory.allCases) { category in
+                        Text(category.rawValue).tag(category)
+                    }
+                }
+                Picker("优先级", selection: $taskStore.newTaskPriority) {
+                    ForEach(1...4, id: \.self) { priority in
+                        Text("\(priority) 级").tag(priority)
+                    }
+                }
+            }
+            Section("计划") {
+                Picker("预估番茄", selection: $taskStore.newTaskPomodoros) {
+                    ForEach(1...8, id: \.self) { count in
+                        Text("\(count) 番茄").tag(count)
+                    }
+                }
+                Picker("重复", selection: $taskStore.newTaskRecurrence) {
+                    ForEach(TaskRecurrence.allCases) { recurrence in
+                        Text(recurrence.rawValue).tag(recurrence)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                Image(systemName: taskStore.newTaskCategory.icon)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(taskStore.newTaskCategory.color)
+                Text(taskStore.newTaskCategory.rawValue)
+                    .lineLimit(1)
+                Image(systemName: "timer")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundColor(AppTheme.accent)
+                Text("\(taskStore.newTaskPomodoros)")
+                    .monospacedDigit()
+            }
+            .font(.system(size: 11.5, weight: .medium))
+            .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.86))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5.5)
+            .background(
+                Capsule().fill(AppTheme.elevatedBackground(for: colorScheme).opacity(0.78))
+            )
+            .overlay(
+                Capsule().strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.75)
+            )
+            .overlay(
+                Capsule().strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.5)
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .buttonStyle(SpringScaleButtonStyle(pressedScale: 0.96))
+        .help("设置新任务的分类、优先级、预估番茄数和重复周期")
+        .accessibilityLabel(
+            "任务属性设置：\(taskStore.newTaskCategory.rawValue)，\(taskStore.newTaskPriority) 级优先级，\(taskStore.newTaskPomodoros) 个番茄，\(taskStore.newTaskRecurrence.rawValue)"
         )
     }
     
     private func dueChip(title: String, override: TaskStore.DueOverride?) -> some View {
         let selected = dueOverride == override
         return Button {
-            withAnimation(.easeOut(duration: 0.12)) {
+            withAnimation(AppTheme.springInteractive) {
                 dueOverride = override
             }
         } label: {
-            Text(title)
-                .font(.caption2.weight(.semibold))
-                .foregroundColor(
-                    selected
-                    ? AppTheme.accent
-                    : AppTheme.secondaryText(for: colorScheme)
-                )
-                .padding(.horizontal, 9)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule().fill(
+            HStack(spacing: 3) {
+                if selected {
+                    Circle()
+                        .fill(AppTheme.accent)
+                        .frame(width: 4, height: 4)
+                }
+                Text(title)
+                    .font(.system(size: 11, weight: selected ? .semibold : .medium))
+                    .foregroundColor(
                         selected
-                        ? AppTheme.accent.opacity(0.12)
-                        : AppTheme.elevatedBackground(for: colorScheme).opacity(0.7)
+                        ? AppTheme.accent
+                        : AppTheme.secondaryText(for: colorScheme).opacity(0.85)
                     )
-                )
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 3.5)
+            .background(
+                Capsule()
+                    .fill(
+                        selected
+                        ? AppTheme.accent.opacity(colorScheme == .light ? 0.12 : 0.20)
+                        : AppTheme.elevatedBackground(for: colorScheme).opacity(0.6)
+                    )
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(
+                        selected
+                        ? AppTheme.accent.opacity(0.25)
+                        : AppTheme.separatorLow(for: colorScheme),
+                        lineWidth: 0.75
+                    )
+            )
         }
-        .buttonStyle(.plain)
-    }
-    
-    private func compactMenu<Label: View, Content: View>(
-        help: String,
-        @ViewBuilder content: () -> Content,
-        @ViewBuilder label: () -> Label
-    ) -> some View {
-        Menu { content() } label: {
-            label()
-                .font(.system(size: 13, weight: .semibold))
-                .frame(minWidth: 28, minHeight: 28)
-                .padding(.horizontal, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(AppTheme.elevatedBackground(for: colorScheme))
-                )
-        }
-        .menuStyle(.borderlessButton)
-        .help(help)
+        .buttonStyle(SpringScaleButtonStyle(pressedScale: 0.96))
     }
     
     private func addTask(openEditor: Bool) {
@@ -680,6 +939,20 @@ struct TaskListView: View {
         let isCompletedList = viewState.selectedScreen == .completedTask
         let isToday = viewState.selectedScreen == .todayTask
         let filteredEmpty = !baseTasks.isEmpty && currentTasks.isEmpty
+
+        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && currentTasks.isEmpty {
+            return AnyView(
+                AppEmptyState(
+                    systemImage: "magnifyingglass",
+                    title: "没有找到相关任务",
+                    subtitle: "试试其他关键词，或清除搜索继续浏览。",
+                    actionTitle: "清除搜索",
+                    action: { searchText = "" }
+                )
+                .padding(.vertical, 28)
+                .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
+            )
+        }
         
         if filteredEmpty {
             return AnyView(

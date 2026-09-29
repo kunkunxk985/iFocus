@@ -5,13 +5,27 @@ struct VisualEffectBackground: NSViewRepresentable {
     var material: NSVisualEffectView.Material
     var blendingMode: NSVisualEffectView.BlendingMode
     var state: NSVisualEffectView.State = .active
+    var isEmphasized: Bool = false
+
+    init(
+        material: NSVisualEffectView.Material = .sidebar,
+        blendingMode: NSVisualEffectView.BlendingMode = .behindWindow,
+        state: NSVisualEffectView.State = .active,
+        isEmphasized: Bool = false
+    ) {
+        self.material = material
+        self.blendingMode = blendingMode
+        self.state = state
+        self.isEmphasized = isEmphasized
+    }
 
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
         view.blendingMode = blendingMode
         view.state = state
-        view.isEmphasized = true
+        view.isEmphasized = isEmphasized
+        view.wantsLayer = true
         return view
     }
 
@@ -19,31 +33,109 @@ struct VisualEffectBackground: NSViewRepresentable {
         view.material = material
         view.blendingMode = blendingMode
         view.state = state
+        view.isEmphasized = isEmphasized
     }
 }
+
+extension VisualEffectBackground {
+    static var sidebar: VisualEffectBackground {
+        VisualEffectBackground(material: .sidebar, blendingMode: .behindWindow)
+    }
+
+    static var hudWindow: VisualEffectBackground {
+        VisualEffectBackground(material: .hudWindow, blendingMode: .withinWindow)
+    }
+
+    static var popover: VisualEffectBackground {
+        VisualEffectBackground(material: .popover, blendingMode: .withinWindow)
+    }
+
+    static var underWindowBackground: VisualEffectBackground {
+        VisualEffectBackground(material: .underWindowBackground, blendingMode: .behindWindow)
+    }
+
+    static var titlebar: VisualEffectBackground {
+        VisualEffectBackground(material: .titlebar, blendingMode: .withinWindow)
+    }
+
+    static var selection: VisualEffectBackground {
+        VisualEffectBackground(material: .selection, blendingMode: .withinWindow)
+    }
+
+    static var headerView: VisualEffectBackground {
+        VisualEffectBackground(material: .headerView, blendingMode: .withinWindow)
+    }
+
+    static var sheet: VisualEffectBackground {
+        VisualEffectBackground(material: .sheet, blendingMode: .withinWindow)
+    }
+
+    static var menu: VisualEffectBackground {
+        VisualEffectBackground(material: .menu, blendingMode: .withinWindow)
+    }
+}
+
+extension View {
+    /// Apply an authentic macOS NSVisualEffectView blur behind the view.
+    func visualEffect(
+        material: NSVisualEffectView.Material = .sidebar,
+        blendingMode: NSVisualEffectView.BlendingMode = .behindWindow,
+        state: NSVisualEffectView.State = .active,
+        isEmphasized: Bool = false
+    ) -> some View {
+        background(
+            VisualEffectBackground(
+                material: material,
+                blendingMode: blendingMode,
+                state: state,
+                isEmphasized: isEmphasized
+            )
+        )
+    }
+}
+
 
 struct CircularVisualEffectBackground: NSViewRepresentable {
     var material: NSVisualEffectView.Material
     var blendingMode: NSVisualEffectView.BlendingMode
     var state: NSVisualEffectView.State = .active
+    /// Emphasized material reads as solid. The sidebar toggle stays glassy.
+    var emphasized: Bool = false
 
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
+    func makeNSView(context: Context) -> CircularEffectView {
+        let view = CircularEffectView()
         view.material = material
         view.blendingMode = blendingMode
         view.state = state
-        view.isEmphasized = true
-        view.wantsLayer = true
-        view.layer?.masksToBounds = true
-        view.layer?.backgroundColor = NSColor.clear.cgColor
+        view.isEmphasized = emphasized
         return view
     }
 
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {
+    func updateNSView(_ view: CircularEffectView, context: Context) {
         view.material = material
         view.blendingMode = blendingMode
         view.state = state
-        view.layer?.cornerRadius = min(view.bounds.width, view.bounds.height) / 2
+        view.isEmphasized = emphasized
+    }
+}
+
+/// Sidebar-toggle glass. Corner radius is applied in `layout` so the first
+/// frame is already a circle, not a square that clips later.
+final class CircularEffectView: NSVisualEffectView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        layer?.backgroundColor = NSColor.clear.cgColor
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+    }
+
+    override func layout() {
+        super.layout()
+        layer?.cornerRadius = min(bounds.width, bounds.height) / 2
     }
 }
 

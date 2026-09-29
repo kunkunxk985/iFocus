@@ -12,37 +12,50 @@ struct ProfileStatsRow: View {
     
     var body: some View {
         HStack(spacing: 0) {
-            statColumn(value: "\(todayPomodoros)", label: "今日")
+            statColumn(icon: "timer", value: "\(todayPomodoros)", label: "今日番茄", tint: AppTheme.accent)
             statDivider
-            statColumn(value: FocusStats.formatTotalMinutes(totalMinutes), label: "累计")
+            statColumn(icon: "clock", value: FocusStats.formatTotalMinutes(totalMinutes), label: "累计专注", tint: Color(hex: "#3B82F6"))
             statDivider
-            statColumn(value: "\(totalPomodoros)", label: "番茄")
+            statColumn(icon: "checkmark.circle", value: "\(totalPomodoros)", label: "总完成", tint: Color(hex: "#10B981"))
             statDivider
-            statColumn(value: "\(currentStreak)", label: "连续")
+            statColumn(icon: "flame", value: "\(currentStreak)", label: "连续天数", tint: Color(hex: "#F59E0B"))
             statDivider
-            statColumn(value: "\(longestStreak)", label: "最长")
+            statColumn(icon: "trophy", value: "\(longestStreak)", label: "最高连续", tint: Color(hex: "#8B5CF6"))
         }
-        .padding(.vertical, 14)
+        .padding(.vertical, 16)
+        .padding(.horizontal, 8)
         .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
     }
     
-    private func statColumn(value: String, label: String) -> some View {
-        VStack(spacing: 3) {
+    private func statColumn(icon: String, value: String, label: String, tint: Color) -> some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundColor(tint)
+                Text(label)
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
+            }
             Text(value)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .font(.system(size: 17, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundColor(AppTheme.primaryText(for: colorScheme))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-            Text(label)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
         }
         .frame(maxWidth: .infinity)
     }
     
     private var statDivider: some View {
-        Rectangle()
-            .fill(AppTheme.separatorLow(for: colorScheme))
-            .frame(width: 1, height: 26)
+        LinearGradient(
+            colors: [
+                Color.clear,
+                AppTheme.separatorLow(for: colorScheme),
+                Color.clear
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(width: 1, height: 28)
     }
 }

@@ -393,4 +393,41 @@ final class TaskStoreTests: XCTestCase {
             .filter { $0.lastPathComponent.contains("corrupt-") && $0.pathExtension == "json" }
         XCTAssertFalse(backups.isEmpty, "corrupt focus_sessions.json should be copied to a backup")
     }
+
+    func testSafetySnapshotCreatesDailyBackup() throws {
+        let tasksURL = tempDir.appendingPathComponent("tasks.json")
+        try Data("[]".utf8).write(to: tasksURL)
+
+        _ = TaskStore(storageDirectory: tempDir)
+
+        let backupsDir = tempDir.appendingPathComponent("backups", isDirectory: true)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: backupsDir.path))
+        let items = try FileManager.default.contentsOfDirectory(at: backupsDir, includingPropertiesForKeys: nil)
+        let autoBackups = items.filter { $0.lastPathComponent.hasPrefix("auto_") }
+        XCTAssertEqual(autoBackups.count, 1)
+        let copiedTasks = autoBackups[0].appendingPathComponent("tasks.json")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: copiedTasks.path))
+    }
+
+    func testResilientArrayDecodingSalvagesGoodItems() throws {
+        let mixedSessionsJSON = """
+        [
+          {
+            "id": "AEE6D75B-1C7F-4C79-A1FD-8F501D6439D8",
+            "taskTitle": "有效番茄",
+            "durationMinutes": 25,
+            "timestamp": "2026-07-10T05:21:37Z"
+          },
+          {
+            "invalid_field": true
+          }
+        ]
+        """
+        let sessionsURL = tempDir.appendingPathComponent("focus_sessions.json")
+        try Data(mixedSessionsJSON.utf8).write(to: sessionsURL)
+
+        let store = TaskStore(storageDirectory: tempDir)
+        XCTAssertEqual(store.focusSessions.count, 1)
+        XCTAssertEqual(store.focusSessions[0].taskTitle, "有效番茄")
+    }
 }

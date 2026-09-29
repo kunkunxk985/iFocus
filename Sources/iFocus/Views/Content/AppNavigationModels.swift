@@ -7,6 +7,8 @@ enum AppScreen: Hashable {
 
 class ContentViewState: ObservableObject {
     @Published var selectedScreen: AppScreen? = .timer
+    @Published var shouldFocusQuickAdd: Bool = false
+    @Published var shouldFocusSearch: Bool = false
 }
 
 struct SidebarItem: Identifiable {
@@ -16,5 +18,5 @@ struct SidebarItem: Identifiable {
     let screen: AppScreen
     let badge: String?
     let icon: String
-    let tint: Color
+    var accentColor: Color? = nil
 }

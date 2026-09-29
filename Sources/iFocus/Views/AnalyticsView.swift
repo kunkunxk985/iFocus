@@ -9,8 +9,11 @@ struct AnalyticsView: View {
     @EnvironmentObject var taskStore: TaskStore
     @Environment(\.colorScheme) private var colorScheme
     @State private var clockVersion: UInt = 0
+    /// Dashboard numbers are minute-granularity. Ignore per-second ticks inside the same minute.
+    @State private var liveMinuteBucket: Int = -1
     @State private var range: AnalyticsTimeRange = .today
     @State private var showCustomizeCards = false
+    @Namespace private var rangeNamespace
 
     private var model: AnalyticsDashboardModel {
         _ = clockVersion
@@ -60,7 +63,7 @@ struct AnalyticsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, pad * density.scale)
                 .padding(.top, topInset)
-                .padding(.bottom, 28)
+                .padding(.bottom, timerStore.isSessionInProgress ? 96 : 32)
                 .animation(.easeInOut(duration: 0.2), value: settings.analyticsShowGoal)
                 .animation(.easeInOut(duration: 0.2), value: settings.analyticsShowRecent)
                 .animation(.easeInOut(duration: 0.2), value: settings.anyAnalyticsCardEnabled)
@@ -68,8 +71,14 @@ struct AnalyticsView: View {
             .softScroll()
             .frame(width: geo.size.width, height: contentH + topInset, alignment: .top)
         }
+        .onAppear {
+            liveMinuteBucket = timerStore.totalSecondsToday / 60
+        }
         .onReceive(timerStore.clockTick) { _ in
             guard timerStore.isRunning, timerStore.mode == .work else { return }
+            let bucket = timerStore.totalSecondsToday / 60
+            guard bucket != liveMinuteBucket else { return }
+            liveMinuteBucket = bucket
             clockVersion &+= 1
         }
     }
@@ -90,9 +99,13 @@ struct AnalyticsView: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
                             .frame(width: 28, height: 28)
-                            .contentShape(Rectangle())
+                            .background(
+                                Circle()
+                                    .fill(AppTheme.cardBackground(for: colorScheme))
+                                    .overlay(Circle().strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1))
+                            )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SpringScaleButtonStyle(pressedScale: 0.92))
                     .help("导出摘要（邮件或剪贴板）")
                 }
             }
@@ -178,9 +191,13 @@ struct AnalyticsView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
                 .frame(width: 28, height: 28)
-                .contentShape(Rectangle())
+                .background(
+                    Circle()
+                        .fill(AppTheme.cardBackground(for: colorScheme))
+                        .overlay(Circle().strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1))
+                )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SpringScaleButtonStyle(pressedScale: 0.92))
         .help("自定义展示卡片")
         .popover(isPresented: $showCustomizeCards, arrowEdge: .bottom) {
             AnalyticsCardVisibilityEditor(settings: settings, style: .compact)
@@ -220,25 +237,39 @@ struct AnalyticsView: View {
             ForEach(AnalyticsTimeRange.allCases) { r in
                 let selected = range == r
                 Button {
-                    withAnimation(.easeOut(duration: 0.18)) { range = r }
+                    withAnimation(AppTheme.springInteractive) { range = r }
                 } label: {
                     Text(r.rawValue)
-                        .font(.caption.weight(selected ? .semibold : .medium))
+                        .font(.system(size: 12, weight: selected ? .semibold : .medium))
                         .foregroundColor(
                             selected
-                            ? AppTheme.accent
-                            : AppTheme.secondaryText(for: colorScheme).opacity(0.9)
+                            ? AppTheme.primaryText(for: colorScheme)
+                            : AppTheme.secondaryText(for: colorScheme).opacity(0.85)
                         )
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(
-                            Capsule().fill(selected ? AppTheme.accent.opacity(0.10) : Color.clear)
-                        )
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background {
+                            if selected {
+                                Capsule()
+                                    .fill(AppTheme.cardBackground(for: colorScheme))
+                                    .overlay(
+                                        Capsule()
+                                            .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                                    )
+                                    .overlay(
+                                        Capsule()
+                                            .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.75)
+                                    )
+                                    .multiLayerShadow(elevation: .row, colorScheme: colorScheme)
+                                    .matchedGeometryEffect(id: "activeRangePill", in: rangeNamespace)
+                            }
+                        }
                 }
                 .buttonStyle(.plain)
             }
             Spacer(minLength: 0)
         }
+        .padding(.vertical, 2)
     }
 
     private func shareReport() {

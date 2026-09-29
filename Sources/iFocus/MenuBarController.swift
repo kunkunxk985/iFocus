@@ -13,6 +13,9 @@ final class MenuBarController: NSObject, ObservableObject {
     private var launchObserver: NSObjectProtocol?
     /// Built once; content refreshed on `menuNeedsUpdate` / store changes.
     private var statusMenu: NSMenu?
+    /// Menu-bar icon only changes with mode, activity, or accent — not every second.
+    private var cachedStatusIconKey: String?
+    private var cachedStatusIcon: NSImage?
 
     private enum MenuTag: Int {
         case countdown = 99
@@ -243,7 +246,7 @@ final class MenuBarController: NSObject, ObservableObject {
 
         timerStore.clockTick
             .receive(on: RunLoop.main)
-            .sink { [weak self] in self?.updateStatusItem() }
+            .sink { [weak self] in self?.updateStatusItem(refreshMenus: false) }
             .store(in: &cancellables)
 
         if let taskStore = timerStore.taskStore {
@@ -262,7 +265,9 @@ final class MenuBarController: NSObject, ObservableObject {
             .store(in: &cancellables)
     }
 
-    private func updateStatusItem() {
+    /// `refreshMenus` rebuilds task/mode submenus. The 1 Hz clock must not do that:
+    /// those menus do not change every second, and rebuilding them while the menu is open resets it.
+    private func updateStatusItem(refreshMenus: Bool = true) {
         guard let statusItem else { return }
 
         let time = timerStore.timeString
@@ -284,8 +289,9 @@ final class MenuBarController: NSObject, ObservableObject {
             pauseIdleTooLong: idleTooLong,
             displayStyle: displayStyle
         )
+        let emphasized = isRunning || inProgress
         if let button = statusItem.button {
-            button.image = Self.modeImage(for: mode, isRunning: isRunning || inProgress)
+            button.image = cachedStatusIcon(mode: mode, isActive: emphasized)
             if displayStyle == .iconOnly && !idleTooLong {
                 button.attributedTitle = NSAttributedString(string: "")
                 button.title = ""
@@ -323,17 +329,12 @@ final class MenuBarController: NSObject, ObservableObject {
         statusItem.button?.toolTip = tooltip
 
         guard let menu = statusMenu else { return }
-
-        if let countdownItem = menu.item(withTag: MenuTag.countdown.rawValue) {
-            let font = NSFont.monospacedDigitSystemFont(ofSize: 20, weight: .semibold)
-            countdownItem.attributedTitle = NSAttributedString(
-                string: "  \(time)",
-                attributes: [
-                    .font: font,
-                    .foregroundColor: Self.nsColor(for: mode, emphasized: isRunning || inProgress)
-                ]
-            )
+        // Detached menu items are not on screen. Refresh the countdown only while the menu is open,
+        // or when a real state change is about to show it.
+        if refreshMenus || statusItem.menu != nil {
+            updateCountdownItem(menu, time: time, mode: mode, emphasized: emphasized)
         }
+        guard refreshMenus else { return }
 
         menu.item(withTag: MenuTag.status.rawValue)?.title =
             "\(mode.rawValue)  · \(runStateLabel)"
@@ -370,6 +371,30 @@ final class MenuBarController: NSObject, ObservableObject {
 
         refreshModeSubmenu(menu)
         refreshTaskSubmenu(menu)
+    }
+
+    private func cachedStatusIcon(mode: TimerMode, isActive: Bool) -> NSImage {
+        let accent = UserDefaults.standard.string(forKey: "accentPreset") ?? AccentPreset.tomato.rawValue
+        let key = "\(mode.rawValue)|\(isActive)|\(accent)"
+        if key == cachedStatusIconKey, let cachedStatusIcon {
+            return cachedStatusIcon
+        }
+        let image = Self.modeImage(for: mode, isRunning: isActive)
+        cachedStatusIconKey = key
+        cachedStatusIcon = image
+        return image
+    }
+
+    private func updateCountdownItem(_ menu: NSMenu, time: String, mode: TimerMode, emphasized: Bool) {
+        guard let countdownItem = menu.item(withTag: MenuTag.countdown.rawValue) else { return }
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 20, weight: .semibold)
+        countdownItem.attributedTitle = NSAttributedString(
+            string: "  \(time)",
+            attributes: [
+                .font: font,
+                .foregroundColor: Self.nsColor(for: mode, emphasized: emphasized)
+            ]
+        )
     }
 
     private func refreshModeSubmenu(_ menu: NSMenu) {

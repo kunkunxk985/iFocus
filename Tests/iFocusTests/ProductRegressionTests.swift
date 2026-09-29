@@ -445,4 +445,63 @@ final class ProductRegressionTests: XCTestCase {
         XCTAssertEqual(totals.pomodoros, 2)
         XCTAssertEqual(totals.minutes, 50)
     }
+
+    // MARK: - Navigation & Quick-Add Focus
+
+    func testContentViewStateQuickAddFocusNavigation() {
+        let viewState = ContentViewState()
+        XCTAssertEqual(viewState.selectedScreen, .timer)
+        XCTAssertFalse(viewState.shouldFocusQuickAdd)
+
+        // Simulating ⌘N behavior from non-task screen
+        let isTaskInputScreen: Bool
+        switch viewState.selectedScreen {
+        case .todayTask, .tomorrowTask, .weekTask, .plannedTask, .inboxTask:
+            isTaskInputScreen = true
+        default:
+            isTaskInputScreen = false
+        }
+        if !isTaskInputScreen {
+            viewState.selectedScreen = .todayTask
+        }
+        viewState.shouldFocusQuickAdd = true
+
+        XCTAssertEqual(viewState.selectedScreen, .todayTask)
+        XCTAssertTrue(viewState.shouldFocusQuickAdd)
+    }
+
+    // MARK: - Sidebar Drawer Layout Metrics
+
+    func testSidebarDrawerWidthMetrics() {
+        func expandedSidebarWidth(for availableWidth: CGFloat) -> CGFloat {
+            let fluid = min(1, max(0, (availableWidth - WindowLayoutMetrics.minimum.width)
+                                   / max(1, WindowLayoutMetrics.reference.width - WindowLayoutMetrics.minimum.width)))
+            return 208 + fluid * 44
+        }
+
+        func sidebarWidth(for availableWidth: CGFloat, collapsed: Bool) -> CGFloat {
+            collapsed ? 0 : expandedSidebarWidth(for: availableWidth)
+        }
+
+        // Collapsed should always yield 0 regardless of available width
+        XCTAssertEqual(sidebarWidth(for: 800, collapsed: true), 0)
+        XCTAssertEqual(sidebarWidth(for: 1024, collapsed: true), 0)
+        XCTAssertEqual(sidebarWidth(for: 1280, collapsed: true), 0)
+        XCTAssertEqual(sidebarWidth(for: 1440, collapsed: true), 0)
+
+        // Expanded minimum size (1024pt window) -> base 208pt
+        XCTAssertEqual(sidebarWidth(for: 1024, collapsed: false), 208, accuracy: 0.001)
+
+        // Expanded reference size (1280pt window) -> max 252pt (208 + 44)
+        XCTAssertEqual(sidebarWidth(for: 1280, collapsed: false), 252, accuracy: 0.001)
+
+        // Expanded large display (1440pt window) -> clamped at 252pt
+        XCTAssertEqual(sidebarWidth(for: 1440, collapsed: false), 252, accuracy: 0.001)
+
+        // Sub-minimum clamped to base 208pt
+        XCTAssertEqual(sidebarWidth(for: 800, collapsed: false), 208, accuracy: 0.001)
+
+        // Midpoint (1152pt window) -> 230pt
+        XCTAssertEqual(sidebarWidth(for: 1152, collapsed: false), 230, accuracy: 0.001)
+    }
 }

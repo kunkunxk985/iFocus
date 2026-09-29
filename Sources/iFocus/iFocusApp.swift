@@ -25,14 +25,31 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         UNUserNotificationCenter.current().delegate = self
         WindowChrome.applyAll()
         NSApp.setActivationPolicy(.regular)
+
+        // Sanitize corrupted fullscreen window frame if present
+        if let saved = WindowLayoutStore.savedMainWindowFrame(),
+           let screen = NSScreen.main,
+           saved.size == screen.frame.size {
+            UserDefaults.standard.removeObject(forKey: "mainWindowFrame")
+        }
         WindowLayoutStore.restoreMainWindowIfPossible()
+        ViewMenuSanitizer.attachToViewMenu()
+        DispatchQueue.main.async {
+            ViewMenuSanitizer.attachToViewMenu()
+        }
+
         // Observe frame changes on the main window for layout memory.
         NotificationCenter.default.addObserver(
             forName: NSWindow.didResizeNotification,
             object: nil,
             queue: .main
         ) { note in
-            guard let window = note.object as? NSWindow, window.title != "设置" else { return }
+            guard let window = note.object as? NSWindow,
+                  window.title != "设置",
+                  !window.styleMask.contains(.fullScreen),
+                  !WindowStateModel.shared.isFullScreen,
+                  !WindowStateModel.shared.isTransitioningFullScreen else { return }
+            if let screen = window.screen, window.frame.size == screen.frame.size { return }
             WindowLayoutStore.saveMainWindowFrame(window.frame)
         }
         NotificationCenter.default.addObserver(
@@ -40,7 +57,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             object: nil,
             queue: .main
         ) { note in
-            guard let window = note.object as? NSWindow, window.title != "设置" else { return }
+            guard let window = note.object as? NSWindow,
+                  window.title != "设置",
+                  !window.styleMask.contains(.fullScreen),
+                  !WindowStateModel.shared.isFullScreen,
+                  !WindowStateModel.shared.isTransitioningFullScreen else { return }
+            if let screen = window.screen, window.frame.size == screen.frame.size { return }
             WindowLayoutStore.saveMainWindowFrame(window.frame)
         }
     }
@@ -69,15 +91,92 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 }
 
+/// Sanitizes the standard View menu to prevent duplicate full-screen commands.
+final class ViewMenuSanitizer: NSObject, NSMenuDelegate {
+    static let shared = ViewMenuSanitizer()
+    private var isSanitizing = false
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        sanitize(menu)
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        sanitize(menu)
+    }
+
+    func sanitize(_ menu: NSMenu) {
+        guard !isSanitizing else { return }
+        isSanitizing = true
+        defer { isSanitizing = false }
+
+        let indicesToRemove = menu.items.indices.filter { idx in
+            let item = menu.items[idx]
+            return item.action == #selector(NSWindow.toggleFullScreen(_:))
+                || item.title.contains("全屏幕")
+                || item.title == "Enter Full Screen"
+                || item.title == "Exit Full Screen"
+        }
+        for idx in indicesToRemove.reversed() {
+            menu.removeItem(at: idx)
+        }
+    }
+
+    static func attachToViewMenu() {
+        guard let mainMenu = NSApplication.shared.mainMenu else { return }
+        for item in mainMenu.items {
+            if let submenu = item.submenu {
+                let isViewMenu = item.title == "显示"
+                    || item.title == "View"
+                    || submenu.items.contains {
+                        $0.title == "展开侧栏" || $0.title == "收起侧栏"
+                        || $0.title == "进入全屏" || $0.title == "退出全屏"
+                    }
+                if isViewMenu {
+                    submenu.delegate = shared
+                    shared.sanitize(submenu)
+                }
+            }
+        }
+    }
+}
+
 /// Owns window chrome + close-to-hide behavior for the main window.
 final class WindowChromeController: NSObject, NSWindowDelegate {
     static let shared = WindowChromeController()
     
+    private final class FullScreenExitToken {
+        var observer: NSObjectProtocol?
+    }
+
+    static func closeOrHide(window: NSWindow) {
+        if window.title == "设置" {
+            window.close()
+            return
+        }
+        if window.styleMask.contains(.fullScreen) {
+            let token = FullScreenExitToken()
+            token.observer = NotificationCenter.default.addObserver(
+                forName: NSWindow.didExitFullScreenNotification,
+                object: window,
+                queue: .main
+            ) { _ in
+                if let obs = token.observer {
+                    NotificationCenter.default.removeObserver(obs)
+                    token.observer = nil
+                }
+                window.orderOut(nil)
+            }
+            window.toggleFullScreen(nil)
+        } else {
+            window.orderOut(nil)
+        }
+    }
+
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if sender.title == "设置" {
             return true
         }
-        sender.orderOut(nil)
+        WindowChromeController.closeOrHide(window: sender)
         return false
     }
     
@@ -124,6 +223,7 @@ struct iFocusApp: App {
     @StateObject private var timerStore: TimerStore
     @StateObject private var taskStore: TaskStore
     @StateObject private var menuBarController: MenuBarController
+    @StateObject private var windowState = WindowStateModel.shared
     
     init() {
         let settings = SettingsStore()
@@ -171,6 +271,23 @@ struct iFocusApp: App {
         .windowResizability(.contentSize)
         .defaultSize(width: AppWindow.defaultSize.width, height: AppWindow.defaultSize.height)
         .commands {
+            CommandGroup(replacing: .sidebar) {
+                Button(windowState.isSidebarCollapsed ? "展开侧栏" : "收起侧栏") {
+                    NotificationCenter.default.post(name: AppNavigation.toggleSidebar, object: nil)
+                }
+                .keyboardShortcut("s", modifiers: [.control, .command])
+
+                Divider()
+
+                Button(windowState.isFullScreen ? "退出全屏" : "进入全屏") {
+                    let window = (NSApp.keyWindow?.title != "设置" ? NSApp.keyWindow : nil)
+                        ?? NSApplication.shared.windows.first(where: { $0.title == "iFocus" && $0.canBecomeKey })
+                        ?? NSApplication.shared.windows.first(where: { $0.title == "iFocus" })
+                    window?.toggleFullScreen(nil)
+                }
+                .keyboardShortcut("f", modifiers: [.control, .command])
+            }
+
             CommandMenu("前往") {
                 Button("专注钟") { AppNavigation.post(.timer) }
                     .keyboardShortcut("1", modifiers: .command)
@@ -211,6 +328,16 @@ struct iFocusApp: App {
                     NotificationCenter.default.post(name: AppNavigation.skipTimer, object: nil)
                 }
                 .keyboardShortcut(.rightArrow, modifiers: .command)
+            }
+            CommandMenu("任务") {
+                Button("搜索任务") {
+                    NotificationCenter.default.post(name: AppNavigation.searchTasks, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: .command)
+                Button("新建任务") {
+                    NotificationCenter.default.post(name: AppNavigation.newTask, object: nil)
+                }
+                .keyboardShortcut("n", modifiers: .command)
             }
         }
         .onChange(of: settings.appearance) { mode in
@@ -279,6 +406,14 @@ enum WindowChrome {
         } else {
             window.styleMask.insert(.fullSizeContentView)
         }
+
+        if isSettings {
+            window.collectionBehavior.remove(.fullScreenPrimary)
+            window.collectionBehavior.insert(.fullScreenAuxiliary)
+        } else {
+            window.collectionBehavior.insert(.fullScreenPrimary)
+            ViewMenuSanitizer.attachToViewMenu()
+        }
         
         if !isSettings {
             window.delegate = WindowChromeController.shared
@@ -303,13 +438,13 @@ enum WindowChrome {
             window.setContentSize(targetSize)
         }
         
-        // Match content so any residual chrome blends (never pure system white).
-        window.isOpaque = true
-        window.backgroundColor = AppTheme.windowBackgroundColor
+        // Enable authentic macOS window translucency
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.hasShadow = true
         
         window.contentView?.wantsLayer = true
-        window.contentView?.layer?.backgroundColor = AppTheme.windowBackgroundColor.cgColor
+        window.contentView?.layer?.backgroundColor = NSColor.clear.cgColor
         window.contentView?.layer?.masksToBounds = false
         
         // Clear opaque titlebar container fills that can still flash as a white strip.
@@ -332,53 +467,18 @@ enum WindowChrome {
         return window.title == "iFocus" || window.title == "设置"
     }
     
-    /// Position traffic lights for expanded vs collapsed sidebar.
-    ///
-    /// Collapsed rail is only ~80pt wide — a fixed 20pt leading inset makes the
-    /// three buttons spill into the detail pane and look “orphaned” on the divider.
-    /// When collapsed we center the group inside the rail instead.
+    /// Keep AppKit's real traffic lights visible so macOS owns their placement,
+    /// hover glyphs, inactive appearance, and accessibility behavior.
     static func layoutTrafficLights(in window: NSWindow) {
-        guard !window.styleMask.contains(.fullScreen) else { return }
-        guard window.title != "设置" else { return }
-        guard let close = window.standardWindowButton(.closeButton),
-              let mini = window.standardWindowButton(.miniaturizeButton),
-              let zoom = window.standardWindowButton(.zoomButton),
-              let container = close.superview else { return }
-        
-        let btnW = close.frame.width
-        let btnH = close.frame.height
-        let gap = AppTheme.trafficLightSpacing
-        let top = AppTheme.trafficLightTop
-        let groupWidth = btnW * 3 + gap * 2
-        let collapsed = WindowLayoutStore.isSidebarCollapsed
-        
-        // Horizontal: center in narrow rail, classic leading inset when expanded.
-        let leading: CGFloat = {
-            if collapsed {
-                let rail = AppTheme.collapsedSidebarWidth
-                return max(6, (rail - groupWidth) / 2)
-            }
-            return AppTheme.trafficLightLeading
-        }()
-        
-        // Prefer container-local coordinates — more stable than window↔content conversion
-        // which can drift after live resize / sidebar animation.
-        let y = max(0, container.bounds.height - top - btnH)
-        var x = leading
-        
-        for button in [close, mini, zoom] {
-            let origin = NSPoint(x: round(x), y: round(y))
-            if abs(button.frame.origin.x - origin.x) > 0.5
-                || abs(button.frame.origin.y - origin.y) > 0.5 {
-                button.setFrameOrigin(origin)
-            }
-            x += btnW + gap
-        }
+        guard isManagedAppWindow(window) else { return }
+        window.standardWindowButton(.closeButton)?.isHidden = false
+        window.standardWindowButton(.miniaturizeButton)?.isHidden = false
+        window.standardWindowButton(.zoomButton)?.isHidden = false
     }
     
-    /// Re-layout traffic lights on the main iFocus window (e.g. after sidebar toggle).
+    /// Reaffirm native traffic-light visibility on managed windows after layout or appearance changes.
     static func layoutMainWindowTrafficLights() {
-        for window in NSApplication.shared.windows where window.title == "iFocus" {
+        for window in NSApplication.shared.windows where isManagedAppWindow(window) {
             layoutTrafficLights(in: window)
             // System may reset frames after layout animations.
             DispatchQueue.main.async {
@@ -417,9 +517,14 @@ enum WindowChrome {
                 current.wantsLayer = true
                 current.layer?.backgroundColor = NSColor.clear.cgColor
                 if let effect = current as? NSVisualEffectView {
-                    effect.material = .titlebar
-                    effect.blendingMode = .withinWindow
-                    effect.state = .active
+                    if #available(macOS 26.0, *) {
+                        // Preserve the platform's Liquid Glass titlebar material.
+                        effect.state = .followsWindowActiveState
+                    } else {
+                        effect.material = .titlebar
+                        effect.blendingMode = .withinWindow
+                        effect.state = .active
+                    }
                     effect.isEmphasized = false
                 }
             }

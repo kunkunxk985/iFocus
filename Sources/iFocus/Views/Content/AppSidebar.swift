@@ -1,9 +1,11 @@
 import SwiftUI
+import iFocusCore
 
-/// Left navigation rail + account chip.
+/// Left navigation rail with integrated traffic lights, sidebar toggle, and refined navigation rows.
 struct AppSidebar: View {
     @Binding var sidebarCollapsed: Bool
     @Binding var isAccountMenuPresented: Bool
+    var isFullScreen: Bool = false
     var onPresentAccountMenu: () -> Void
     var onDismissAccountMenu: () -> Void
 
@@ -14,211 +16,149 @@ struct AppSidebar: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.colorScheme) private var colorScheme
 
-    private var titlebarContentInset: CGFloat {
-        sidebarCollapsed ? AppTheme.collapsedSidebarTopInset : AppTheme.detailTopInset
-    }
-
-    private var smartItems: [SidebarItem] {
-        // Single O(n) scan — previously six filter+sorts on every sidebar body pass.
-        let counts = taskStore.sidebarBadgeCounts()
-        // Show total today open tasks; overdue only affects badge color, not the number alone.
-        let todayBadge: String? = counts.today > 0 ? "\(counts.today)" : nil
-        return [
-            SidebarItem(title: "今天", screen: .todayTask, badge: todayBadge, icon: "sun.max.fill", tint: Color(hex: "#F59E0B")),
-            SidebarItem(title: "明天", screen: .tomorrowTask, badge: badgeIfPositive(counts.tomorrow), icon: "sunrise.fill", tint: Color(hex: "#EC4899")),
-            SidebarItem(title: "本周", screen: .weekTask, badge: badgeIfPositive(counts.week), icon: "calendar", tint: Color(hex: "#EF4444")),
-            SidebarItem(title: "已计划", screen: .plannedTask, badge: badgeIfPositive(counts.planned), icon: "calendar.badge.clock", tint: Color(hex: "#8B5CF6")),
-            SidebarItem(title: "已完成", screen: .completedTask, badge: nil, icon: "checkmark.circle.fill", tint: Color(hex: "#10B981")),
-            SidebarItem(title: "收集箱", screen: .inboxTask, badge: badgeIfPositive(counts.inbox), icon: "tray.fill", tint: Color(hex: "#3B82F6"))
+    private func agendaItems(_ counts: TaskFiltering.SidebarBadgeCounts) -> [SidebarItem] {
+        [
+            SidebarItem(
+                title: "今天",
+                screen: .todayTask,
+                badge: badgeIfPositive(counts.today),
+                icon: "sun.max.fill",
+                accentColor: Color(hex: "#F59E0B")
+            ),
+            SidebarItem(
+                title: "明天",
+                screen: .tomorrowTask,
+                badge: badgeIfPositive(counts.tomorrow),
+                icon: "sunrise.fill",
+                accentColor: Color(hex: "#F97316")
+            ),
+            SidebarItem(
+                title: "本周",
+                screen: .weekTask,
+                badge: badgeIfPositive(counts.week),
+                icon: "calendar",
+                accentColor: Color(hex: "#3B82F6")
+            ),
+            SidebarItem(
+                title: "收集箱",
+                screen: .inboxTask,
+                badge: badgeIfPositive(counts.inbox),
+                icon: "tray.fill",
+                accentColor: Color(hex: "#8B5CF6")
+            )
         ]
     }
-    
-    private var todayOverdueCount: Int {
-        taskStore.sidebarBadgeCounts().overdue
+
+    private func libraryItems(_ counts: TaskFiltering.SidebarBadgeCounts) -> [SidebarItem] {
+        [
+            SidebarItem(
+                title: "已计划",
+                screen: .plannedTask,
+                badge: badgeIfPositive(counts.planned),
+                icon: "calendar.badge.clock",
+                accentColor: Color(hex: "#64748B")
+            ),
+            SidebarItem(
+                title: "已完成",
+                screen: .completedTask,
+                badge: nil,
+                icon: "checkmark.circle.fill",
+                accentColor: Color(hex: "#10B981")
+            )
+        ]
     }
-    
+
     private func badgeIfPositive(_ count: Int) -> String? {
         count > 0 ? "\(count)" : nil
-    }
-    
-    private var brandHeader: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(AppTheme.accent.opacity(0.14))
-                        .frame(width: 28, height: 28)
-                    Image(systemName: "leaf.fill")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(AppTheme.accent)
-                }
-                Text("iFocus")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
-            }
-            // Greeting omitted when username is default — quieter brand mark.
-            if !settings.username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-               settings.username != "小番茄" {
-                Text(timeOfDayGreeting)
-                    .font(.caption)
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.9))
-                    .lineLimit(1)
-                    .padding(.leading, 2)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
-    }
-    
-    private var timeOfDayGreeting: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        let name = settings.username.trimmingCharacters(in: .whitespacesAndNewlines)
-        let who = name.isEmpty ? "小番茄" : name
-        switch hour {
-        case 5..<12: return "早上好，\(who)"
-        case 12..<14: return "中午好，\(who)"
-        case 14..<18: return "下午好，\(who)"
-        case 18..<23: return "晚上好，\(who)"
-        default: return "夜深了，\(who)"
-        }
     }
 
     var body: some View {
         ZStack {
-            VisualEffectBackground(material: .sidebar, blendingMode: .behindWindow)
-                .ignoresSafeArea()
-
-            AppTheme.sidebarTint(for: colorScheme)
-                .ignoresSafeArea()
-
             VStack(spacing: 0) {
-                sidebarTopSpacer
-                
-                // Collapsed: no leaf under the traffic lights — they already own the top
-                // corner; a second brand mark makes the rail feel cramped and odd.
-                if !sidebarCollapsed {
-                    brandHeader
-                }
+                sidebarHeader
 
                 ScrollView {
-                    // Flat list — no section headers (less chrome noise).
-                    VStack(alignment: .leading, spacing: sidebarCollapsed ? 6 : 4) {
+                    let counts = taskStore.sidebarBadgeCounts()
+                    VStack(alignment: .leading, spacing: 2) {
                         sidebarRow(
                             title: "专注钟",
                             screen: .timer,
                             badge: timerStore.isRunning ? "…" : (timerStore.isSessionInProgress ? "‖" : nil),
                             icon: "timer",
-                            tint: AppTheme.accent,
+                            accentColor: AppTheme.accent,
                             emphasizeRunning: timerStore.isRunning
                         )
                         sidebarRow(
                             title: "数据统计",
                             screen: .analytics,
                             badge: nil,
-                            icon: "chart.bar.fill",
-                            tint: Color(hex: "#6B7280")
+                            icon: "chart.bar.xaxis",
+                            accentColor: Color(hex: "#6366F1")
                         )
 
-                        if !sidebarCollapsed {
-                            Color.clear.frame(height: 10)
+                        sidebarSection("待办") {
+                            ForEach(agendaItems(counts)) { item in
+                                sidebarRow(
+                                    title: item.title,
+                                    screen: item.screen,
+                                    badge: item.badge,
+                                    icon: item.icon,
+                                    accentColor: item.accentColor ?? AppTheme.accent,
+                                    showsOverdue: item.screen == .todayTask && counts.overdue > 0
+                                )
+                            }
                         }
 
-                        ForEach(smartItems) { item in
-                            sidebarRow(
-                                title: item.title,
-                                screen: item.screen,
-                                badge: item.badge,
-                                icon: item.icon,
-                                tint: item.tint
-                            )
+                        sidebarSection("更多") {
+                            ForEach(libraryItems(counts)) { item in
+                                sidebarRow(
+                                    title: item.title,
+                                    screen: item.screen,
+                                    badge: item.badge,
+                                    icon: item.icon,
+                                    accentColor: item.accentColor ?? AppTheme.accent
+                                )
+                            }
                         }
                     }
-                    .padding(.horizontal, sidebarCollapsed ? 8 : 12)
+                    .padding(.horizontal, 10)
+                    .padding(.top, 4)
                     .padding(.bottom, 16)
                 }
                 .softScroll()
 
-                sidebarCollapseButton
                 bottomUserBar
             }
         }
-        .overlay(alignment: .trailing) {
-            Rectangle()
-                .fill(AppTheme.separator(for: colorScheme))
-                .frame(width: 1)
-                .opacity(colorScheme == .light ? 0.55 : 0.7)
-        }
-    }
-    
-    private func toggleSidebarCollapsed() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            sidebarCollapsed.toggle()
-            WindowLayoutStore.isSidebarCollapsed = sidebarCollapsed
-        }
-        // Re-center traffic lights for the new rail width after the width animates.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            WindowChrome.layoutMainWindowTrafficLights()
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-            WindowChrome.layoutMainWindowTrafficLights()
-        }
-    }
-    
-    /// Final chrome: chevron rail control (not dual-pane SF Symbol).
-    /// Collapsed → › expand; expanded → ‹ 收起侧栏.
-    private var sidebarCollapseButton: some View {
-        Button(action: toggleSidebarCollapsed) {
-            if sidebarCollapsed {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.9))
-                    .frame(width: 30, height: 30)
-                    .background(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(AppTheme.elevatedBackground(for: colorScheme))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                    )
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-            } else {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
-                    .frame(width: 30, height: 30)
-                    .background(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(AppTheme.elevatedBackground(for: colorScheme).opacity(0.6))
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-            }
-        }
-        .buttonStyle(SoftScaleButtonStyle())
-        .help(sidebarCollapsed ? "展开侧栏" : "收起侧栏")
+        .adaptiveGlass(cornerRadius: AppTheme.radiusXL, fallbackMaterial: .sidebar)
+        .padding(.leading, 8)
+        .padding(.trailing, 4)
+        .padding(.vertical, 8)
     }
 
-    private var sidebarTopSpacer: some View {
-        Color.clear
-            .frame(height: titlebarContentInset)
+    /// AppKit draws the native lights in the transparent titlebar; this row keeps the sidebar toggle aligned.
+    private var sidebarHeader: some View {
+        HStack(alignment: .center, spacing: 0) {
+            Spacer(minLength: 0)
+
+            SidebarToggleButton(sidebarCollapsed: $sidebarCollapsed)
+                .padding(.trailing, 12)
+                .offset(y: -AppTheme.spaceM)
+        }
+        .frame(height: AppTheme.topHeaderHeight)
     }
 
     private func sidebarSection<Content: View>(
         _ title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if !title.isEmpty {
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 2)
-            }
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.65))
+                .padding(.horizontal, 10)
+                .padding(.top, 14)
+                .padding(.bottom, 4)
 
             content()
         }
@@ -229,92 +169,25 @@ struct AppSidebar: View {
         screen: AppScreen,
         badge: String?,
         icon: String,
-        tint: Color,
-        emphasizeRunning: Bool = false
+        accentColor: Color,
+        emphasizeRunning: Bool = false,
+        showsOverdue: Bool = false
     ) -> some View {
         let isSelected = viewState.selectedScreen == screen
         return Button {
             viewState.selectedScreen = screen
         } label: {
-            HStack(spacing: sidebarCollapsed ? 0 : 11) {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: icon)
-                        .font(.system(size: sidebarCollapsed ? 14 : 13, weight: .semibold))
-                        .foregroundColor(
-                            isSelected || emphasizeRunning
-                            ? AppTheme.accent
-                            // Whisper of smart-list color — not full chroma when idle.
-                            : tint.opacity(colorScheme == .light ? 0.48 : 0.55)
-                        )
-                        .frame(width: sidebarCollapsed ? 22 : 20, height: sidebarCollapsed ? 22 : 20)
-                    if sidebarCollapsed, let badge, !badge.isEmpty {
-                        Circle()
-                            .fill(
-                                screen == .todayTask && todayOverdueCount > 0
-                                ? Color.red.opacity(0.9)
-                                : AppTheme.accent.opacity(0.9)
-                            )
-                            .frame(width: 7, height: 7)
-                            .offset(x: 3, y: -2)
-                    }
-                }
-
-                if !sidebarCollapsed {
-                    Text(title)
-                        .font(.system(size: 13.5, weight: isSelected ? .semibold : .medium))
-                        .foregroundColor(isSelected ? AppTheme.primaryText(for: colorScheme) : AppTheme.primaryText(for: colorScheme).opacity(0.88))
-                        .lineLimit(1)
-
-                    Spacer(minLength: 6)
-
-                    if let badge, !badge.isEmpty {
-                        Text(badge)
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .foregroundColor(badgeForeground(isSelected: isSelected, emphasizeRunning: emphasizeRunning, badge: badge, screen: screen))
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule()
-                                    .fill(badgeBackground(isSelected: isSelected, emphasizeRunning: emphasizeRunning, badge: badge, screen: screen))
-                            )
-                    }
-                }
-            }
-            .padding(.horizontal, sidebarCollapsed ? 0 : 10)
-            .padding(.vertical, sidebarCollapsed ? 10 : 9)
-            .frame(maxWidth: .infinity, alignment: sidebarCollapsed ? .center : .leading)
-            .help(sidebarCollapsed ? (badge.map { "\(title) · \($0)" } ?? title) : "")
-            .background(
-                RoundedRectangle(cornerRadius: sidebarCollapsed ? 12 : 10, style: .continuous)
-                    .fill(isSelected
-                          ? AppTheme.accent.opacity(colorScheme == .light ? 0.11 : 0.18)
-                          : Color.clear)
+            SidebarRowLabel(
+                title: title,
+                icon: icon,
+                badge: badge,
+                accentColor: accentColor,
+                isSelected: isSelected,
+                emphasizeRunning: emphasizeRunning,
+                showsOverdue: showsOverdue
             )
-            .overlay(alignment: .leading) {
-                // Leading accent bar only in expanded mode (cramped / odd when collapsed).
-                if isSelected && !sidebarCollapsed {
-                    Capsule()
-                        .fill(AppTheme.accent)
-                        .frame(width: 3, height: 16)
-                        .padding(.leading, 2)
-                }
-            }
-            .contentShape(RoundedRectangle(cornerRadius: sidebarCollapsed ? 12 : 10, style: .continuous))
         }
-        .buttonStyle(SoftHoverButtonStyle(cornerRadius: sidebarCollapsed ? 12 : 10))
-    }
-    
-    private func badgeForeground(isSelected: Bool, emphasizeRunning: Bool, badge: String, screen: AppScreen) -> Color {
-        if isSelected || emphasizeRunning { return .white }
-        // Only the 今天 row uses overdue styling — never match by badge digit alone.
-        if screen == .todayTask, todayOverdueCount > 0 { return .white }
-        return AppTheme.secondaryText(for: colorScheme)
-    }
-    
-    private func badgeBackground(isSelected: Bool, emphasizeRunning: Bool, badge: String, screen: AppScreen) -> Color {
-        if isSelected || emphasizeRunning { return AppTheme.accent }
-        if screen == .todayTask, todayOverdueCount > 0 { return Color.red.opacity(0.85) }
-        return colorScheme == .light ? Color.black.opacity(0.06) : Color.white.opacity(0.10)
+        .buttonStyle(SidebarRowButtonStyle(isSelected: isSelected))
     }
 
     private var bottomUserBar: some View {
@@ -325,141 +198,179 @@ struct AppSidebar: View {
                 onPresentAccountMenu()
             }
         } label: {
-            VStack(spacing: 0) {
-                Rectangle()
-                    .fill(AppTheme.separator(for: colorScheme))
-                    .frame(height: 1)
-                    .opacity(0.45)
-
-                if sidebarCollapsed {
-                    // Avatar only — keeps rail clean under the › expand chip.
-                    UnifiedAvatarView(
-                        path: settings.avatarPath,
-                        colorIndex: settings.avatarColorIndex,
-                        username: settings.username.isEmpty ? "小番茄" : settings.username,
-                        size: 30
-                    )
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        Circle()
-                            .fill(isAccountMenuPresented
-                                  ? AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.16)
-                                  : Color.clear)
-                            .frame(width: 40, height: 40)
-                    )
-                } else {
-                    HStack(spacing: 10) {
-                        UnifiedAvatarView(
-                            path: settings.avatarPath,
-                            colorIndex: settings.avatarColorIndex,
-                            username: settings.username.isEmpty ? "小番茄" : settings.username,
-                            size: 34
-                        )
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(settings.username.isEmpty ? "小番茄" : settings.username)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                                .lineLimit(1)
-                            // Leaf clock — must not live on ContentView root.
-                            SidebarAccountStatusLine()
-                        }
-                        .layoutPriority(1)
-
-                        Spacer(minLength: 4)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(isAccountMenuPresented
-                                  ? AppTheme.accent.opacity(colorScheme == .light ? 0.07 : 0.12)
-                                  : Color.clear)
-                    )
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(isAccountMenuPresented ? "关闭菜单" : "账号与设置")
-    }
-
-    private var accountPopover: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 UnifiedAvatarView(
                     path: settings.avatarPath,
                     colorIndex: settings.avatarColorIndex,
                     username: settings.username.isEmpty ? "小番茄" : settings.username,
-                    size: 36
+                    size: 32
                 )
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(settings.username.isEmpty ? "小番茄" : settings.username)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                    Text("本地账号")
-                        .font(.caption)
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                }
-            }
-            .padding(.horizontal, 4)
-            .padding(.bottom, 6)
-
-            Divider().opacity(0.7)
-
-            accountMenuButton("个人资料", icon: "person.crop.circle") {
-                viewState.selectedScreen = .profile
-                onDismissAccountMenu()
-            }
-
-            accountMenuButton("设置", icon: "gearshape") {
-                openWindow(id: "settings")
-                onDismissAccountMenu()
-            }
-            .keyboardShortcut(",", modifiers: .command)
-        }
-        .padding(12)
-        .frame(width: 228, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(AppTheme.menuBackground(for: colorScheme))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(AppTheme.separator(for: colorScheme), lineWidth: 1)
+                    Circle()
+                        .strokeBorder(Color.primary.opacity(colorScheme == .light ? 0.08 : 0.15), lineWidth: 0.5)
                 )
-                .shadow(color: Color.black.opacity(colorScheme == .light ? 0.10 : 0.35), radius: 20, y: 8)
-        )
-    }
 
-    private func accountMenuButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                    .frame(width: 22)
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                Spacer()
-                if title == "设置" {
-                    Text("⌘,")
-                        .font(.caption)
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.75))
+                VStack(alignment: .leading, spacing: 1.5) {
+                    Text(settings.username.isEmpty ? "小番茄" : settings.username)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                        .lineLimit(1)
+                    SidebarAccountStatusLine()
                 }
+                .layoutPriority(1)
+
+                Spacer(minLength: 2)
+
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.65))
+                    .frame(width: 18, height: 18)
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 9)
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.clear)
+                    .fill(
+                        isAccountMenuPresented
+                        ? AppTheme.accent.opacity(colorScheme == .light ? 0.09 : 0.16)
+                        : Color.clear
+                    )
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(
+                        isAccountMenuPresented
+                        ? AppTheme.accent.opacity(0.24)
+                        : Color.clear,
+                        lineWidth: 0.5
+                    )
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
-        .buttonStyle(AccountMenuRowButtonStyle())
+        .buttonStyle(SoftHoverButtonStyle(cornerRadius: 10))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(AppTheme.separator(for: colorScheme))
+                .frame(height: 0.5)
+                .opacity(0.4)
+        }
+    }
+}
+
+// MARK: - Sidebar Row Components
+
+private struct SidebarRowLabel: View {
+    let title: String
+    let icon: String
+    let badge: String?
+    let accentColor: Color
+    let isSelected: Bool
+    let emphasizeRunning: Bool
+    let showsOverdue: Bool
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(spacing: 9) {
+            ZStack {
+                Image(systemName: icon)
+                    .font(.system(size: 13.5, weight: isSelected ? .semibold : .medium))
+                    .foregroundColor(
+                        isSelected
+                        ? AppTheme.accent
+                        : accentColor.opacity(colorScheme == .light ? 0.88 : 0.94)
+                    )
+
+                if emphasizeRunning {
+                    Circle()
+                        .fill(AppTheme.accent)
+                        .frame(width: 5, height: 5)
+                        .offset(x: 8, y: -7)
+                }
+            }
+            .frame(width: 20, height: 20)
+
+            Text(title)
+                .font(.system(size: 13.5, weight: isSelected ? .semibold : .medium))
+                .foregroundColor(
+                    isSelected
+                    ? AppTheme.primaryText(for: colorScheme)
+                    : AppTheme.primaryText(for: colorScheme).opacity(0.88)
+                )
+                .lineLimit(1)
+
+            Spacer(minLength: 4)
+
+            if let badge, !badge.isEmpty {
+                Text(badge)
+                    .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                    .foregroundColor(badgeForeground)
+                    .padding(.horizontal, 6.5)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(badgeBackground)
+                    )
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .contentShape(RoundedRectangle(cornerRadius: 8.5, style: .continuous))
     }
 
+    private var badgeForeground: Color {
+        if showsOverdue || isSelected { return .white }
+        return AppTheme.secondaryText(for: colorScheme)
+    }
+
+    private var badgeBackground: Color {
+        if showsOverdue { return Color.red.opacity(0.88) }
+        if isSelected { return AppTheme.accent }
+        return colorScheme == .light ? Color.black.opacity(0.06) : Color.white.opacity(0.12)
+    }
+}
+
+private struct SidebarRowButtonStyle: ButtonStyle {
+    let isSelected: Bool
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                RoundedRectangle(cornerRadius: 8.5, style: .continuous)
+                    .fill(backgroundFill(isPressed: configuration.isPressed))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8.5, style: .continuous)
+                    .strokeBorder(borderStroke, lineWidth: 0.5)
+            )
+            .scaleEffect(configuration.isPressed ? 0.985 : 1.0)
+            .animation(.spring(response: 0.20, dampingFraction: 0.74), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.12), value: isHovering)
+            .animation(.easeOut(duration: 0.16), value: isSelected)
+            .onHover { isHovering = $0 }
+    }
+
+    private func backgroundFill(isPressed: Bool) -> Color {
+        if isSelected {
+            let alpha: Double = colorScheme == .light ? 0.11 : 0.20
+            return isPressed ? AppTheme.accent.opacity(alpha + 0.05) : AppTheme.accent.opacity(alpha)
+        }
+        if isPressed {
+            return colorScheme == .light ? Color.black.opacity(0.07) : Color.white.opacity(0.12)
+        }
+        if isHovering {
+            return colorScheme == .light ? Color.black.opacity(0.045) : Color.white.opacity(0.07)
+        }
+        return Color.clear
+    }
+
+    private var borderStroke: Color {
+        if isSelected {
+            return AppTheme.accent.opacity(colorScheme == .light ? 0.20 : 0.32)
+        }
+        return Color.clear
+    }
 }

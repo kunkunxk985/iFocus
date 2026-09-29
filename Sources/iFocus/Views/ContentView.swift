@@ -6,6 +6,8 @@ struct ContentView: View {
     @State private var showResetConfirm = false
     @State private var showResumeSessionAlert = false
     @State private var didApplySmartLanding = false
+
+    @State private var isFullScreen = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
     @Environment(\.openWindow) private var openWindow
@@ -14,11 +16,15 @@ struct ContentView: View {
     @EnvironmentObject var timerStore: TimerStore
     @Environment(\.colorScheme) private var colorScheme
 
-    private func sidebarWidth(for availableWidth: CGFloat) -> CGFloat {
-        if sidebarCollapsed { return AppTheme.collapsedSidebarWidth }
+    private func expandedSidebarWidth(for availableWidth: CGFloat) -> CGFloat {
         let fluid = min(1, max(0, (availableWidth - WindowLayoutMetrics.minimum.width)
                                / max(1, WindowLayoutMetrics.reference.width - WindowLayoutMetrics.minimum.width)))
         return 208 + fluid * 44
+    }
+
+    private func sidebarWidth(for availableWidth: CGFloat) -> CGFloat {
+        if sidebarCollapsed { return 0 }
+        return expandedSidebarWidth(for: availableWidth)
     }
 
     private var shouldShowFloatingPill: Bool {
@@ -32,6 +38,9 @@ struct ContentView: View {
                 height: geometry.size.height,
                 densityScale: settings.uiDensity.scale
             )
+            let targetSidebarWidth = expandedSidebarWidth(for: geometry.size.width)
+            let currentSidebarWidth = sidebarWidth(for: geometry.size.width)
+
             ZStack(alignment: .topLeading) {
                 AppTheme.contentBackground(for: colorScheme)
                     .ignoresSafeArea()
@@ -40,18 +49,51 @@ struct ContentView: View {
                     AppSidebar(
                         sidebarCollapsed: $sidebarCollapsed,
                         isAccountMenuPresented: $isAccountMenuPresented,
+                        isFullScreen: isFullScreen,
                         onPresentAccountMenu: presentAccountMenu,
                         onDismissAccountMenu: dismissAccountMenu
                     )
-                    .frame(width: sidebarWidth(for: geometry.size.width))
-                    .animation(.easeInOut(duration: 0.2), value: sidebarCollapsed)
+                    .frame(width: targetSidebarWidth, alignment: .leading)
+                    .frame(width: currentSidebarWidth, alignment: .leading)
+                    .clipped()
+                    .allowsHitTesting(!sidebarCollapsed)
+                    .accessibilityHidden(sidebarCollapsed)
 
                     detailPane
                         .environment(\.windowLayout, layout)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(AppTheme.springGentle, value: sidebarCollapsed)
                 .animation(.easeInOut(duration: 0.16), value: layout.scale)
 
+                if sidebarCollapsed {
+                    HStack(alignment: .center, spacing: 14) {
+                        Color.clear
+                            .frame(width: 58, height: 1)
+                            .accessibilityHidden(true)
+                        SidebarToggleButton(sidebarCollapsed: $sidebarCollapsed)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.leading, AppTheme.trafficLightLeading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: AppTheme.topHeaderHeight)
+                    .background(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 17, style: .continuous)
+                            .fill(Color.clear)
+                            .frame(width: 132, height: 36)
+                            .adaptiveGlass(cornerRadius: 17, fallbackMaterial: .titlebar)
+                            .padding(.leading, 7)
+                    }
+                    .offset(y: -AppTheme.spaceM)
+                    .zIndex(25)
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity.animation(.easeInOut(duration: 0.20)),
+                            removal: .opacity.animation(.easeOut(duration: 0.12))
+                        )
+                    )
+                    .allowsHitTesting(sidebarCollapsed)
+                }
                 if isAccountMenuPresented {
                     // Tap-catcher above content, below popover — dismiss account menu.
                     Color.black.opacity(0.001)
@@ -77,13 +119,12 @@ struct ContentView: View {
                         .transition(accountMenuTransition)
                         .zIndex(30)
                 }
-                
+
                 if !hasCompletedOnboarding {
                     OnboardingOverlay {
                         withAnimation(.easeOut(duration: 0.25)) {
                             hasCompletedOnboarding = true
                             applySmartLaunchLandingIfNeeded(force: true)
-                            // After first-run, offer pending resume if any.
                             if timerStore.pendingResumeSnapshot != nil {
                                 showResumeSessionAlert = true
                             }
@@ -92,7 +133,7 @@ struct ContentView: View {
                     .transition(.opacity)
                     .zIndex(40)
                 }
-                
+
                 if timerStore.showDailyGoalCelebration {
                     DailyGoalCelebrationOverlay(
                         completed: timerStore.completedPomodoros,
@@ -108,7 +149,6 @@ struct ContentView: View {
                 }
             }
         }
-        // Draw under the transparent titlebar so no system white strip shows through.
         .background(AppTheme.contentBackground(for: colorScheme).ignoresSafeArea())
         .ignoresSafeArea(.container, edges: .top)
         .environmentObject(viewState)
@@ -116,17 +156,55 @@ struct ContentView: View {
         .animation(.easeOut(duration: 0.25), value: hasCompletedOnboarding)
         .animation(.spring(response: 0.4, dampingFraction: 0.86), value: timerStore.showDailyGoalCelebration)
         .onAppear {
-            // Keep AppStorage sidebar flag in sync for traffic-light layout.
+            let fs = NSApplication.shared.windows.first(where: { $0.title == "iFocus" })?.styleMask.contains(.fullScreen) ?? false
+            isFullScreen = fs
+            WindowStateModel.shared.isFullScreen = fs
             WindowLayoutStore.isSidebarCollapsed = sidebarCollapsed
+            WindowStateModel.shared.isSidebarCollapsed = sidebarCollapsed
             WindowChrome.layoutMainWindowTrafficLights()
+            ViewMenuSanitizer.attachToViewMenu()
             applySmartLaunchLandingIfNeeded()
-            // Offer resume after quit mid-session — wait until onboarding is done.
             if hasCompletedOnboarding, timerStore.pendingResumeSnapshot != nil {
                 showResumeSessionAlert = true
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willEnterFullScreenNotification)) { note in
+            if (note.object as? NSWindow)?.title != "设置" {
+                isFullScreen = true
+                WindowStateModel.shared.isFullScreen = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { note in
+            if (note.object as? NSWindow)?.title != "设置" {
+                isFullScreen = true
+                WindowStateModel.shared.isFullScreen = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willExitFullScreenNotification)) { note in
+            if (note.object as? NSWindow)?.title != "设置" {
+                isFullScreen = false
+                WindowStateModel.shared.isFullScreen = false
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { note in
+            if (note.object as? NSWindow)?.title != "设置" {
+                isFullScreen = false
+                WindowStateModel.shared.isFullScreen = false
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppNavigation.toggleSidebar)) { _ in
+            withAnimation(AppTheme.springGentle) {
+                sidebarCollapsed.toggle()
+                WindowLayoutStore.isSidebarCollapsed = sidebarCollapsed
+                WindowStateModel.shared.isSidebarCollapsed = sidebarCollapsed
+            }
+        }
         .onChange(of: sidebarCollapsed) { collapsed in
             WindowLayoutStore.isSidebarCollapsed = collapsed
+            WindowStateModel.shared.isSidebarCollapsed = collapsed
+            if collapsed {
+                dismissAccountMenu()
+            }
             WindowChrome.layoutMainWindowTrafficLights()
         }
         .onChange(of: viewState.selectedScreen) { _ in
@@ -143,6 +221,7 @@ struct ContentView: View {
             openWindow(id: "settings")
         }
         .onReceive(NotificationCenter.default.publisher(for: AppNavigation.toggleTimer)) { _ in
+            AppHaptics.buttonClick()
             timerStore.toggle()
         }
         .onReceive(NotificationCenter.default.publisher(for: AppNavigation.resetTimer)) { _ in
@@ -155,8 +234,35 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: AppNavigation.skipTimer)) { _ in
             if timerStore.canSkipSegment {
+                AppHaptics.buttonClick()
                 timerStore.skipToNext()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppNavigation.newTask)) { _ in
+            let isTaskInputScreen: Bool
+            switch viewState.selectedScreen {
+            case .todayTask, .tomorrowTask, .weekTask, .plannedTask, .inboxTask:
+                isTaskInputScreen = true
+            default:
+                isTaskInputScreen = false
+            }
+            if !isTaskInputScreen {
+                viewState.selectedScreen = .todayTask
+            }
+            viewState.shouldFocusQuickAdd = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppNavigation.searchTasks)) { _ in
+            let isTaskScreen: Bool
+            switch viewState.selectedScreen {
+            case .todayTask, .tomorrowTask, .weekTask, .plannedTask, .completedTask, .inboxTask:
+                isTaskScreen = true
+            default:
+                isTaskScreen = false
+            }
+            if !isTaskScreen {
+                viewState.selectedScreen = .todayTask
+            }
+            viewState.shouldFocusSearch = true
         }
         .confirmationDialog(
             "重置当前计时？",
@@ -325,6 +431,8 @@ struct ContentView: View {
                 .zIndex(10)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppTheme.contentBackground(for: colorScheme).ignoresSafeArea())
         .animation(.spring(response: 0.35, dampingFraction: 0.82), value: shouldShowFloatingPill)
         .animation(.spring(response: 0.35, dampingFraction: 0.82), value: timerStore.pendingResumeSnapshot != nil)
     }

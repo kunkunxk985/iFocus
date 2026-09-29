@@ -163,12 +163,42 @@ struct FocusTask: Identifiable, Equatable, Codable {
 }
 
 struct FocusSession: Identifiable, Codable, Equatable {
-    var id = UUID()
+    var id: UUID
     var taskId: UUID?
     var taskTitle: String
     var taskCategory: TaskCategory?
     var durationMinutes: Int
     var timestamp: Date
+
+    init(
+        id: UUID = UUID(),
+        taskId: UUID? = nil,
+        taskTitle: String,
+        taskCategory: TaskCategory? = nil,
+        durationMinutes: Int,
+        timestamp: Date = Date()
+    ) {
+        self.id = id
+        self.taskId = taskId
+        self.taskTitle = taskTitle
+        self.taskCategory = taskCategory
+        self.durationMinutes = durationMinutes
+        self.timestamp = timestamp
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, taskId, taskTitle, taskCategory, durationMinutes, timestamp
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decode(UUID.self, forKey: .id)) ?? UUID()
+        self.taskId = try? c.decodeIfPresent(UUID.self, forKey: .taskId)
+        self.taskTitle = try c.decode(String.self, forKey: .taskTitle)
+        self.taskCategory = try? c.decodeIfPresent(TaskCategory.self, forKey: .taskCategory)
+        self.durationMinutes = try c.decode(Int.self, forKey: .durationMinutes)
+        self.timestamp = try c.decode(Date.self, forKey: .timestamp)
+    }
 }
 
 class TaskStore: ObservableObject {
@@ -534,6 +564,27 @@ class TaskStore: ObservableObject {
             return try decoder.decode(type, from: data)
         }
     }
+
+    /// Resilient array decoding that preserves existing items even if individual entries are damaged.
+    private static func decodeResilientArray<T: Decodable>(_ itemType: T.Type, from data: Data) throws -> [T] {
+        if let direct = try? decodeList([T].self, from: data) {
+            return direct
+        }
+        guard let jsonArray = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else {
+            return try decodeList([T].self, from: data)
+        }
+        var salvaged: [T] = []
+        for dict in jsonArray {
+            guard let itemData = try? JSONSerialization.data(withJSONObject: dict) else { continue }
+            if let item = try? decodeList(T.self, from: itemData) {
+                salvaged.append(item)
+            }
+        }
+        guard !salvaged.isEmpty || jsonArray.isEmpty else {
+            return try decodeList([T].self, from: data)
+        }
+        return salvaged
+    }
     
     private func scheduleSaveTasks() {
         guard !blockTasksPersistence else { return }
@@ -588,7 +639,7 @@ class TaskStore: ObservableObject {
         if FileManager.default.fileExists(atPath: tasksFileURL.path) {
             do {
                 let data = try Data(contentsOf: tasksFileURL)
-                tasks = try Self.decodeList([FocusTask].self, from: data)
+                tasks = try Self.decodeResilientArray(FocusTask.self, from: data)
                 blockTasksPersistence = false
             } catch {
                 tasksOK = false
@@ -602,7 +653,7 @@ class TaskStore: ObservableObject {
         if FileManager.default.fileExists(atPath: sessionsFileURL.path) {
             do {
                 let data = try Data(contentsOf: sessionsFileURL)
-                focusSessions = try Self.decodeList([FocusSession].self, from: data)
+                focusSessions = try Self.decodeResilientArray(FocusSession.self, from: data)
                 blockSessionsPersistence = false
             } catch {
                 sessionsOK = false
@@ -667,7 +718,7 @@ class TaskStore: ObservableObject {
         }
         do {
             let data = try Data(contentsOf: fileURL)
-            self.tasks = try Self.decodeList([FocusTask].self, from: data)
+            self.tasks = try Self.decodeResilientArray(FocusTask.self, from: data)
         } catch {
             AppLog.tasks.error("loadTasks failed: \(error.localizedDescription, privacy: .public)")
             backupCorruptFile(at: fileURL)
@@ -696,7 +747,7 @@ class TaskStore: ObservableObject {
         }
         do {
             let data = try Data(contentsOf: fileURL)
-            self.focusSessions = try Self.decodeList([FocusSession].self, from: data)
+            self.focusSessions = try Self.decodeResilientArray(FocusSession.self, from: data)
         } catch {
             AppLog.tasks.error("loadSessions failed: \(error.localizedDescription, privacy: .public)")
             backupCorruptFile(at: fileURL)
@@ -748,6 +799,7 @@ class TaskStore: ObservableObject {
         } else {
             self.appSupportDir = Self.defaultStorageDirectory()
         }
+        createSafetySnapshotIfNeeded()
         isLoadingFromDisk = true
         loadTasks()
         loadSessions()
@@ -755,6 +807,43 @@ class TaskStore: ObservableObject {
         isLoadingFromDisk = false
         // Roll incomplete recurring tasks whose due date is already past.
         rollForwardOverdueRecurringTasks()
+    }
+
+    /// Safeguard existing user data on app launch before reading or mutating.
+    private func createSafetySnapshotIfNeeded() {
+        let fm = FileManager.default
+        let hasTasks = fm.fileExists(atPath: tasksFileURL.path)
+        let hasSessions = fm.fileExists(atPath: sessionsFileURL.path)
+        guard hasTasks || hasSessions else { return }
+
+        let backupsDir = appSupportDir.appendingPathComponent("backups", isDirectory: true)
+        try? fm.createDirectory(at: backupsDir, withIntermediateDirectories: true)
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let dateTag = formatter.string(from: Date())
+        let snapshotDir = backupsDir.appendingPathComponent("auto_\(dateTag)", isDirectory: true)
+
+        // Only snapshot once per day unless snapshotDir is missing
+        if !fm.fileExists(atPath: snapshotDir.path) {
+            try? fm.createDirectory(at: snapshotDir, withIntermediateDirectories: true)
+            let filesToBackup = [tasksFileURL, sessionsFileURL, stateFileURL]
+            for file in filesToBackup where fm.fileExists(atPath: file.path) {
+                let dest = snapshotDir.appendingPathComponent(file.lastPathComponent)
+                try? fm.copyItem(at: file, to: dest)
+            }
+        }
+
+        // Retain only the latest 5 snapshots to avoid unlimited disk growth
+        if let contents = try? fm.contentsOfDirectory(at: backupsDir, includingPropertiesForKeys: [.creationDateKey], options: .skipsHiddenFiles) {
+            let autoBackups = contents.filter { $0.lastPathComponent.hasPrefix("auto_") }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            if autoBackups.count > 5 {
+                for old in autoBackups.prefix(autoBackups.count - 5) {
+                    try? fm.removeItem(at: old)
+                }
+            }
+        }
     }
     
     private func backupCorruptFile(at url: URL) {

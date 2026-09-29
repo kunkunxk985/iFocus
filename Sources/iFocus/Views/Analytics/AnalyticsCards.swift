@@ -70,22 +70,45 @@ enum AnalyticsCards {
     static func goalCard(model: AnalyticsDashboardModel, colorScheme: ColorScheme) -> some View {
         AnalyticsCard(title: "今日目标", icon: "scope") {
             GeometryReader { g in
-                let ring = min(132, min(g.size.width * 0.55, g.size.height * 0.52))
+                let ring = min(136, min(g.size.width * 0.56, g.size.height * 0.54))
+                let clampedProg = CGFloat(min(max(model.goalProgress, 0.0), 1.0))
                 VStack(spacing: 12) {
                     Spacer(minLength: 0)
                     ZStack {
+                        // Background track with recessed bevel
                         Circle()
-                            .stroke(AppTheme.accent.opacity(0.14), lineWidth: 14)
+                            .stroke(
+                                colorScheme == .light
+                                ? AppTheme.separatorLow(for: colorScheme).opacity(0.85)
+                                : Color.white.opacity(0.06),
+                                lineWidth: 13
+                            )
+
+                        // Active progress arc with luminous gradient and soft ambient glow
                         Circle()
-                            .trim(from: 0, to: model.goalProgress)
-                            .stroke(AppTheme.accent, style: StrokeStyle(lineWidth: 14, lineCap: .round))
+                            .trim(from: 0, to: clampedProg)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        AppTheme.accent.opacity(0.85),
+                                        AppTheme.accent,
+                                        AppTheme.accent
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                style: StrokeStyle(lineWidth: 13, lineCap: .round)
+                            )
                             .rotationEffect(.degrees(-90))
-                            .animation(.easeInOut(duration: 0.8), value: model.goalProgress)
-                        VStack(spacing: 2) {
+                            .shadow(color: AppTheme.accent.opacity(colorScheme == .light ? 0.35 : 0.45), radius: 5, x: 0, y: 1)
+                            .animation(AppTheme.springInteractive, value: model.goalProgress)
+
+                        VStack(spacing: 3) {
                             Text("\(Int(model.goalProgress * 100))%")
-                                .font(.system(size: max(24, ring * 0.22), weight: .bold, design: .rounded))
-                            Text(model.goalRemaining == 0 && model.completedPomodoros > 0 ? "已完成" : "完成")
-                                .font(.caption)
+                                .font(.system(size: max(25, ring * 0.24), weight: .bold, design: .rounded).monospacedDigit())
+                                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                            Text(model.goalRemaining == 0 && model.completedPomodoros > 0 ? "已达成" : "达成率")
+                                .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                         }
                     }
@@ -98,11 +121,11 @@ enum AnalyticsCards {
                             color: AppTheme.accent
                         )
                         ProgressRow(
-                            label: model.goalRemaining == 0 ? "目标" : "还剩",
+                            label: model.goalRemaining == 0 ? "目标" : "还差",
                             valueText: model.goalRemaining == 0
                                 ? "\(model.dailyGoal) 个"
                                 : "\(model.goalRemaining) 个",
-                            color: .gray
+                            color: Color(hex: "#9CA3AF")
                         )
                         ProgressRow(
                             label: "昨日",
@@ -207,20 +230,28 @@ enum AnalyticsCards {
                         VStack(alignment: .leading, spacing: 5) {
                             HStack {
                                 Label(item.name, systemImage: item.icon)
-                                    .font(.subheadline.weight(.semibold))
+                                    .font(.system(size: 12.5, weight: .semibold))
                                     .foregroundColor(item.color)
                                     .lineLimit(1)
                                 Spacer()
                                 Text("\(item.minutes) 分")
-                                    .font(.caption.weight(.bold).monospacedDigit())
+                                    .font(.system(size: 12, weight: .bold, design: .rounded).monospacedDigit())
                                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                             }
                             GeometryReader { g in
                                 ZStack(alignment: .leading) {
-                                    Capsule().fill(AppTheme.separator(for: colorScheme))
                                     Capsule()
-                                        .fill(item.color.opacity(0.85))
-                                        .frame(width: max(4, g.size.width * CGFloat(item.minutes) / CGFloat(total)))
+                                        .fill(AppTheme.separatorLow(for: colorScheme))
+                                    Capsule()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [item.color, item.color.opacity(0.85)],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .frame(width: max(6, g.size.width * CGFloat(item.minutes) / CGFloat(total)))
+                                        .shadow(color: item.color.opacity(0.28), radius: 2, x: 0, y: 0)
                                 }
                             }
                             .frame(height: 6)
@@ -236,13 +267,15 @@ enum AnalyticsCards {
         let pct = Int((model.freeShare * 100).rounded())
         let boundPct = max(0, 100 - pct)
         return AnalyticsCard(title: "任务绑定", icon: "link") {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("\(boundPct)%")
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.accent)
-                Text("绑定任务的专注占比")
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(boundPct)%")
+                        .font(.system(size: 36, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundColor(AppTheme.accent)
+                    Text("绑定任务占比")
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                }
                 ProgressRow(
                     label: "自由专注",
                     valueText: "\(pct)%",
@@ -252,8 +285,14 @@ enum AnalyticsCards {
                      ? "不错，多数时间都挂在任务上。"
                      : "多选任务再开始，分类与排行会更准。")
                     .font(.caption)
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(AppTheme.elevatedBackground(for: colorScheme).opacity(0.5))
+                    )
                 Spacer(minLength: 0)
             }
         }
@@ -274,7 +313,7 @@ enum AnalyticsCards {
                     ForEach(model.recentSessions) { session in
                         sessionRow(session, model: model, tasks: tasks, colorScheme: colorScheme)
                         if session.id != model.recentSessions.last?.id {
-                            Divider().opacity(0.55)
+                            Divider().opacity(0.4)
                         }
                     }
                 }
@@ -289,41 +328,52 @@ enum AnalyticsCards {
         colorScheme: ColorScheme
     ) -> some View {
         let cat = model.resolvedCategory(for: session, tasks: tasks)
+        let tint = cat?.color ?? AppTheme.accent
         return HStack(spacing: 12) {
-            Image(systemName: cat?.icon ?? "timer")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(cat?.color ?? AppTheme.accent)
-                .frame(width: 28, height: 28)
-                .background(Circle().fill((cat?.color ?? AppTheme.accent).opacity(0.12)))
+            ZStack {
+                Circle()
+                    .fill(tint.opacity(colorScheme == .light ? 0.12 : 0.20))
+                    .frame(width: 28, height: 28)
+                Image(systemName: cat?.icon ?? "timer")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(tint)
+            }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(session.taskTitle)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
                     .lineLimit(1)
                 HStack(spacing: 6) {
                     Text(sessionDateFormatter.string(from: session.timestamp))
-                        .font(.caption)
+                        .font(.system(size: 11))
                         .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                     if let cat {
                         Text("·")
-                            .font(.caption)
+                            .font(.system(size: 11))
                             .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                         Text(cat.rawValue)
-                            .font(.caption.weight(.medium))
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundColor(cat.color)
                     } else if session.taskId == nil {
                         Text("· 自由专注")
-                            .font(.caption)
+                            .font(.system(size: 11))
                             .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                     }
                 }
             }
             Spacer()
             Text("\(session.durationMinutes) 分")
-                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .font(.system(size: 12.5, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundColor(AppTheme.accent)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule()
+                        .fill(AppTheme.accent.opacity(colorScheme == .light ? 0.08 : 0.16))
+                )
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 7)
     }
 }
 

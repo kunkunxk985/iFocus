@@ -106,7 +106,7 @@ struct TimerView: View {
                         TimerImmersiveStatusPill(modeColor: modeColor, statusLabel: statusLabel)
                     }
 
-                    Spacer(minLength: max(2, layout.sectionSpacing * 0.35))
+                    Spacer(minLength: 4)
 
                     TimerRingView(
                         size: ringSize,
@@ -116,25 +116,29 @@ struct TimerView: View {
                         modeColor: modeColor,
                         isRunning: timerStore.isRunning,
                         decorativeMotion: settings.decorativeMotionEnabled,
-                        ringBreath: ringBreath
+                        ringBreath: ringBreath,
+                        isWorkMode: timerStore.mode == .work,
+                        sessionIndex: timerStore.completedPomodoros + 1,
+                        completedInCycle: timerStore.completedPomodoros % max(1, settings.longBreakEvery),
+                        cycleLength: max(1, settings.longBreakEvery)
                     )
                     .scaleEffect(
                         settings.decorativeMotionEnabled && celebratePulse
                         ? 1.04
-                        : (settings.decorativeMotionEnabled && timerStore.isRunning && ringBreath ? 1.015 : 1)
+                        : (settings.decorativeMotionEnabled && timerStore.isRunning && timerStore.mode == .work && ringBreath ? 1.015 : 1)
                     )
                     .animation(
                         settings.decorativeMotionEnabled ? .easeOut(duration: 0.35) : .linear(duration: 0),
                         value: celebratePulse
                     )
                     .animation(
-                        settings.decorativeMotionEnabled && timerStore.isRunning
+                        settings.decorativeMotionEnabled && timerStore.isRunning && timerStore.mode == .work
                         ? .easeInOut(duration: 2.4).repeatForever(autoreverses: true)
                         : .easeOut(duration: 0.2),
                         value: ringBreath
                     )
 
-                    Spacer(minLength: max(2, layout.sectionSpacing * 0.35))
+                    Spacer(minLength: 4)
 
                     if !immersiveMode {
                         TimerModeSwitcher(layout: layout)
@@ -149,15 +153,17 @@ struct TimerView: View {
                         showResetConfirm: $showResetConfirm,
                         onPlayToggle: requestStartOrToggle
                     )
+                    .padding(.top, 4)
 
                     if !immersiveMode, layout.showSessionHint {
                         TimerSessionHint()
-                            .padding(.bottom, TimerLayoutMath.lerp(10, 18, layout.eased))
+                            .padding(.bottom, TimerLayoutMath.lerp(8, 14, layout.eased))
                             .transition(.opacity)
                     } else {
-                        Color.clear.frame(height: TimerLayoutMath.lerp(8, 16, layout.eased))
+                        Color.clear.frame(height: TimerLayoutMath.lerp(6, 12, layout.eased))
                     }
                 }
+                .frame(maxWidth: 640)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.horizontal, layout.horizontalPadding)
                 .animation(.easeInOut(duration: 0.22), value: immersiveMode)
@@ -175,6 +181,9 @@ struct TimerView: View {
             syncAmbientMotion()
         }
         .onChange(of: timerStore.isRunning) { _ in
+            syncAmbientMotion()
+        }
+        .onChange(of: timerStore.mode) { _ in
             syncAmbientMotion()
         }
         .confirmationDialog(
@@ -204,14 +213,16 @@ struct TimerView: View {
             RadialGradient(
                 colors: [
                     modeColor.opacity(quiet
-                                      ? (colorScheme == .light ? 0.05 : 0.08)
-                                      : (colorScheme == .light ? 0.12 : 0.16)),
-                    modeColor.opacity(quiet ? 0.02 : 0.04),
+                                      ? (colorScheme == .light ? 0.04 : 0.07)
+                                      : (colorScheme == .light ? 0.11 : 0.15)),
+                    modeColor.opacity(quiet
+                                      ? (colorScheme == .light ? 0.015 : 0.03)
+                                      : (colorScheme == .light ? 0.035 : 0.055)),
                     .clear
                 ],
-                center: UnitPoint(x: 0.5, y: 0.42),
-                startRadius: 40,
-                endRadius: 480
+                center: UnitPoint(x: 0.5, y: 0.40),
+                startRadius: 30,
+                endRadius: 500
             )
         }
         .ignoresSafeArea()
@@ -230,7 +241,7 @@ struct TimerView: View {
         }
     }
 
-    /// Keep ring-breath / play-invite motion identical to pre-extract TimerView.
+    /// Keep ring-breath / play-invite motion synced with mode and focus state.
     private func syncAmbientMotion() {
         guard settings.decorativeMotionEnabled else {
             ringBreath = false
@@ -240,8 +251,10 @@ struct TimerView: View {
         if timerStore.isRunning {
             ringBreath = false
             playInvite = false
-            DispatchQueue.main.async {
-                ringBreath = true
+            if timerStore.mode == .work {
+                DispatchQueue.main.async {
+                    ringBreath = true
+                }
             }
         } else {
             ringBreath = false

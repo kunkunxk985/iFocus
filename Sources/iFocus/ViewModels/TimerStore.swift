@@ -128,6 +128,9 @@ class TimerStore: ObservableObject {
     /// Throttle dirty disk writes while the timer is running.
     private var lastDirtySnapshotAt: Date?
     private let dirtySnapshotInterval: TimeInterval = 12
+    /// Skip redundant Dock tile redraws when the badge text has not changed.
+    private var didApplyDockBadge = false
+    private var lastAppliedDockBadge: String?
     
     init(settings: SettingsStore, taskStore: TaskStore? = nil, sessionStorageDirectory: URL? = nil) {
         self.settings = settings
@@ -381,6 +384,9 @@ class TimerStore: ObservableObject {
             guard let self = self else { return }
             self.updateTimerTick()
         }
+        // Display is whole seconds from the wall-clock deadline, so a short
+        // tolerance lets the system coalesce wakes without skipping a shown second.
+        timer.tolerance = 0.2
         self.timer = timer
         RunLoop.main.add(timer, forMode: .common)
         updateTimerTick()
@@ -445,6 +451,7 @@ class TimerStore: ObservableObject {
         let watch = Timer(timeInterval: 30, repeats: true) { [weak self] _ in
             self?.evaluatePauseIdle()
         }
+        watch.tolerance = 5
         pauseWatchTimer = watch
         RunLoop.main.add(watch, forMode: .common)
         evaluatePauseIdle()
@@ -874,18 +881,29 @@ class TimerStore: ObservableObject {
     }
     
     private func updateDockBadge() {
-        DispatchQueue.main.async {
+        let label: String?
+        if isRunning {
+            label = timeString
+        } else if completedPomodoros > 0 {
+            label = "\(completedPomodoros)"
+        } else {
+            label = nil
+        }
+        if didApplyDockBadge, lastAppliedDockBadge == label { return }
+        didApplyDockBadge = true
+        lastAppliedDockBadge = label
+
+        let apply = {
             // Unit tests and early teardown can run without an NSApplication instance.
             guard let app = NSApp else { return }
             let tile = app.dockTile
-            if self.isRunning {
-                tile.badgeLabel = self.timeString
-            } else if self.completedPomodoros > 0 {
-                tile.badgeLabel = "\(self.completedPomodoros)"
-            } else {
-                tile.badgeLabel = nil
-            }
+            tile.badgeLabel = label
             tile.display()
+        }
+        if Thread.isMainThread {
+            apply()
+        } else {
+            DispatchQueue.main.async(execute: apply)
         }
     }
     

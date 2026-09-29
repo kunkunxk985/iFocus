@@ -1,11 +1,11 @@
 import SwiftUI
-import AppKit
 import iFocusCore
 
 /// Profile screen — thin composition of focused subviews.
 struct ProfileView: View {
     @EnvironmentObject var settings: SettingsStore
     @EnvironmentObject var taskStore: TaskStore
+    @EnvironmentObject var timerStore: TimerStore
     @Environment(\.colorScheme) private var colorScheme
     
     @State private var isEditing = false
@@ -74,7 +74,6 @@ struct ProfileView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     ProfileHeaderBar(
-                        onShare: shareReportViaEmail,
                         onEdit: {
                             tempUsername = displayName
                             isEditing = true
@@ -124,8 +123,8 @@ struct ProfileView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .padding(.top, 24)
-                    .padding(.bottom, 56)
                 }
+                .padding(.bottom, timerStore.isSessionInProgress ? 96 : 32)
             }
             .softScroll()
         }
@@ -147,56 +146,5 @@ struct ProfileView: View {
             }
         }
         .animation(.easeOut(duration: 0.16), value: isEditing)
-    }
-    
-    private func shareReportViaEmail() {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let todaySessions = taskStore.focusSessions.filter { $0.timestamp >= today }
-        let todayPomodorosCount = todaySessions.count
-        let todayMinutes = todaySessions.reduce(0) { $0 + $1.durationMinutes }
-        
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy年M月d日"
-        formatter.locale = Locale(identifier: "zh_CN")
-        let dateStr = formatter.string(from: Date())
-        
-        var bodyText = """
-        你好！这是 \(displayName) 在 \(dateStr) 的 iFocus 专注日报：
-        
-        - 今日完成番茄钟：\(todayPomodorosCount) 个
-        - 今日累计专注时间：\(todayMinutes) 分钟
-        - 当前连续专注天数：\(streakInfo.current) 天
-        
-        分类专注明细：
-        """
-        
-        let stats = categoryStats.filter { $0.minutes > 0 }
-        if stats.isEmpty {
-            bodyText += "\n- 暂无分类专注数据（自由专注）"
-        } else {
-            for item in stats {
-                bodyText += "\n- \(item.category.rawValue)：\(item.minutes) 分钟"
-            }
-        }
-        
-        bodyText += "\n\n合理规划时间，保持高效专注！\n-- 来自 iFocus macOS 客户端"
-        
-        let subject = "iFocus 专注日报 - \(dateStr)"
-        var allowed = CharacterSet.alphanumerics
-        allowed.insert(charactersIn: "-._~")
-        guard let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: allowed),
-              let encodedBody = bodyText.addingPercentEncoding(withAllowedCharacters: allowed) else {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString("\(subject)\n\n\(bodyText)", forType: .string)
-            return
-        }
-        let urlString = "mailto:?subject=\(encodedSubject)&body=\(encodedBody)"
-        if let url = URL(string: urlString), urlString.count < 7000 {
-            NSWorkspace.shared.open(url)
-        } else {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString("\(subject)\n\n\(bodyText)", forType: .string)
-        }
     }
 }
