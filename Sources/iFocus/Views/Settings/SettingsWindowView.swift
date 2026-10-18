@@ -75,7 +75,9 @@ struct SettingsWindowView: View {
             .background(AppTheme.contentBackground(for: colorScheme).ignoresSafeArea())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.clear)
+        // Same canvas as the main window behind the glass sidebar card; with a clear root the
+        // margin around the card and the gap before the content pane showed the desktop.
+        .background(AppTheme.contentBackground(for: colorScheme).ignoresSafeArea())
         // Like the main window: the sidebar card runs under the transparent titlebar so the
         // traffic lights sit on it. Otherwise they float over the clear window background,
         // look misplaced, and clicks on them can fall through the window.
