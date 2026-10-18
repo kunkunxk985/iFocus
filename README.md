@@ -29,7 +29,7 @@ CLANG_MODULE_CACHE_PATH="$(pwd)/.build/clang-module-cache" \
 ## 打包与运行
 
 ```bash
-# 生成 Build/iFocus.app（含 Info.plist 版本 1.9.3 / 85）
+# 生成 Build/iFocus.app（版本号取自根目录 VERSION），并同步到 ~/Desktop 和 /Applications
 bash Scripts/package_app.sh
 
 # 生成 Build/iFocus.dmg（默认会先重新打包 .app）
