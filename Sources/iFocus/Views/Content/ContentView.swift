@@ -312,6 +312,23 @@ struct ContentView: View {
         } message: {
             Text(taskStore.dataLoadErrorMessage ?? "")
         }
+        .alert(
+            "部分记录没能读出来",
+            isPresented: Binding(
+                get: { taskStore.upgradeNotice != nil && taskStore.dataLoadErrorMessage == nil },
+                set: { if !$0 { taskStore.upgradeNotice = nil } }
+            )
+        ) {
+            Button("打开数据文件夹") {
+                settings.openDataFolderInFinder()
+                taskStore.upgradeNotice = nil
+            }
+            Button("知道了", role: .cancel) {
+                taskStore.upgradeNotice = nil
+            }
+        } message: {
+            Text(taskStore.upgradeNotice ?? "")
+        }
         // IMPORTANT: never subscribe to `clockTick` on this root view.
         // Per-second invalidation re-renders the whole tree (task list + edit sheet)
         // and freezes macOS DatePicker / controls. Clock UI lives in leaf views only.

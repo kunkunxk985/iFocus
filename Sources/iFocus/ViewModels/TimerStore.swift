@@ -76,6 +76,24 @@ class TimerStore: ObservableObject {
     /// so a timer left running cannot record an unlimited amount of study.
     static let countUpCapMinutes = 120
 
+    /// Which save path committed a work session.
+    enum CommitKind: Equatable {
+        case pomodoro
+        case countUpFinish
+        case finishEarly
+        case countUpCap
+        case resumeAfterCap
+    }
+
+    /// Offer to start the next block after a count-up stopped at the cap.
+    struct CapRestart: Equatable {
+        let taskId: UUID?
+        let taskTitle: String
+    }
+
+    /// Title for a task-less session when no title was captured.
+    static let untitledSessionTitle = "未指定任务"
+
     private struct WorkSessionContext {
         let taskId: UUID?
         let taskTitle: String
@@ -94,6 +112,10 @@ class TimerStore: ObservableObject {
     @Published var showDailyGoalCelebration: Bool = false
     /// Unclean-exit snapshot waiting for user to resume or discard (set at launch).
     @Published var pendingResumeSnapshot: TimerSessionSnapshot?
+    /// Most recently committed focus session (set by every save path).
+    @Published private(set) var lastCommittedSessionID: UUID?
+    /// Set when a count-up block stopped at the cap; 「再开一段」 starts the next one.
+    @Published private(set) var capRestart: CapRestart?
     /// When set, UI should confirm discarding the mid-session before applying the action.
     @Published var pendingSessionDiscard: PendingSessionDiscard?
     /// True when paused mid-session longer than the reminder threshold.
@@ -130,6 +152,8 @@ class TimerStore: ObservableObject {
     private var sessionPlannedDuration: TimeInterval?
     /// Whether the current segment counts up, locked at start like `sessionPlannedDuration`.
     private var sessionCountsUp: Bool?
+    /// Forces the next work start to count up (「再开一段」 after the cap), whatever the setting.
+    private var countUpOverrideForNextStart: Bool?
     /// Snapshot attribution when a work session starts, so later task edits cannot steal it.
     private var workSessionContext: WorkSessionContext?
     private var isCompleting = false
@@ -394,14 +418,18 @@ class TimerStore: ObservableObject {
         guard !isRunning, !isCompleting else { return }
         if sessionPlannedDuration == nil {
             if mode == .work {
-                sessionCountsUp = settings.countUpWork
+                let countsUp = countUpOverrideForNextStart ?? settings.countUpWork
+                sessionCountsUp = countsUp
                 if elapsedBeforePause <= 0.01 {
                     // Idle time may predate a settings change (e.g. count-up just toggled).
-                    timeRemaining = mode.duration(settings: settings)
+                    timeRemaining = TimeInterval((countsUp ? Self.countUpCapMinutes : settings.workMinutes) * 60)
                 }
             }
+            countUpOverrideForNextStart = nil
             sessionPlannedDuration = max(0, elapsedBeforePause + timeRemaining)
         }
+        // A new block replaces the restart offer from the cap.
+        capRestart = nil
         captureWorkSessionContextIfNeeded()
         clearPauseIdleState()
         isRunning = true
@@ -701,12 +729,33 @@ class TimerStore: ObservableObject {
         let planned = sessionPlannedDuration ?? mode.duration(settings: settings)
         let elapsed = min(currentSessionElapsed, planned)
         let minutes = elapsed >= 60
-            ? logWorkSegment(elapsedSeconds: elapsed, plannedDuration: planned, context: workSessionContext)
+            ? commitSession(
+                elapsedSeconds: elapsed,
+                plannedDuration: planned,
+                context: workSessionContext,
+                kind: .finishEarly
+            )?.durationMinutes
             : nil
         reset()
         if let minutes {
             celebrationMessage = "已记录 \(minutes) 分钟专注"
         }
+    }
+
+    /// 「再开一段」: a fresh count-up block on the task whose block stopped at the cap.
+    func restartAfterCap() {
+        guard let cap = capRestart, !isRunning, !isSessionInProgress else { return }
+        var taskId = cap.taskId
+        if let id = taskId, taskStore?.tasks.contains(where: { $0.id == id && !$0.isCompleted }) != true {
+            taskId = nil
+        }
+        countUpOverrideForNextStart = true
+        requestStartWorkFocus(taskId: taskId)
+    }
+
+    /// Hides the restart offer without starting anything.
+    func dismissCapRestart() {
+        capRestart = nil
     }
 
     /// Explicit one-tap start of the prepared next segment (when auto-start is off).
@@ -736,12 +785,37 @@ class TimerStore: ObservableObject {
     
     private func loadPendingResumeIfNeeded() {
         guard let snap = TimerSessionPersistence.load(from: sessionDirectory()) else { return }
+        if commitIfCountUpCapPassed(snap) { return }
         if snap.shouldOfferResume {
             pendingResumeSnapshot = snap
             return
         }
         // Idle / empty snapshot left on disk — drop so we start fresh.
         TimerSessionPersistence.clear(in: sessionDirectory())
+    }
+
+    /// A count-up block that was still running when the app quit or crashed, and would have
+    /// reached the cap since, is committed as exactly the cap instead of offered for resume.
+    private func commitIfCountUpCapPassed(_ snap: TimerSessionSnapshot, now: Date = Date()) -> Bool {
+        guard snap.timerMode == .work, snap.countUp == true, snap.isRunning else { return false }
+        let capEnd = snap.savedAt.addingTimeInterval(max(0, snap.timeRemaining))
+        guard capEnd <= now else { return false }
+        let planned = snap.sessionPlannedDuration ?? TimeInterval(Self.countUpCapMinutes * 60)
+        let context = WorkSessionContext(
+            taskId: snap.activeTaskId,
+            taskTitle: snap.workTaskTitle ?? "自由专注",
+            taskCategory: snap.workTaskCategory.flatMap { raw in TaskCategory.allCases.first { $0.rawValue == raw } }
+        )
+        commitSession(
+            elapsedSeconds: planned,
+            plannedDuration: planned,
+            context: context,
+            kind: .resumeAfterCap,
+            endedAt: capEnd
+        )
+        TimerSessionPersistence.clear(in: sessionDirectory())
+        capRestart = CapRestart(taskId: context.taskId, taskTitle: context.taskTitle)
+        return true
     }
 
     /// Refresh a restored timer snapshot after a backup import.
@@ -995,6 +1069,9 @@ class TimerStore: ObservableObject {
         // Sleeping past the deadline must not turn one pomodoro into hours of history.
         let elapsedSeconds = min(currentSessionElapsed, plannedDuration)
         let completedWorkContext = workSessionContext
+        let countedUp = wasWork && sessionCountsUp == true
+        // 「完成」 ends a count-up early; running out the planned time means the cap was reached.
+        let reachedCountUpCap = countedUp && timeRemaining <= 0
         
         pause()
         clearPauseIdleState()
@@ -1003,11 +1080,17 @@ class TimerStore: ObservableObject {
         
         var loggedMinutes: Int?
         if wasWork {
-            loggedMinutes = logWorkSegment(
+            loggedMinutes = commitSession(
                 elapsedSeconds: elapsedSeconds,
                 plannedDuration: plannedDuration,
-                context: completedWorkContext
-            )
+                context: completedWorkContext,
+                kind: reachedCountUpCap ? .countUpCap : (countedUp ? .countUpFinish : .pomodoro)
+            )?.durationMinutes
+        }
+        if reachedCountUpCap {
+            stopAtCountUpCap(context: completedWorkContext)
+            isCompleting = false
+            return
         }
         
         // Restore mode for notification copy (pause does not change mode).
@@ -1042,33 +1125,44 @@ class TimerStore: ObservableObject {
         emitClockTick()
     }
     
-    /// Writes a work segment to focus history. Returns logged minutes, or nil under the one-minute floor.
-    private func logWorkSegment(
+    /// The one place a work session is written to history: pomodoro end, count-up 「完成」,
+    /// 「结束并记录」, the 2-hour cap and the cap passed while the app was closed.
+    /// Returns nil under the one-minute floor (nothing is written).
+    @discardableResult
+    private func commitSession(
         elapsedSeconds: TimeInterval,
         plannedDuration: TimeInterval,
-        context: WorkSessionContext?
-    ) -> Int? {
+        context: WorkSessionContext?,
+        kind: CommitKind,
+        endedAt: Date = Date()
+    ) -> FocusSession? {
         guard let minutes = TimerFormatting.logMinutes(
             elapsedSeconds: elapsedSeconds,
             maximumSeconds: plannedDuration
         ) else { return nil }
         let previousPomodoros = completedPomodoros
+        let session: FocusSession?
         if let taskId = context?.taskId {
             taskStore?.addFocusTime(to: taskId, minutes: minutes)
-            taskStore?.logFocusSession(
+            session = taskStore?.logFocusSession(
                 taskId: taskId,
                 taskTitle: context?.taskTitle ?? "已删除任务",
                 taskCategory: context?.taskCategory,
-                minutes: minutes
+                minutes: minutes,
+                endedAt: endedAt
             )
         } else {
-            taskStore?.logFocusSession(
+            // Task-less time is study time, so it counts toward 学习.
+            let title = context?.taskTitle.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            session = taskStore?.logFocusSession(
                 taskId: nil,
-                taskTitle: context?.taskTitle ?? "自由专注",
-                taskCategory: context?.taskCategory,
-                minutes: minutes
+                taskTitle: title.isEmpty ? Self.untitledSessionTitle : title,
+                taskCategory: .study,
+                minutes: minutes,
+                endedAt: endedAt
             )
         }
+        lastCommittedSessionID = session?.id
         if let store = taskStore {
             updateStatsFromHistory(taskStore: store)
         }
@@ -1076,7 +1170,25 @@ class TimerStore: ObservableObject {
             previousCount: previousPomodoros,
             newCount: completedPomodoros
         )
-        return minutes
+        return session
+    }
+
+    /// After the cap is committed: stop on an idle work timer and offer 「再开一段」.
+    /// Nothing continues on its own while nobody may be watching.
+    private func stopAtCountUpCap(context: WorkSessionContext?) {
+        sessionPlannedDuration = nil
+        sessionCountsUp = nil
+        workSessionContext = nil
+        mode = .work
+        timeRemaining = mode.duration(settings: settings)
+        celebrationMessage = nil
+        capRestart = CapRestart(taskId: context?.taskId, taskTitle: context?.taskTitle ?? "自由专注")
+        playCompletionRitual()
+        cancelSegmentEndNotification()
+        sendCapNotification(taskTitle: context?.taskId == nil ? nil : context?.taskTitle)
+        clearSessionSnapshot()
+        updateDockBadge()
+        emitClockTick()
     }
 
     private func applyCompletion(nextMode: TimerMode) {
@@ -1116,6 +1228,10 @@ class TimerStore: ObservableObject {
 
         let content = UNMutableNotificationContent()
         switch mode {
+        case .work where sessionCountsUp == true:
+            // A count-up block only reaches its deadline at the cap.
+            content.title = "已记下 \(Self.countUpCapMinutes / 60) 小时"
+            content.body = "这段先记下了。回到 iFocus 点「再开一段」接着学。"
         case .work:
             content.title = "专注即将完成"
             content.body = "本段专注已到时。打开 iFocus 查看下一段。"
@@ -1219,6 +1335,24 @@ class TimerStore: ObservableObject {
         NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
     }
     
+    private func sendCapNotification(taskTitle: String?) {
+        guard isPackagedApp else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "已记下 \(Self.countUpCapMinutes / 60) 小时"
+        if let title = taskTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+            content.body = "「\(title)」先记下了。回到 iFocus 点「再开一段」接着学。"
+        } else {
+            content.body = "这段先记下了。回到 iFocus 点「再开一段」接着学。"
+        }
+        content.sound = settings.completionNotificationSound()
+        let request = UNNotificationRequest(
+            identifier: "ifocus.timer.cap.\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: { _ in })
+    }
+
     private func sendNotification(
         completed: TimerMode,
         next: TimerMode,

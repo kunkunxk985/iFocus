@@ -234,6 +234,10 @@ class TaskStore: ObservableObject {
     
     /// Non-nil after a corrupt tasks/sessions load — UI should show recovery options.
     @Published private(set) var dataLoadErrorMessage: String?
+    /// Tasks or sessions that could not be read (and were left out) since launch.
+    private(set) var skippedItemsOnLoad = 0
+    /// One-time notice after an upgrade launch that skipped unreadable items.
+    @Published var upgradeNotice: String?
     
     @Published var newTaskTitle: String = ""
     @Published var newTaskCategory: TaskCategory = .study
@@ -395,6 +399,8 @@ class TaskStore: ObservableObject {
         tasks.append(task)
         newTaskTitle = ""
         newTaskRecurrence = .none
+        // Study is the default every time, not the last category used.
+        newTaskCategory = .study
         saveTasksImmediately()
         return task.id
     }
@@ -571,7 +577,12 @@ class TaskStore: ObservableObject {
     }
 
     /// Resilient array decoding that preserves existing items even if individual entries are damaged.
-    private static func decodeResilientArray<T: Decodable>(_ itemType: T.Type, from data: Data) throws -> [T] {
+    /// `skipped` gains the number of entries that could not be read.
+    private static func decodeResilientArray<T: Decodable>(
+        _ itemType: T.Type,
+        from data: Data,
+        skipped: inout Int
+    ) throws -> [T] {
         if let direct = try? decodeList([T].self, from: data) {
             return direct
         }
@@ -588,6 +599,7 @@ class TaskStore: ObservableObject {
         guard !salvaged.isEmpty || jsonArray.isEmpty else {
             return try decodeList([T].self, from: data)
         }
+        skipped += jsonArray.count - salvaged.count
         return salvaged
     }
     
@@ -645,7 +657,7 @@ class TaskStore: ObservableObject {
         if FileManager.default.fileExists(atPath: tasksFileURL.path) {
             do {
                 let data = try Data(contentsOf: tasksFileURL)
-                tasks = try Self.decodeResilientArray(FocusTask.self, from: data)
+                tasks = try Self.decodeResilientArray(FocusTask.self, from: data, skipped: &skippedItemsOnLoad)
                 blockTasksPersistence = false
             } catch {
                 tasksOK = false
@@ -659,7 +671,7 @@ class TaskStore: ObservableObject {
         if FileManager.default.fileExists(atPath: sessionsFileURL.path) {
             do {
                 let data = try Data(contentsOf: sessionsFileURL)
-                focusSessions = try Self.decodeResilientArray(FocusSession.self, from: data)
+                focusSessions = try Self.decodeResilientArray(FocusSession.self, from: data, skipped: &skippedItemsOnLoad)
                 blockSessionsPersistence = false
             } catch {
                 sessionsOK = false
@@ -724,7 +736,7 @@ class TaskStore: ObservableObject {
         }
         do {
             let data = try Data(contentsOf: fileURL)
-            self.tasks = try Self.decodeResilientArray(FocusTask.self, from: data)
+            self.tasks = try Self.decodeResilientArray(FocusTask.self, from: data, skipped: &skippedItemsOnLoad)
         } catch {
             AppLog.tasks.error("loadTasks failed: \(error.localizedDescription, privacy: .public)")
             backupCorruptFile(at: fileURL)
@@ -754,7 +766,7 @@ class TaskStore: ObservableObject {
         }
         do {
             let data = try Data(contentsOf: fileURL)
-            self.focusSessions = try Self.decodeResilientArray(FocusSession.self, from: data)
+            self.focusSessions = try Self.decodeResilientArray(FocusSession.self, from: data, skipped: &skippedItemsOnLoad)
         } catch {
             AppLog.tasks.error("loadSessions failed: \(error.localizedDescription, privacy: .public)")
             backupCorruptFile(at: fileURL)
@@ -1057,23 +1069,26 @@ class TaskStore: ObservableObject {
         saveTasksImmediately()
     }
     
+    @discardableResult
     func logFocusSession(
         taskId: UUID?,
         taskTitle: String,
         taskCategory: TaskCategory? = nil,
-        minutes: Int
-    ) {
-        guard minutes >= 1 else { return }
+        minutes: Int,
+        endedAt: Date = Date()
+    ) -> FocusSession? {
+        guard minutes >= 1 else { return nil }
         let session = FocusSession(
             taskId: taskId,
             taskTitle: taskTitle,
             taskCategory: taskCategory,
             durationMinutes: minutes,
-            timestamp: Date()
+            timestamp: endedAt
         )
         focusSessions.append(session)
         // Completing a pomodoro must survive force-quit — write sessions immediately.
         saveSessionsWorkItem?.cancel()
         saveSessions()
+        return session
     }
 }

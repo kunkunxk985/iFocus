@@ -29,6 +29,7 @@ final class MenuBarController: NSObject, ObservableObject {
         case nextMode = 104
         case setMode = 110
         case openToday = 111
+        case restartAfterCap = 112
         case show = 105
         case quit = 106
     }
@@ -147,6 +148,11 @@ final class MenuBarController: NSObject, ObservableObject {
         let nextItem = NSMenuItem(title: "跳过此段", action: #selector(advanceMode), keyEquivalent: "")
         nextItem.tag = MenuTag.nextMode.rawValue
         menu.addItem(nextItem)
+
+        let restartItem = NSMenuItem(title: "再开一段", action: #selector(restartAfterCap), keyEquivalent: "")
+        restartItem.tag = MenuTag.restartAfterCap.rawValue
+        restartItem.isHidden = true
+        menu.addItem(restartItem)
 
         let modeRoot = NSMenuItem(title: "切换模式", action: nil, keyEquivalent: "")
         modeRoot.tag = MenuTag.setMode.rawValue
@@ -368,6 +374,13 @@ final class MenuBarController: NSObject, ObservableObject {
 
         // Reset only meaningful when something is live.
         menu.item(withTag: MenuTag.reset.rawValue)?.isEnabled = isRunning || inProgress
+
+        // After a count-up stopped at the cap: one click starts the next block.
+        if let restartItem = menu.item(withTag: MenuTag.restartAfterCap.rawValue) {
+            let cap = timerStore.capRestart
+            restartItem.isHidden = cap == nil || isRunning || inProgress
+            restartItem.title = "再开一段：\(cap?.taskTitle ?? "自由专注")"
+        }
 
         refreshModeSubmenu(menu)
         refreshTaskSubmenu(menu)
@@ -727,6 +740,11 @@ final class MenuBarController: NSObject, ObservableObject {
     @objc private func openTodayList() {
         WindowChromeController.shared.showMainWindow()
         AppNavigation.post(.todayTask)
+    }
+
+    @objc private func restartAfterCap() {
+        timerStore.restartAfterCap()
+        updateStatusItem()
     }
 
     @objc private func showMainWindow() {

@@ -227,7 +227,18 @@ struct iFocusApp: App {
     
     init() {
         let settings = SettingsStore()
+        // Copy the data files aside on the first launch of a new version, before anything reads them.
+        let preUpgradeFolder = PreUpgradeGuard.run(
+            storageDirectory: TaskStore.defaultStorageDirectory(),
+            currentVersion: AppVersion.short
+        )
         let taskStore = TaskStore(studyLogDirectory: StudyLogWriter.defaultDirectory())
+        if let preUpgradeFolder, taskStore.skippedItemsOnLoad > 0 {
+            taskStore.upgradeNotice = PreUpgradeGuard.skippedItemsNotice(
+                count: taskStore.skippedItemsOnLoad,
+                folder: preUpgradeFolder
+            )
+        }
         let timerStore = TimerStore(settings: settings, taskStore: taskStore)
         _settings = StateObject(wrappedValue: settings)
         _taskStore = StateObject(wrappedValue: taskStore)

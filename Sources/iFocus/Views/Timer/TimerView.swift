@@ -40,6 +40,30 @@ struct TimerView: View {
         }
     }
 
+    /// Shown after a count-up stopped at the cap: the time is logged, one click continues.
+    private func capRestartButton(_ cap: TimerStore.CapRestart) -> some View {
+        Button {
+            timerStore.restartAfterCap()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(TimerMode.work.accent)
+                Text("已记下 \(TimerStore.countUpCapMinutes / 60) 小时 · 再开一段")
+                    .fontWeight(.semibold)
+                Text(cap.taskTitle)
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    .lineLimit(1)
+            }
+            .font(.system(size: 12.5))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(Capsule().fill(AppTheme.cardBackground(for: colorScheme)))
+            .overlay(Capsule().strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1))
+        }
+        .buttonStyle(SoftScaleButtonStyle())
+        .help("从 00:00 开始下一段正计时，记在同一个任务上")
+    }
+
     private var goalProgress: Double {
         guard settings.dailyGoal > 0 else { return 0 }
         return min(1, Double(timerStore.completedPomodoros) / Double(settings.dailyGoal))
@@ -132,6 +156,11 @@ struct TimerView: View {
                     )
 
                     Spacer(minLength: 4)
+
+                    if let cap = timerStore.capRestart, !timerStore.isRunning, !timerStore.isSessionInProgress {
+                        capRestartButton(cap)
+                            .transition(.opacity)
+                    }
 
                     if !immersiveMode {
                         TimerModeSwitcher(layout: layout)

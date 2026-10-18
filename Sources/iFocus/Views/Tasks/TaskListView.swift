@@ -156,8 +156,10 @@ struct TaskListView: View {
         for chip in candidates where chipCount(chip) > 0 {
             chips.append(chip)
         }
-        let cats = Set(baseTasks.map(\.category))
-        for cat in TaskCategory.allCases where cats.contains(cat) {
+        // 学习 always; other categories only while an unfinished task uses them.
+        chips.append(.category(.study))
+        let used = Set(taskStore.incompleteTasks.map(\.category))
+        for cat in TaskCategory.allCases where cat != .study && used.contains(cat) {
             chips.append(.category(cat))
         }
         return chips
@@ -710,9 +712,10 @@ struct TaskListView: View {
     private var taskOptionsMenu: some View {
         Menu {
             Section("任务属性") {
-                Picker("分类", selection: $taskStore.newTaskCategory) {
-                    ForEach(TaskCategory.allCases) { category in
-                        Text(category.rawValue).tag(category)
+                newTaskCategoryButton(.study)
+                Menu("更多分类") {
+                    ForEach(TaskCategory.allCases.filter { $0 != .study }) { category in
+                        newTaskCategoryButton(category)
                     }
                 }
                 Picker("优先级", selection: $taskStore.newTaskPriority) {
@@ -771,6 +774,19 @@ struct TaskListView: View {
         )
     }
     
+    /// Menu row that picks the quick-add category (checkmark on the current one).
+    private func newTaskCategoryButton(_ category: TaskCategory) -> some View {
+        Button {
+            taskStore.newTaskCategory = category
+        } label: {
+            if taskStore.newTaskCategory == category {
+                Label(category.rawValue, systemImage: "checkmark")
+            } else {
+                Text(category.rawValue)
+            }
+        }
+    }
+
     private func dueChip(title: String, override: TaskStore.DueOverride?) -> some View {
         let selected = dueOverride == override
         return Button {
