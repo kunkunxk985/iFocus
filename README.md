@@ -104,14 +104,27 @@ bash Scripts/smoke_test.sh --replace-running
 ## 工程结构
 
 ```
-VERSION               # 营销版本 + build（唯一来源）
+VERSION                 # 营销版本 + build（唯一来源）
 Sources/
-  iFocus/             # App：SwiftUI、Store、菜单栏
-    Views/Analytics/  # 统计页拆分（Chrome / Charts / Cards）
-  iFocusCore/         # 纯逻辑（过滤、统计、时间范围、备份包）
+  iFocus/               # App 本体（SwiftUI + AppKit）
+    App/                # 入口 iFocusApp、窗口外观、菜单栏、深链接、开机启动、日志
+    Services/           # 本地备份、学习记录（~/StudyLog）写出
+    ViewModels/         # TimerStore、TaskStore、SettingsStore 等状态
+    Views/
+      Content/          # 主窗口骨架：ContentView、侧栏、全局浮层、窗口尺寸
+      Timer/            # 专注钟页
+      Tasks/            # 清单页、任务行、编辑任务
+      Analytics/        # 数据统计页（Chrome / Charts / Cards）
+      Profile/          # 个人资料页
+      Settings/         # 设置窗口
+      Theme/            # 颜色、字号、间距、触感反馈
+      Components/       # 多个页面共用的小组件
+    AppIcon.icns
+  iFocusCore/           # 纯逻辑（过滤、统计、时间范围、备份包、学习记录导出）
 Tests/iFocusTests/
 Scripts/
-  package_app.sh      # 读 VERSION 写入 Info.plist
+  package_app.sh        # 读 VERSION 写入 Info.plist，并同步安装
+  package_dmg.sh
   smoke_test.sh
   run_deep_qa.sh
 ```

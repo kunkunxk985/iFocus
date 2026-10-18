@@ -23,6 +23,9 @@ Distribution/
 # Local / agent caches
 .clang-module-cache/
 **/clang-module-cache/
+.agents/
+.work/
+outputs/
 
 # Crash / temp
 *.ipa
