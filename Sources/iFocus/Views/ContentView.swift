@@ -257,19 +257,7 @@ struct ContentView: View {
             }
             viewState.shouldFocusSearch = true
         }
-        .confirmationDialog(
-            "重置当前计时？",
-            isPresented: $showResetConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("重置", role: .destructive) {
-                timerStore.celebrationMessage = nil
-                timerStore.reset()
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("进行中的时段不会记入专注记录。")
-        }
+        .timerResetConfirmation(isPresented: $showResetConfirm, timerStore: timerStore)
         .alert(
             "恢复专注会话？",
             isPresented: $showResumeSessionAlert
@@ -352,15 +340,12 @@ struct ContentView: View {
             return "有未完成的计时可以恢复。"
         }
         let modeName = snap.timerMode?.rawValue ?? "计时"
-        let remaining = Int(snap.timeRemaining.rounded())
-        let m = remaining / 60
-        let s = remaining % 60
-        let timePart = String(format: "%d:%02d", m, s)
+        let timePart = snap.resumeTimeLabel
         let prefix = snap.resumeReasonLabel
         if let title = snap.workTaskTitle, !title.isEmpty, snap.timerMode == .work {
-            return "\(prefix)「\(title)」· \(modeName) 还剩 \(timePart)。恢复后处于暂停，可点继续。选「稍后」可在顶部横幅再处理。"
+            return "\(prefix)「\(title)」· \(modeName) \(timePart)。恢复后处于暂停，可点继续。选「稍后」可在顶部横幅再处理。"
         }
-        return "\(prefix)\(modeName) 还剩 \(timePart)。恢复后处于暂停。选「稍后」可在顶部横幅再处理。"
+        return "\(prefix)\(modeName) \(timePart)。恢复后处于暂停。选「稍后」可在顶部横幅再处理。"
     }
     
     private var detailPane: some View {
@@ -382,8 +367,7 @@ struct ContentView: View {
                 case nil:
                     AppEmptyState(
                         systemImage: "sidebar.left",
-                        title: "选择一个功能开始",
-                        subtitle: "从左侧打开专注钟、清单或数据统计"
+                        title: "选择一个功能"
                     )
                     .transition(pageTransition)
                 }
@@ -433,15 +417,12 @@ struct ContentView: View {
     private var resumeBannerShortMessage: String {
         guard let snap = timerStore.pendingResumeSnapshot else { return "有未完成的专注会话" }
         let modeName = snap.timerMode?.rawValue ?? "计时"
-        let remaining = Int(snap.timeRemaining.rounded())
-        let m = remaining / 60
-        let s = remaining % 60
-        let timePart = String(format: "%d:%02d", m, s)
+        let timePart = snap.resumeTimeLabel
         let reason = snap.resumeReasonLabel
         if let title = snap.workTaskTitle, !title.isEmpty, snap.timerMode == .work {
-            return "\(reason) · 「\(title)」还剩 \(timePart)"
+            return "\(reason) · 「\(title)」\(timePart)"
         }
-        return "\(reason) · \(modeName) 还剩 \(timePart)"
+        return "\(reason) · \(modeName) \(timePart)"
     }
     
     private var pageTransition: AnyTransition {

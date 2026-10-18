@@ -22,7 +22,7 @@ enum TimerLayoutMath {
             + (immersive ? 0 : lerp(48, 68, layout.eased))
             + layout.sectionSpacing * 0.7
             + layout.controlMainSize + (layout.showControlLabels ? 22 : 4)
-            + (layout.showSessionHint && !immersive ? 28 : 12)
+            + 12
             + layout.sectionSpacing
         let budget = max(160, stageHeight - reserved)
         let widthCap = stageWidth * (immersive ? 0.55 : layout.ringMaxFractionOfWidth)

@@ -207,6 +207,9 @@ struct TimerRingView: View {
                     .font(.system(size: max(50, size * 0.27), weight: .semibold, design: .rounded))
                     .tracking(TypeScale.trackingDisplay)
                     .monospacedDigit()
+                    // Count-up past an hour reads h:mm:ss; shrink rather than clip.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
 
                 EyebrowTag(

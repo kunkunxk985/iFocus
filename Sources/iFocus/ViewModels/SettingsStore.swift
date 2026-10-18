@@ -68,6 +68,7 @@ class SettingsStore: ObservableObject {
         static let autoStartWork = "autoStartWork"
         static let longBreakEvery = "longBreakEvery"
         static let strictMode = "strictMode"
+        static let countUpWork = "countUpWork"
         static let soundEnabled = "soundEnabled"
         static let soundName = "soundName"
         static let hapticsEnabled = "hapticsEnabled"
@@ -155,6 +156,10 @@ class SettingsStore: ObservableObject {
     /// Disables skip (and deep-link skip) so a segment must finish or be reset with confirm.
     @Published var strictMode: Bool {
         didSet { defaults.set(strictMode, forKey: Key.strictMode) }
+    }
+    /// Work segments count up from 00:00 and end on 「完成」 instead of a fixed countdown.
+    @Published var countUpWork: Bool {
+        didSet { defaults.set(countUpWork, forKey: Key.countUpWork) }
     }
     @Published var soundEnabled: Bool {
         didSet { defaults.set(soundEnabled, forKey: Key.soundEnabled) }
@@ -391,13 +396,20 @@ class SettingsStore: ObservableObject {
         NSWorkspace.shared.open(url)
     }
 
+    /// Readable CSV + weekly reports mirrored from focus history (`~/StudyLog`).
+    func openStudyLogFolderInFinder() {
+        let url = StudyLogWriter.defaultDirectory()
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(url)
+    }
+
     /// Feedback line for backup export/import (settings panel).
     @Published var backupFeedback: String?
 
     /// Preference keys included in quiet local backup (not transient UI state).
     static let backupPreferenceKeys: [String] = [
         Key.workMinutes, Key.shortBreakMinutes, Key.longBreakMinutes,
-        Key.autoStartBreaks, Key.autoStartWork, Key.longBreakEvery, Key.strictMode,
+        Key.autoStartBreaks, Key.autoStartWork, Key.longBreakEvery, Key.strictMode, Key.countUpWork,
         Key.soundEnabled, Key.soundName, Key.hapticsEnabled, Key.dailyGoal,
         Key.appearance, Key.username, Key.avatarColorIndex,
         Key.toggleShortcut, Key.showFocusModeHint,
@@ -421,6 +433,7 @@ class SettingsStore: ObservableObject {
             Key.autoStartWork: autoStartWork,
             Key.longBreakEvery: longBreakEvery,
             Key.strictMode: strictMode,
+            Key.countUpWork: countUpWork,
             Key.soundEnabled: soundEnabled,
             Key.soundName: soundName as String,
             Key.hapticsEnabled: hapticsEnabled,
@@ -469,6 +482,7 @@ class SettingsStore: ObservableObject {
         if let v = Self.jsonBool(dict["autoStartWork"]) { autoStartWork = v }
         if let v = Self.jsonInt(dict["longBreakEvery"]) { longBreakEvery = Self.clampLongBreakEvery(v) }
         if let v = Self.jsonBool(dict["strictMode"]) { strictMode = v }
+        if let v = Self.jsonBool(dict[Key.countUpWork]) { countUpWork = v }
         if let v = Self.jsonBool(dict["soundEnabled"]) { soundEnabled = v }
         if let v = dict["soundName"] as? String { soundName = NSSound.Name(v) }
         if let v = Self.jsonBool(dict[Key.hapticsEnabled]) { hapticsEnabled = v }
@@ -603,6 +617,7 @@ class SettingsStore: ObservableObject {
             Self.intValue(for: Key.longBreakEvery, in: defaults, defaultValue: 4)
         )
         self.strictMode        = defaults.object(forKey: Key.strictMode) as? Bool ?? false
+        self.countUpWork       = defaults.bool(forKey: Key.countUpWork)
         self.soundEnabled      = defaults.object(forKey: Key.soundEnabled) as? Bool ?? true
         let saved = defaults.string(forKey: Key.soundName) ?? "Glass"
         self.soundName         = NSSound.Name(saved)

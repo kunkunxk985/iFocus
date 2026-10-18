@@ -69,26 +69,9 @@ struct ProfileIdentityBlock: View {
                 .shadow(color: Color.black.opacity(colorScheme == .light ? 0.08 : 0.3), radius: 8, x: 0, y: 4)
             }
 
-            VStack(spacing: 4) {
-                Text(username)
-                    .font(.system(size: 21, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
-
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(Color(hex: "#10B981"))
-                        .frame(width: 6, height: 6)
-                    Text("专注进行时")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2.5)
-                .background(
-                    Capsule()
-                        .fill(AppTheme.elevatedBackground(for: colorScheme).opacity(0.6))
-                )
-            }
+            Text(username)
+                .font(.system(size: 21, weight: .bold, design: .rounded))
+                .foregroundColor(AppTheme.primaryText(for: colorScheme))
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 6)

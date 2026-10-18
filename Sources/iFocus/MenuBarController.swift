@@ -362,9 +362,9 @@ final class MenuBarController: NSObject, ObservableObject {
             workSessionsCompletedToday: mode == .work ? done : 0,
             longBreakEvery: timerStore.settings.longBreakEvery
         )
-        menu.item(withTag: MenuTag.nextMode.rawValue)?.title = canSkip
-            ? "跳过 → \(skipTarget.rawValue)"
-            : "跳过（严格模式关闭）"
+        menu.item(withTag: MenuTag.nextMode.rawValue)?.title = timerStore.finishesOnSkip
+            ? "完成并记录"
+            : (canSkip ? "跳过 → \(skipTarget.rawValue)" : "跳过（严格模式关闭）")
 
         // Reset only meaningful when something is live.
         menu.item(withTag: MenuTag.reset.rawValue)?.isEnabled = isRunning || inProgress
@@ -402,14 +402,15 @@ final class MenuBarController: NSObject, ObservableObject {
         let sub = NSMenu(title: "模式")
         let running = timerStore.isRunning
         for mode in TimerMode.allCases {
-            let mins: Int
+            let detail: String
             switch mode {
-            case .work: mins = timerStore.settings.workMinutes
-            case .shortBreak: mins = timerStore.settings.shortBreakMinutes
-            case .longBreak: mins = timerStore.settings.longBreakMinutes
+            case .work:
+                detail = timerStore.settings.countUpWork ? "正计时" : "\(timerStore.settings.workMinutes) 分"
+            case .shortBreak: detail = "\(timerStore.settings.shortBreakMinutes) 分"
+            case .longBreak: detail = "\(timerStore.settings.longBreakMinutes) 分"
             }
             let item = NSMenuItem(
-                title: "\(mode.rawValue)（\(mins) 分）",
+                title: "\(mode.rawValue)（\(detail)）",
                 action: #selector(setModeFromMenu(_:)),
                 keyEquivalent: ""
             )
@@ -688,12 +689,30 @@ final class MenuBarController: NSObject, ObservableObject {
     @objc private func resetTimer() {
         if timerStore.isRunning || timerStore.isSessionInProgress {
             let alert = NSAlert()
-            alert.messageText = "重置当前计时？"
-            alert.informativeText = "进行中的时段不会记入专注记录。"
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "重置")
-            alert.addButton(withTitle: "取消")
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            if let minutes = timerStore.earlyFinishMinutes {
+                alert.messageText = "结束这段专注？"
+                alert.informativeText = "可以把已经专注的时间记下来，也可以直接丢弃。"
+                alert.addButton(withTitle: "结束并记录 \(minutes) 分钟")
+                alert.addButton(withTitle: "重置（不记录）")
+                alert.addButton(withTitle: "取消")
+                switch alert.runModal() {
+                case .alertFirstButtonReturn:
+                    timerStore.finishEarlyAndLog()
+                    updateStatusItem()
+                    return
+                case .alertSecondButtonReturn:
+                    break
+                default:
+                    return
+                }
+            } else {
+                alert.messageText = "重置当前计时？"
+                alert.informativeText = "进行中的时段不会记入专注记录。"
+                alert.addButton(withTitle: "重置")
+                alert.addButton(withTitle: "取消")
+                guard alert.runModal() == .alertFirstButtonReturn else { return }
+            }
         }
         timerStore.celebrationMessage = nil
         timerStore.reset()

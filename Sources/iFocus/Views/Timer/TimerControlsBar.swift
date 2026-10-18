@@ -95,7 +95,7 @@ struct TimerModeSwitcher: View {
 
     private func durationLabel(for mode: TimerMode) -> String {
         switch mode {
-        case .work: return "\(settings.workMinutes)′"
+        case .work: return settings.countUpWork ? "正计时" : "\(settings.workMinutes)′"
         case .shortBreak: return "\(settings.shortBreakMinutes)′"
         case .longBreak: return "\(settings.longBreakMinutes)′"
         }
@@ -120,9 +120,10 @@ struct TimerControlsBar: View {
 
         return HStack(spacing: layout.controlSpacing) {
             // MARK: - Skip Button (Embossed circular control)
+            // In a count-up focus this control ends the segment and logs it.
             EmbossedControlButton(
-                systemName: "forward.end.fill",
-                title: "跳过",
+                systemName: timerStore.finishesOnSkip ? "checkmark" : "forward.end.fill",
+                title: timerStore.finishesOnSkip ? "完成" : "跳过",
                 size: side,
                 showTitle: showLabels,
                 tint: AppTheme.secondaryText(for: colorScheme).opacity(timerStore.canSkipSegment ? 1 : 0.35),
@@ -132,7 +133,11 @@ struct TimerControlsBar: View {
                 timerStore.skipToNext()
             }
             .keyboardShortcut(.rightArrow, modifiers: [.command])
-            .help(timerStore.canSkipSegment ? "立即跳过当前段 (⌘→)" : "严格模式：不可跳过")
+            .help(
+                timerStore.finishesOnSkip
+                    ? "完成并记录 (⌘→)"
+                    : (timerStore.canSkipSegment ? "立即跳过当前段 (⌘→)" : "严格模式：不可跳过")
+            )
 
             // MARK: - Main Play/Pause Button (Floating Dual-Layer Micro-Structure)
             Button(action: {
@@ -219,20 +224,7 @@ struct TimerControlsBar: View {
             }
             .keyboardShortcut("r", modifiers: .command)
             .help("重置 (⌘R)")
-            .confirmationDialog(
-                "重置当前计时？",
-                isPresented: $showResetConfirm,
-                titleVisibility: .visible
-            ) {
-                Button("重置", role: .destructive) {
-                    AppHaptics.buttonClick()
-                    timerStore.celebrationMessage = nil
-                    timerStore.reset()
-                }
-                Button("取消", role: .cancel) {}
-            } message: {
-                Text("进行中的时段不会记入专注记录。")
-            }
+            .timerResetConfirmation(isPresented: $showResetConfirm, timerStore: timerStore)
         }
     }
 
@@ -243,6 +235,39 @@ struct TimerControlsBar: View {
         } else {
             timerStore.celebrationMessage = nil
             timerStore.reset()
+        }
+    }
+}
+
+extension View {
+    /// Confirms a mid-session reset. During focus it also offers 「结束并记录」 so
+    /// stopping early can keep the time already spent instead of discarding it.
+    /// The clock is not `@Published`, so minutes are read inside the action closures
+    /// (evaluated when the dialog opens) rather than captured with the view body.
+    func timerResetConfirmation(isPresented: Binding<Bool>, timerStore: TimerStore) -> some View {
+        confirmationDialog(
+            timerStore.mode == .work ? "结束这段专注？" : "重置当前计时？",
+            isPresented: isPresented,
+            titleVisibility: .visible
+        ) {
+            if let minutes = timerStore.earlyFinishMinutes {
+                Button("结束并记录 \(minutes) 分钟") {
+                    AppHaptics.buttonClick()
+                    timerStore.finishEarlyAndLog()
+                }
+            }
+            Button(timerStore.mode == .work ? "重置（不记录）" : "重置", role: .destructive) {
+                AppHaptics.buttonClick()
+                timerStore.celebrationMessage = nil
+                timerStore.reset()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text(
+                timerStore.earlyFinishMinutes == nil
+                    ? "进行中的时段不会记入专注记录。"
+                    : "可以把已经专注的时间记下来，也可以直接丢弃。"
+            )
         }
     }
 }
@@ -314,54 +339,5 @@ struct EmbossedControlButton: View {
             isHovering = hovering
         }
         .disabled(disabled)
-    }
-}
-
-struct TimerSessionHint: View {
-    @EnvironmentObject var timerStore: TimerStore
-    @EnvironmentObject var taskStore: TaskStore
-    @EnvironmentObject var settings: SettingsStore
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        HStack(spacing: 8) {
-            if timerStore.mode == .work {
-                if timerStore.isRunning {
-                    KeyCap(label: "空格")
-                    Text("暂停")
-                    if timerStore.canSkipSegment {
-                        Text("·").opacity(0.4)
-                        KeyCap(label: "⌘→")
-                        Text("跳过")
-                    } else {
-                        Text("·").opacity(0.4)
-                        Text("严格模式")
-                    }
-                } else if let title = taskStore.activeTask?.title, !title.isEmpty {
-                    KeyCap(label: "空格")
-                    Text("开始 · \(title)")
-                        .lineLimit(1)
-                } else {
-                    KeyCap(label: "空格")
-                    Text("自由专注")
-                    Text("·").opacity(0.4)
-                    Text("上方可选任务")
-                }
-            } else {
-                KeyCap(label: "空格")
-                Text(timerStore.isRunning ? "暂停休息" : "开始休息")
-                if timerStore.canSkipSegment {
-                    Text("·").opacity(0.4)
-                    KeyCap(label: "⌘→")
-                    Text("跳过")
-                }
-            }
-        }
-        .font(.caption2.weight(.medium))
-        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-        .lineLimit(1)
-        .frame(maxWidth: 380)
-        .animation(.easeOut(duration: 0.2), value: timerStore.isRunning)
-        .animation(.easeOut(duration: 0.2), value: timerStore.mode)
     }
 }

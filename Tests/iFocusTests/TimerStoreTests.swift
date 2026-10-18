@@ -292,6 +292,212 @@ final class TimerStoreTests: XCTestCase {
         XCTAssertFalse(timer.isSessionInProgress)
     }
     
+    func testFinishEarlyLogsElapsedMinutesWithCategory() {
+        let snapshot = TimerSessionSnapshot(
+            mode: TimerMode.work.rawValue,
+            timeRemaining: 15 * 60,
+            isRunning: false,
+            elapsedBeforePause: 10 * 60,
+            sessionPlannedDuration: 25 * 60,
+            activeTaskId: nil,
+            workTaskTitle: "3b1b 线性代数",
+            workTaskCategory: TaskCategory.study.rawValue,
+            cleanExit: true,
+            savedAt: Date()
+        )
+        TimerSessionPersistence.save(snapshot, to: tempDir)
+        let (_, tasks, timer) = makeStores()
+        XCTAssertTrue(timer.resumeFromPendingSnapshot())
+        XCTAssertEqual(timer.earlyFinishMinutes, 10)
+
+        timer.finishEarlyAndLog()
+
+        XCTAssertEqual(tasks.focusSessions.count, 1)
+        XCTAssertEqual(tasks.focusSessions.first?.durationMinutes, 10)
+        XCTAssertEqual(tasks.focusSessions.first?.taskTitle, "3b1b 线性代数")
+        XCTAssertEqual(tasks.focusSessions.first?.taskCategory, .study)
+        XCTAssertEqual(timer.mode, .work)
+        XCTAssertFalse(timer.isSessionInProgress)
+        XCTAssertNil(timer.earlyFinishMinutes)
+        XCTAssertEqual(timer.celebrationMessage, "已记录 10 分钟专注")
+    }
+
+    func testFinishEarlyUnderOneMinuteLogsNothing() {
+        let (_, tasks, timer) = makeStores()
+        timer.start()
+        XCTAssertNil(timer.earlyFinishMinutes)
+
+        timer.finishEarlyAndLog()
+
+        XCTAssertEqual(tasks.focusSessions.count, 0)
+        XCTAssertFalse(timer.isRunning)
+        XCTAssertFalse(timer.isSessionInProgress)
+    }
+
+    func testFinishEarlyIsNotOfferedDuringBreak() {
+        let (_, tasks, timer) = makeStores()
+        timer.setMode(.shortBreak)
+        timer.start()
+        XCTAssertNil(timer.earlyFinishMinutes)
+
+        timer.finishEarlyAndLog()
+
+        XCTAssertTrue(timer.isRunning)
+        XCTAssertEqual(tasks.focusSessions.count, 0)
+        timer.reset()
+    }
+
+    // MARK: - Count-up focus
+
+    private func countUpSnapshot(elapsedMinutes: Int, countUp: Bool?) -> TimerSessionSnapshot {
+        let planned = TimeInterval(TimerStore.countUpCapMinutes * 60)
+        let elapsed = TimeInterval(elapsedMinutes * 60)
+        return TimerSessionSnapshot(
+            mode: TimerMode.work.rawValue,
+            timeRemaining: planned - elapsed,
+            isRunning: false,
+            elapsedBeforePause: elapsed,
+            sessionPlannedDuration: planned,
+            activeTaskId: nil,
+            workTaskTitle: "看网课",
+            workTaskCategory: TaskCategory.study.rawValue,
+            cleanExit: true,
+            savedAt: Date(),
+            countUp: countUp
+        )
+    }
+
+    func testCountUpStartsAtZeroAndFinishReplacesSkip() {
+        let (settings, _, timer) = makeStores()
+        settings.strictMode = true
+        settings.countUpWork = true
+        timer.syncDurationFromSettingsIfIdle()
+
+        XCTAssertTrue(timer.isCountingUp)
+        XCTAssertEqual(timer.timeString, "00:00")
+        XCTAssertFalse(timer.finishesOnSkip)
+
+        timer.start()
+        XCTAssertTrue(timer.isRunning)
+        XCTAssertTrue(timer.finishesOnSkip)
+        // Strict mode blocks skipping, but finishing a count-up is always allowed.
+        XCTAssertTrue(timer.canSkipSegment)
+        timer.reset()
+    }
+
+    func testCountUpFinishLogsElapsedAndMovesToBreak() {
+        let (settings, tasks, timer) = makeStores()
+        settings.soundEnabled = false
+        settings.dockBounceOnComplete = false
+        settings.countUpWork = true
+        TimerSessionPersistence.save(countUpSnapshot(elapsedMinutes: 47, countUp: true), to: tempDir)
+        timer.reloadPendingResumeFromDisk()
+        XCTAssertTrue(timer.resumeFromPendingSnapshot())
+        XCTAssertEqual(timer.timeString, "47:00")
+
+        timer.skipToNext()
+
+        XCTAssertEqual(tasks.focusSessions.count, 1)
+        XCTAssertEqual(tasks.focusSessions.first?.durationMinutes, 47)
+        XCTAssertEqual(tasks.focusSessions.first?.taskCategory, .study)
+        XCTAssertEqual(timer.mode, .shortBreak)
+        XCTAssertFalse(timer.isRunning)
+    }
+
+    func testCountUpUnderOneMinuteFinishOnlyResets() {
+        let (settings, tasks, timer) = makeStores()
+        settings.countUpWork = true
+        timer.start()
+
+        timer.skipToNext()
+
+        XCTAssertEqual(tasks.focusSessions.count, 0)
+        XCTAssertEqual(timer.mode, .work)
+        XCTAssertFalse(timer.isSessionInProgress)
+    }
+
+    func testCountUpFinishAfterSecondsOnlyResets() {
+        let (settings, tasks, timer) = makeStores()
+        settings.countUpWork = true
+        var snapshot = countUpSnapshot(elapsedMinutes: 0, countUp: true)
+        snapshot.timeRemaining -= 30
+        snapshot.elapsedBeforePause = 30
+        TimerSessionPersistence.save(snapshot, to: tempDir)
+        timer.reloadPendingResumeFromDisk()
+        XCTAssertTrue(timer.resumeFromPendingSnapshot())
+        XCTAssertTrue(timer.finishesOnSkip)
+        XCTAssertNil(timer.earlyFinishMinutes)
+
+        timer.skipToNext()
+
+        XCTAssertEqual(tasks.focusSessions.count, 0)
+        XCTAssertEqual(timer.completedPomodoros, 0)
+        XCTAssertEqual(timer.mode, .work)
+        XCTAssertFalse(timer.isSessionInProgress)
+    }
+
+    func testFinishEarlyAfterSecondsLogsNothing() {
+        let snapshot = TimerSessionSnapshot(
+            mode: TimerMode.work.rawValue,
+            timeRemaining: 25 * 60 - 30,
+            isRunning: false,
+            elapsedBeforePause: 30,
+            sessionPlannedDuration: 25 * 60,
+            activeTaskId: nil,
+            workTaskTitle: nil,
+            workTaskCategory: nil,
+            cleanExit: true,
+            savedAt: Date()
+        )
+        TimerSessionPersistence.save(snapshot, to: tempDir)
+        let (_, tasks, timer) = makeStores()
+        XCTAssertTrue(timer.resumeFromPendingSnapshot())
+        XCTAssertNil(timer.earlyFinishMinutes)
+
+        timer.finishEarlyAndLog()
+
+        XCTAssertEqual(tasks.focusSessions.count, 0)
+        XCTAssertFalse(timer.isSessionInProgress)
+        XCTAssertNil(timer.celebrationMessage)
+    }
+
+    func testCountUpIdleAtLaunchAddsNoFocusTime() {
+        defaults.set(true, forKey: "countUpWork")
+        let (_, _, timer) = makeStores()
+
+        XCTAssertTrue(timer.isCountingUp)
+        XCTAssertEqual(timer.totalSecondsToday, 0)
+        XCTAssertEqual(timer.progress, 0)
+        XCTAssertEqual(timer.timeString, "00:00")
+    }
+
+    func testCountUpIsLockedForTheRunningSegment() {
+        let (settings, _, timer) = makeStores()
+        settings.countUpWork = true
+        timer.start()
+        settings.countUpWork = false
+        XCTAssertTrue(timer.isCountingUp)
+
+        timer.reset()
+        XCTAssertFalse(timer.isCountingUp)
+        XCTAssertEqual(timer.timeString, "25:00")
+    }
+
+    func testOldSnapshotResumesAsCountdownEvenWithCountUpOn() {
+        let (settings, _, timer) = makeStores()
+        settings.countUpWork = true
+        TimerSessionPersistence.save(countUpSnapshot(elapsedMinutes: 10, countUp: nil), to: tempDir)
+        timer.reloadPendingResumeFromDisk()
+        XCTAssertEqual(timer.pendingResumeSnapshot?.resumeTimeLabel, "还剩 110:00")
+        XCTAssertTrue(timer.resumeFromPendingSnapshot())
+        XCTAssertFalse(timer.isCountingUp)
+        timer.reset()
+    }
+
+    func testCountUpSnapshotResumeLabelShowsElapsed() {
+        XCTAssertEqual(countUpSnapshot(elapsedMinutes: 47, countUp: true).resumeTimeLabel, "已专注 47:00")
+    }
+
     func testUpdateStatsFromHistoryCountsTodayOnly() {
         let (_, tasks, timer) = makeStores()
         let calendar = Calendar.current

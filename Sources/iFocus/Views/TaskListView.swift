@@ -944,8 +944,8 @@ struct TaskListView: View {
             return AnyView(
                 AppEmptyState(
                     systemImage: "magnifyingglass",
-                    title: "没有找到相关任务",
-                    subtitle: "试试其他关键词，或清除搜索继续浏览。",
+                    title: "未找到相关任务",
+                    subtitle: nil,
                     actionTitle: "清除搜索",
                     action: { searchText = "" }
                 )
@@ -959,7 +959,7 @@ struct TaskListView: View {
                 AppEmptyState(
                     systemImage: "line.3.horizontal.decrease.circle",
                     title: "没有匹配的任务",
-                    subtitle: "换一个筛选，或点「全部」查看整表",
+                    subtitle: nil,
                     actionTitle: "显示全部",
                     action: { activeChip = .all }
                 )
@@ -972,8 +972,8 @@ struct TaskListView: View {
             return AnyView(
                 AppEmptyState(
                     systemImage: "checkmark.circle",
-                    title: "还没有完成记录",
-                    subtitle: "完成任务后会出现在这里",
+                    title: "暂无完成记录",
+                    subtitle: nil,
                     actionTitle: nil,
                     action: nil
                 )
@@ -984,23 +984,17 @@ struct TaskListView: View {
         
         // Quiet single-focus empty for 今天; others stay minimal.
         return AnyView(
-            VStack(spacing: 14) {
-                Text(isToday ? "今天最重要的一件事是？" : "还没有任务")
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+            VStack(spacing: 12) {
+                Text(isToday ? "暂无今日待办" : "暂无任务")
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                Text(isToday
-                     ? "在上方输入标题，回车即可。先写一件就够。"
-                     : "在上方添加，或去专注钟直接开始。")
-                    .font(.subheadline)
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                    .multilineTextAlignment(.center)
                 if !isToday {
                     Button("去专注钟") {
                         viewState.selectedScreen = .timer
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .padding(.top, 4)
+                    .padding(.top, 2)
                 }
             }
             .frame(maxWidth: .infinity)

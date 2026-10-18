@@ -76,6 +76,10 @@ struct SettingsWindowView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.clear)
+        // Like the main window: the sidebar card runs under the transparent titlebar so the
+        // traffic lights sit on it. Otherwise they float over the clear window background,
+        // look misplaced, and clicks on them can fall through the window.
+        .ignoresSafeArea(.container, edges: .top)
         .onAppear {
             timerStore.updateNotificationStatus()
             settings.refreshLaunchAtLoginFromSystem()
@@ -209,7 +213,7 @@ struct SettingsWindowView: View {
             Spacer()
         }
         .padding(.horizontal, 28)
-        .padding(.top, 24)
+        .padding(.top, AppTheme.detailTopInset)
         .padding(.bottom, 16)
     }
 
@@ -303,6 +307,20 @@ struct SettingsWindowView: View {
     private var timerPanel: some View {
         VStack(alignment: .leading, spacing: 18) {
             SettingsGroup(title: "番茄时钟节奏") {
+                SettingsRow(
+                    title: "专注用正计时",
+                    subtitle: "从 00:00 往上数，学完点「完成」记录；满 \(TimerStore.countUpCapMinutes / 60) 小时自动结束"
+                ) {
+                    Toggle("", isOn: $settings.countUpWork)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                }
+                .onChange(of: settings.countUpWork) { _ in
+                    if timerStore.mode == .work { timerStore.syncDurationFromSettingsIfIdle() }
+                }
+
+                SettingsDivider()
+
                 DurationSettingRow(
                     title: "专注时长",
                     subtitle: "单次专注倒计时",
@@ -701,6 +719,19 @@ struct SettingsWindowView: View {
                 ) {
                     Button("打开数据文件夹") {
                         settings.openDataFolderInFinder()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+
+                SettingsDivider()
+
+                SettingsRow(
+                    title: "学习记录（表格与周报）",
+                    subtitle: "每次记录专注都会自动更新 ~/StudyLog 里的 sessions.csv 和每周报告"
+                ) {
+                    Button("打开学习记录") {
+                        settings.openStudyLogFolderInFinder()
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)

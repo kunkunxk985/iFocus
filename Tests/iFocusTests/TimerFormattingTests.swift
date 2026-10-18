@@ -11,6 +11,15 @@ final class TimerFormattingTests: XCTestCase {
         XCTAssertEqual(TimerFormatting.timeString(remaining: 90), "01:30")
     }
     
+    func testElapsedStringCountsUpAndAddsHours() {
+        XCTAssertEqual(TimerFormatting.elapsedString(seconds: 0), "00:00")
+        XCTAssertEqual(TimerFormatting.elapsedString(seconds: 0.9), "00:00")
+        XCTAssertEqual(TimerFormatting.elapsedString(seconds: 61), "01:01")
+        XCTAssertEqual(TimerFormatting.elapsedString(seconds: 59 * 60 + 59), "59:59")
+        XCTAssertEqual(TimerFormatting.elapsedString(seconds: 3600 + 5 * 60 + 7), "1:05:07")
+        XCTAssertEqual(TimerFormatting.elapsedString(seconds: -5), "00:00")
+    }
+
     func testTimeStringClampsNegative() {
         XCTAssertEqual(TimerFormatting.timeString(remaining: -5), "00:00")
     }

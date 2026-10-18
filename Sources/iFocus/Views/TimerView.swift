@@ -40,12 +40,6 @@ struct TimerView: View {
         }
     }
 
-    private var statusLabel: String {
-        if timerStore.isRunning { return "进行中" }
-        if timerStore.isSessionInProgress { return "已暂停" }
-        return "待开始"
-    }
-
     private var goalProgress: Double {
         guard settings.dailyGoal > 0 else { return 0 }
         return min(1, Double(timerStore.completedPomodoros) / Double(settings.dailyGoal))
@@ -93,7 +87,6 @@ struct TimerView: View {
                         TimerTopMeta(
                             layout: layout,
                             modeColor: modeColor,
-                            statusLabel: statusLabel,
                             goalProgress: goalProgress,
                             celebratePulse: $celebratePulse,
                             onDecorativeMotionChange: syncAmbientMotion
@@ -103,7 +96,7 @@ struct TimerView: View {
                             .frame(maxWidth: min(layout.taskBlockMaxWidth, layout.width - layout.horizontalPadding * 2))
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     } else {
-                        TimerImmersiveStatusPill(modeColor: modeColor, statusLabel: statusLabel)
+                        TimerImmersiveStatusPill()
                     }
 
                     Spacer(minLength: 4)
@@ -155,13 +148,7 @@ struct TimerView: View {
                     )
                     .padding(.top, 4)
 
-                    if !immersiveMode, layout.showSessionHint {
-                        TimerSessionHint()
-                            .padding(.bottom, TimerLayoutMath.lerp(8, 14, layout.eased))
-                            .transition(.opacity)
-                    } else {
-                        Color.clear.frame(height: TimerLayoutMath.lerp(6, 12, layout.eased))
-                    }
+                    Color.clear.frame(height: TimerLayoutMath.lerp(6, 12, layout.eased))
                 }
                 .frame(maxWidth: 640)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

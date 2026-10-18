@@ -455,6 +455,11 @@ class TaskStore: ObservableObject {
     
     /// Directory for `tasks.json` / `focus_sessions.json`. Injectable for unit tests.
     private let appSupportDir: URL
+    /// Readable CSV / weekly Markdown mirror of `focusSessions`; nil disables it (tests).
+    private let studyLog: StudyLogWriter?
+
+    /// Folder holding the readable study log, if export is on.
+    var studyLogDirectory: URL? { studyLog?.directory }
     
     private var tasksFileURL: URL {
         appSupportDir.appendingPathComponent("tasks.json")
@@ -617,6 +622,7 @@ class TaskStore: ObservableObject {
         saveTasks()
         saveSessions()
         saveState()
+        studyLog?.waitUntilIdle()
     }
     
     /// User accepts empty state after corrupt load — re-enable writes for blocked files.
@@ -734,6 +740,7 @@ class TaskStore: ObservableObject {
         do {
             let data = try Self.makeEncoder().encode(focusSessions)
             try data.write(to: sessionsFileURL, options: .atomic)
+            studyLog?.export(focusSessions)
         } catch {
             AppLog.tasks.error("saveSessions failed: \(error.localizedDescription, privacy: .public)")
         }
@@ -791,14 +798,17 @@ class TaskStore: ObservableObject {
         }
     }
     
-    /// - Parameter storageDirectory: Override for tests. `nil` uses Application Support.
-    init(storageDirectory: URL? = nil) {
+    /// - Parameters:
+    ///   - storageDirectory: Override for tests. `nil` uses Application Support.
+    ///   - studyLogDirectory: Where to mirror sessions as CSV / weekly Markdown. `nil` turns it off.
+    init(storageDirectory: URL? = nil, studyLogDirectory: URL? = nil) {
         if let storageDirectory {
             try? FileManager.default.createDirectory(at: storageDirectory, withIntermediateDirectories: true)
             self.appSupportDir = storageDirectory
         } else {
             self.appSupportDir = Self.defaultStorageDirectory()
         }
+        self.studyLog = studyLogDirectory.map { StudyLogWriter(directory: $0) }
         createSafetySnapshotIfNeeded()
         isLoadingFromDisk = true
         loadTasks()
@@ -807,6 +817,10 @@ class TaskStore: ObservableObject {
         isLoadingFromDisk = false
         // Roll incomplete recurring tasks whose due date is already past.
         rollForwardOverdueRecurringTasks()
+        // Refresh the readable log on launch so this week's report exists before the first session.
+        if !blockSessionsPersistence {
+            studyLog?.export(focusSessions)
+        }
     }
 
     /// Safeguard existing user data on app launch before reading or mutating.

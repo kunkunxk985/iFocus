@@ -1,5 +1,6 @@
 import XCTest
 @testable import iFocus
+import iFocusCore
 
 final class TaskStoreTests: XCTestCase {
     private var tempDir: URL!
@@ -349,6 +350,29 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertEqual(after.last, list[0].title)
     }
     
+    func testStudyLogMirrorsSessionsAsCSVAndWeeklyReport() throws {
+        let logDir = tempDir.appendingPathComponent("StudyLog", isDirectory: true)
+        let store = TaskStore(storageDirectory: tempDir, studyLogDirectory: logDir)
+        store.logFocusSession(taskId: nil, taskTitle: "3b1b 线性代数", taskCategory: .study, minutes: 25)
+        store.flushPendingSaves()
+
+        let csv = try String(contentsOf: logDir.appendingPathComponent("sessions.csv"), encoding: .utf8)
+        XCTAssertTrue(csv.hasPrefix("日期,开始,结束,分钟,分类,任务\n"))
+        XCTAssertTrue(csv.contains(",25,学习,3b1b 线性代数"))
+
+        let calendar = StudyLogExport.weekCalendar()
+        let week = StudyLogExport.weekStart(for: Date(), calendar: calendar)
+        let c = calendar.dateComponents([.year, .month, .day], from: week)
+        let name = String(format: "%04d-%02d-%02d.md", c.year!, c.month!, c.day!)
+        let report = try String(contentsOf: logDir.appendingPathComponent("weeks/\(name)"), encoding: .utf8)
+        XCTAssertTrue(report.contains("- 学习分类：25分钟"))
+    }
+
+    func testStudyLogIsOffByDefault() {
+        let store = TaskStore(storageDirectory: tempDir)
+        XCTAssertNil(store.studyLogDirectory)
+    }
+
     func testLoadsLegacySessionsWithoutCategory() throws {
         let legacyJSON = """
         [

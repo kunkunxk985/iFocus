@@ -11,6 +11,18 @@ public enum TimerFormatting {
         return String(format: "%02d:%02d", minutes, seconds)
     }
     
+    /// Count-up display: `mm:ss`, or `h:mm:ss` from one hour on.
+    public static func elapsedString(seconds: TimeInterval) -> String {
+        let total = Int(max(0, seconds).rounded(.down))
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secs = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        }
+        return String(format: "%02d:%02d", minutes, secs)
+    }
+
     /// Round elapsed seconds to pomodoro log minutes (min 1 if elapsed >= 1s).
     public static func logMinutes(
         elapsedSeconds: TimeInterval,

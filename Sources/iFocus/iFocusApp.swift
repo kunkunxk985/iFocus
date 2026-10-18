@@ -227,7 +227,7 @@ struct iFocusApp: App {
     
     init() {
         let settings = SettingsStore()
-        let taskStore = TaskStore()
+        let taskStore = TaskStore(studyLogDirectory: StudyLogWriter.defaultDirectory())
         let timerStore = TimerStore(settings: settings, taskStore: taskStore)
         _settings = StateObject(wrappedValue: settings)
         _taskStore = StateObject(wrappedValue: taskStore)
@@ -402,10 +402,13 @@ enum WindowChrome {
         
         // Do not rebuild styleMask while fullscreen — preserves .fullScreen bit.
         if !isFullScreen {
-            if isSettings {
-                window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
-            } else {
-                window.styleMask = [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView]
+            let mask: NSWindow.StyleMask = isSettings
+                ? [.titled, .closable, .miniaturizable, .fullSizeContentView]
+                : [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView]
+            // This runs on every didBecomeKey; reassigning an unchanged mask still rebuilds the
+            // titlebar, which can swallow the click that made the window key (e.g. on close).
+            if window.styleMask != mask {
+                window.styleMask = mask
             }
         } else {
             window.styleMask.insert(.fullSizeContentView)
@@ -435,12 +438,11 @@ enum WindowChrome {
             window.toolbar = nil
         }
         
+        // Settings size is pinned by SwiftUI (fixed frame + `.contentSize`), which adds the
+        // titlebar inset (frame 900×628). Forcing a 900×600 content size here fought that on
+        // every didBecomeKey and resized the window inside the click that made it key.
         let targetSize = isSettings ? AppWindow.settingsSize : AppWindow.minimumSize
         window.minSize = targetSize
-        if isSettings && !isFullScreen {
-            window.maxSize = targetSize
-            window.setContentSize(targetSize)
-        }
         
         // Enable authentic macOS window translucency
         window.isOpaque = false
@@ -495,6 +497,10 @@ enum WindowChrome {
                 button.alphaValue = 0.78
                 frame.origin.x += trafficLightOffsetX
                 frame.origin.y += (button.superview?.isFlipped == true ? trafficLightOffsetY : -trafficLightOffsetY)
+                // A slice outside the titlebar view would not receive clicks.
+                if let bounds = button.superview?.bounds {
+                    frame.origin.y = max(bounds.minY, min(frame.origin.y, bounds.maxY - frame.height))
+                }
             } else {
                 button.alphaValue = 1
             }

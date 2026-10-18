@@ -13,6 +13,8 @@ struct TimerSessionSnapshot: Codable, Equatable {
     /// false while app is running; true only after clean terminate.
     var cleanExit: Bool
     var savedAt: Date
+    /// Work segment counts up (nil in snapshots from older versions = countdown).
+    var countUp: Bool? = nil
     
     var hasResumableSession: Bool {
         // Mid-session if planned duration set, or remaining not a "fresh full" idle.
@@ -25,6 +27,19 @@ struct TimerSessionSnapshot: Codable, Equatable {
         hasResumableSession
     }
     
+    /// 「还剩 12:30」 for a countdown, 「已专注 47:05」 for a count-up focus.
+    var resumeTimeLabel: String {
+        func clock(_ seconds: TimeInterval) -> String {
+            let total = max(0, Int(seconds.rounded()))
+            return String(format: "%d:%02d", total / 60, total % 60)
+        }
+        if countUp == true {
+            let planned = sessionPlannedDuration ?? (elapsedBeforePause + timeRemaining)
+            return "已专注 " + clock(planned - timeRemaining)
+        }
+        return "还剩 " + clock(timeRemaining)
+    }
+
     var resumeReasonLabel: String {
         cleanExit ? "上次退出时" : "上次异常退出时"
     }

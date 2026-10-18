@@ -4,7 +4,7 @@ macOS 专注 / 番茄钟应用（SwiftUI + AppKit，Swift Package Manager）。
 
 | 项 | 值 |
 |----|-----|
-| 版本 | **1.9.4**（build **87**）· 单一来源见根目录 `VERSION` |
+| 版本 | 见根目录 `VERSION`（单一来源） |
 | 平台 | macOS 13+ |
 | 工具链 | Swift tools 5.8+（见 `Package.swift`） |
 | Bundle ID | `com.kun.ifocus` |
@@ -77,6 +77,22 @@ bash Scripts/smoke_test.sh --replace-running
 损坏的 JSON 加载失败时会备份为 `*.corrupt-<timestamp>.json`，并阻止对应数据通道继续覆盖，等待用户恢复或确认从空白开始。
 
 设置项（时长、主题、昵称等）使用 `UserDefaults`。
+
+### 学习记录导出（~/StudyLog）
+
+每次记录专注后，应用会把全部专注记录同步成可直接阅读的文件（设置 → 数据 →「打开学习记录」）：
+
+```
+~/StudyLog/
+  sessions.csv         # 全部专注：日期,开始,结束,分钟,分类,任务（开始时间为估算）
+  weeks/2026-10-19.md  # 每周（周一至周日）一份周报：每日总计、学习分类时长、按任务汇总、明细
+```
+
+这个文件夹由 `focus_sessions.json` 生成，删掉也会在下次启动或记录时重建。
+
+正计时：设置 → 专注与计时 →「专注用正计时」。专注从 00:00 往上数，点「完成」（⌘→）记录并进入休息，满 2 小时自动结束。
+
+提前结束专注时，重置确认框里可选「结束并记录 N 分钟」，已专注的时间会照常计入记录；选「重置（不记录）」则和以前一样丢弃。
 
 升级时先退出旧版，再将新版 `iFocus.app` 拖入“应用程序”并选择替换。应用数据不在 `.app` 包内，正常覆盖安装不会删除上述数据；不要使用清理软件删除 `Application Support/iFocus`。
 

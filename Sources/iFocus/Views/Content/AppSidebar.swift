@@ -22,29 +22,25 @@ struct AppSidebar: View {
                 title: "今天",
                 screen: .todayTask,
                 badge: badgeIfPositive(counts.today),
-                icon: "sun.max.fill",
-                accentColor: Color(hex: "#F59E0B")
+                icon: "sun.max.fill"
             ),
             SidebarItem(
                 title: "明天",
                 screen: .tomorrowTask,
                 badge: badgeIfPositive(counts.tomorrow),
-                icon: "sunrise.fill",
-                accentColor: Color(hex: "#F97316")
+                icon: "sunrise.fill"
             ),
             SidebarItem(
                 title: "本周",
                 screen: .weekTask,
                 badge: badgeIfPositive(counts.week),
-                icon: "calendar",
-                accentColor: Color(hex: "#3B82F6")
+                icon: "calendar"
             ),
             SidebarItem(
                 title: "收集箱",
                 screen: .inboxTask,
                 badge: badgeIfPositive(counts.inbox),
-                icon: "tray.fill",
-                accentColor: Color(hex: "#8B5CF6")
+                icon: "tray.fill"
             )
         ]
     }
@@ -55,15 +51,13 @@ struct AppSidebar: View {
                 title: "已计划",
                 screen: .plannedTask,
                 badge: badgeIfPositive(counts.planned),
-                icon: "calendar.badge.clock",
-                accentColor: Color(hex: "#64748B")
+                icon: "calendar.badge.clock"
             ),
             SidebarItem(
                 title: "已完成",
                 screen: .completedTask,
                 badge: nil,
-                icon: "checkmark.circle.fill",
-                accentColor: Color(hex: "#10B981")
+                icon: "checkmark.circle.fill"
             )
         ]
     }
@@ -83,7 +77,7 @@ struct AppSidebar: View {
                         sidebarRow(
                             title: "专注钟",
                             screen: .timer,
-                            badge: timerStore.isRunning ? "…" : (timerStore.isSessionInProgress ? "‖" : nil),
+                            badge: nil,
                             icon: "timer",
                             accentColor: AppTheme.accent,
                             emphasizeRunning: timerStore.isRunning
@@ -93,7 +87,7 @@ struct AppSidebar: View {
                             screen: .analytics,
                             badge: nil,
                             icon: "chart.bar.xaxis",
-                            accentColor: Color(hex: "#6366F1")
+                            accentColor: AppTheme.accent
                         )
 
                         sidebarSection("待办") {
@@ -279,7 +273,7 @@ private struct SidebarRowLabel: View {
                     .foregroundColor(
                         isSelected
                         ? AppTheme.accent
-                        : accentColor.opacity(colorScheme == .light ? 0.88 : 0.94)
+                        : AppTheme.secondaryText(for: colorScheme)
                     )
 
                 if emphasizeRunning {

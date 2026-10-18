@@ -170,6 +170,8 @@ enum DataBackupService {
                 throw LocalBackup.BackupError.readFailed("恢复后数据仍无法读取")
             }
             timerStore.reloadPendingResumeFromDisk()
+            // Imported settings may change the work length or count-up; the timer was reset above.
+            timerStore.syncDurationFromSettingsIfIdle()
 
             if let originalAvatarPath,
                originalAvatarPath != settings.avatarPath,
@@ -204,6 +206,7 @@ enum DataBackupService {
                         TimerSessionPersistence.save(activeTimerSnapshot, to: taskStore.storageDirectory)
                     }
                     timerStore.reloadPendingResumeFromDisk()
+                    timerStore.syncDurationFromSettingsIfIdle()
                 }
             } catch {
                 return .failure(LocalBackup.BackupError.rollbackFailed(error.localizedDescription))

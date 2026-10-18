@@ -15,14 +15,10 @@ enum AnalyticsCards {
     }
 
     static func emptyShell(colorScheme: ColorScheme) -> some View {
-        VStack(spacing: 10) {
-            Text("完成一次专注后，这里会变清晰")
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+        VStack(spacing: 12) {
+            Text("暂无专注记录")
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .foregroundColor(AppTheme.primaryText(for: colorScheme))
-
-            Text("先去打一个番茄即可。")
-                .font(.subheadline)
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
 
             Button {
                 AppNavigation.post(.timer)
@@ -32,7 +28,7 @@ enum AnalyticsCards {
                     .foregroundColor(AppTheme.accent)
             }
             .buttonStyle(.plain)
-            .padding(.top, 4)
+            .padding(.top, 2)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)

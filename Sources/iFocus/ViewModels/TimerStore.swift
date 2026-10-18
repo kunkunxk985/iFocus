@@ -14,7 +14,10 @@ enum TimerMode: String, CaseIterable, Identifiable {
     
     func duration(settings: SettingsStore) -> TimeInterval {
         switch self {
-        case .work:        return TimeInterval(settings.workMinutes * 60)
+        case .work:
+            // Count-up runs as a countdown from the cap and displays elapsed time instead.
+            let minutes = settings.countUpWork ? TimerStore.countUpCapMinutes : settings.workMinutes
+            return TimeInterval(minutes * 60)
         case .shortBreak:  return TimeInterval(settings.shortBreakMinutes * 60)
         case .longBreak:   return TimeInterval(settings.longBreakMinutes * 60)
         }
@@ -69,6 +72,10 @@ enum PendingSessionDiscard: Equatable {
 }
 
 class TimerStore: ObservableObject {
+    /// Longest count-up work segment; it then completes and logs on its own,
+    /// so a timer left running cannot record an unlimited amount of study.
+    static let countUpCapMinutes = 120
+
     private struct WorkSessionContext {
         let taskId: UUID?
         let taskTitle: String
@@ -121,6 +128,8 @@ class TimerStore: ObservableObject {
     private var elapsedBeforePause: TimeInterval = 0
     /// Duration captured when the segment begins; later setting changes must not rewrite history.
     private var sessionPlannedDuration: TimeInterval?
+    /// Whether the current segment counts up, locked at start like `sessionPlannedDuration`.
+    private var sessionCountsUp: Bool?
     /// Snapshot attribution when a work session starts, so later task edits cannot steal it.
     private var workSessionContext: WorkSessionContext?
     private var isCompleting = false
@@ -136,7 +145,8 @@ class TimerStore: ObservableObject {
         self.settings = settings
         self.taskStore = taskStore
         self.sessionStorageDirectory = sessionStorageDirectory
-        self.timeRemaining = TimeInterval(settings.workMinutes * 60)
+        // Same source as reset/sync, so an idle count-up clock starts at the 120-minute cap.
+        self.timeRemaining = TimerMode.work.duration(settings: settings)
         observeLifecycleEvents()
         if let store = taskStore {
             updateStatsFromHistory(taskStore: store)
@@ -279,7 +289,17 @@ class TimerStore: ObservableObject {
     }
     
     var timeString: String {
-        TimerFormatting.timeString(remaining: timeRemaining)
+        if isCountingUp {
+            guard isSessionInProgress else { return TimerFormatting.elapsedString(seconds: 0) }
+            let planned = sessionPlannedDuration ?? mode.duration(settings: settings)
+            return TimerFormatting.elapsedString(seconds: planned - timeRemaining)
+        }
+        return TimerFormatting.timeString(remaining: timeRemaining)
+    }
+
+    /// True when the work timer counts up from 00:00 (current segment, else the setting).
+    var isCountingUp: Bool {
+        mode == .work && (sessionCountsUp ?? settings.countUpWork)
     }
     
     /// True while running, or once a segment has been started (including immediate pause).
@@ -373,6 +393,13 @@ class TimerStore: ObservableObject {
     func start() {
         guard !isRunning, !isCompleting else { return }
         if sessionPlannedDuration == nil {
+            if mode == .work {
+                sessionCountsUp = settings.countUpWork
+                if elapsedBeforePause <= 0.01 {
+                    // Idle time may predate a settings change (e.g. count-up just toggled).
+                    timeRemaining = mode.duration(settings: settings)
+                }
+            }
             sessionPlannedDuration = max(0, elapsedBeforePause + timeRemaining)
         }
         captureWorkSessionContextIfNeeded()
@@ -429,6 +456,7 @@ class TimerStore: ObservableObject {
         elapsedBeforePause = 0
         segmentStartedAt = nil
         sessionPlannedDuration = nil
+        sessionCountsUp = nil
         workSessionContext = nil
         timeRemaining = mode.duration(settings: settings)
         refreshStatsFromHistory()
@@ -574,6 +602,7 @@ class TimerStore: ObservableObject {
             mode = .work
             timeRemaining = mode.duration(settings: settings)
             sessionPlannedDuration = nil
+            sessionCountsUp = nil
             elapsedBeforePause = 0
         }
         if !isRunning {
@@ -608,10 +637,18 @@ class TimerStore: ObservableObject {
     /// Skip the current segment without logging a completed pomodoro.
     /// Next mode follows the same long-break cadence as natural completion (skip does not count as a pomodoro).
     /// Whether skip is allowed (strict mode blocks skip for a pure pomodoro flow).
-    var canSkipSegment: Bool { !settings.strictMode }
+    /// A running count-up segment can always be finished, since that is how it ends.
+    var canSkipSegment: Bool { !settings.strictMode || finishesOnSkip }
+
+    /// In a count-up work segment the skip control reads 「完成」 and logs the time.
+    var finishesOnSkip: Bool { isCountingUp && isSessionInProgress }
 
     func skipToNext() {
         guard !isCompleting else { return }
+        if finishesOnSkip {
+            finishCountUp()
+            return
+        }
         guard canSkipSegment else {
             celebrationMessage = "严格模式：不可跳过，请完成本段或重置"
             return
@@ -622,6 +659,7 @@ class TimerStore: ObservableObject {
         elapsedBeforePause = 0
         segmentStartedAt = nil
         sessionPlannedDuration = nil
+        sessionCountsUp = nil
         workSessionContext = nil
         let next = Self.nextMode(
             after: previousMode,
@@ -633,6 +671,42 @@ class TimerStore: ObservableObject {
         updateDockBadge()
         emitClockTick()
         clearSessionSnapshot()
+    }
+
+    /// Ends a count-up segment like a finished pomodoro (logs, then break / auto-start rules).
+    /// Under a minute there is nothing to log, so it just resets.
+    func finishCountUp() {
+        guard finishesOnSkip, !isCompleting else { return }
+        guard earlyFinishMinutes != nil else {
+            reset()
+            return
+        }
+        complete()
+    }
+
+    /// Minutes 「结束并记录」 would save right now; nil outside a work segment or under one minute.
+    var earlyFinishMinutes: Int? {
+        guard mode == .work, isSessionInProgress, !isCompleting else { return nil }
+        let planned = sessionPlannedDuration ?? mode.duration(settings: settings)
+        let elapsed = min(currentSessionElapsed, planned)
+        // `logMinutes` rounds 1–59 s up to a whole minute; a few seconds is not a session.
+        guard elapsed >= 60 else { return nil }
+        return TimerFormatting.logMinutes(elapsedSeconds: elapsed, maximumSeconds: planned)
+    }
+
+    /// Ends the current work segment early but keeps the focused time in history
+    /// (reset / skip discard it), then returns to an idle work timer.
+    func finishEarlyAndLog() {
+        guard mode == .work, isSessionInProgress, !isCompleting else { return }
+        let planned = sessionPlannedDuration ?? mode.duration(settings: settings)
+        let elapsed = min(currentSessionElapsed, planned)
+        let minutes = elapsed >= 60
+            ? logWorkSegment(elapsedSeconds: elapsed, plannedDuration: planned, context: workSessionContext)
+            : nil
+        reset()
+        if let minutes {
+            celebrationMessage = "已记录 \(minutes) 分钟专注"
+        }
     }
 
     /// Explicit one-tap start of the prepared next segment (when auto-start is off).
@@ -697,7 +771,8 @@ class TimerStore: ObservableObject {
             workTaskTitle: workSessionContext?.taskTitle ?? taskStore?.activeTask?.title,
             workTaskCategory: (workSessionContext?.taskCategory ?? taskStore?.activeTask?.category)?.rawValue,
             cleanExit: cleanExit,
-            savedAt: Date()
+            savedAt: Date(),
+            countUp: sessionCountsUp
         )
     }
     
@@ -752,6 +827,7 @@ class TimerStore: ObservableObject {
         timeRemaining = max(0, snap.timeRemaining)
         elapsedBeforePause = max(0, snap.elapsedBeforePause)
         sessionPlannedDuration = snap.sessionPlannedDuration
+        sessionCountsUp = restoredMode == .work ? (snap.countUp ?? false) : nil
         
         // Only reattach task id if it still exists and is incomplete.
         var restoredTaskId = snap.activeTaskId
@@ -830,9 +906,10 @@ class TimerStore: ObservableObject {
         var elapsed = elapsedBeforePause
         if let segmentStartedAt {
             elapsed += Date().timeIntervalSince(segmentStartedAt)
-        } else {
+        } else if isSessionInProgress {
             // Fallback when completing right after pause bookkeeping cleared the segment clock.
-            let total = mode.duration(settings: settings)
+            // Never for an idle clock: a stale idle duration must not count as focus today.
+            let total = sessionPlannedDuration ?? mode.duration(settings: settings)
             elapsed = max(elapsed, total - max(0, timeRemaining))
         }
         return max(0, elapsed)
@@ -924,34 +1001,12 @@ class TimerStore: ObservableObject {
         elapsedBeforePause = 0
         segmentStartedAt = nil
         
-        let previousPomodoros = completedPomodoros
         var loggedMinutes: Int?
-        if wasWork, let minutes = TimerFormatting.logMinutes(
-            elapsedSeconds: elapsedSeconds,
-            maximumSeconds: plannedDuration
-        ) {
-            loggedMinutes = minutes
-            if let taskId = completedWorkContext?.taskId {
-                taskStore?.addFocusTime(to: taskId, minutes: minutes)
-                taskStore?.logFocusSession(
-                    taskId: taskId,
-                    taskTitle: completedWorkContext?.taskTitle ?? "已删除任务",
-                    taskCategory: completedWorkContext?.taskCategory,
-                    minutes: minutes
-                )
-            } else {
-                taskStore?.logFocusSession(
-                    taskId: nil,
-                    taskTitle: completedWorkContext?.taskTitle ?? "自由专注",
-                    minutes: minutes
-                )
-            }
-            if let store = taskStore {
-                updateStatsFromHistory(taskStore: store)
-            }
-            maybeTriggerDailyGoalCelebration(
-                previousCount: previousPomodoros,
-                newCount: completedPomodoros
+        if wasWork {
+            loggedMinutes = logWorkSegment(
+                elapsedSeconds: elapsedSeconds,
+                plannedDuration: plannedDuration,
+                context: completedWorkContext
             )
         }
         
@@ -987,10 +1042,48 @@ class TimerStore: ObservableObject {
         emitClockTick()
     }
     
+    /// Writes a work segment to focus history. Returns logged minutes, or nil under the one-minute floor.
+    private func logWorkSegment(
+        elapsedSeconds: TimeInterval,
+        plannedDuration: TimeInterval,
+        context: WorkSessionContext?
+    ) -> Int? {
+        guard let minutes = TimerFormatting.logMinutes(
+            elapsedSeconds: elapsedSeconds,
+            maximumSeconds: plannedDuration
+        ) else { return nil }
+        let previousPomodoros = completedPomodoros
+        if let taskId = context?.taskId {
+            taskStore?.addFocusTime(to: taskId, minutes: minutes)
+            taskStore?.logFocusSession(
+                taskId: taskId,
+                taskTitle: context?.taskTitle ?? "已删除任务",
+                taskCategory: context?.taskCategory,
+                minutes: minutes
+            )
+        } else {
+            taskStore?.logFocusSession(
+                taskId: nil,
+                taskTitle: context?.taskTitle ?? "自由专注",
+                taskCategory: context?.taskCategory,
+                minutes: minutes
+            )
+        }
+        if let store = taskStore {
+            updateStatsFromHistory(taskStore: store)
+        }
+        maybeTriggerDailyGoalCelebration(
+            previousCount: previousPomodoros,
+            newCount: completedPomodoros
+        )
+        return minutes
+    }
+
     private func applyCompletion(nextMode: TimerMode) {
         elapsedBeforePause = 0
         segmentStartedAt = nil
         sessionPlannedDuration = nil
+        sessionCountsUp = nil
         workSessionContext = nil
         mode = nextMode
         timeRemaining = nextMode.duration(settings: settings)

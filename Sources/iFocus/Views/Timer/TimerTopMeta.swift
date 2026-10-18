@@ -4,7 +4,6 @@ import SwiftUI
 struct TimerTopMeta: View {
     let layout: WindowLayoutMetrics
     let modeColor: Color
-    let statusLabel: String
     let goalProgress: Double
     @Binding var celebratePulse: Bool
     var onDecorativeMotionChange: () -> Void
@@ -28,29 +27,11 @@ struct TimerTopMeta: View {
 
     var body: some View {
         VStack(spacing: TimerLayoutMath.lerp(10, 14, layout.eased)) {
-            // Single quiet status line (no heavy capsule chrome when idle)
-            HStack(spacing: 8) {
-                PulseDot(
-                    color: timerStore.isRunning
-                        ? modeColor
-                        : AppTheme.secondaryText(for: colorScheme),
-                    isActive: timerStore.isRunning,
-                    size: 6,
-                    allowsPulse: settings.decorativeMotionEnabled
-                )
-                Text(statusLabel)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundColor(
-                        timerStore.isRunning
-                        ? modeColor
-                        : AppTheme.secondaryText(for: colorScheme)
-                    )
-                if timerStore.mode == .work {
-                    let mins = timerStore.totalSecondsToday / 60
-                    Text("· \(mins) 分")
-                        .font(.system(size: 11, weight: .medium).monospacedDigit())
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
-                }
+            if timerStore.mode == .work {
+                let mins = timerStore.totalSecondsToday / 60
+                Text("今日 \(mins) 分")
+                    .font(.system(size: 12, weight: .medium, design: .rounded).monospacedDigit())
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
 
             // Goal — progress only, secondary line carries long-break context
@@ -149,32 +130,16 @@ struct TimerTopMeta: View {
 }
 
 struct TimerImmersiveStatusPill: View {
-    let modeColor: Color
-    let statusLabel: String
-    @EnvironmentObject var timerStore: TimerStore
     @EnvironmentObject var taskStore: TaskStore
-    @EnvironmentObject var settings: SettingsStore
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: 8) {
-            PulseDot(
-                color: timerStore.isRunning ? modeColor : AppTheme.secondaryText(for: colorScheme),
-                isActive: timerStore.isRunning,
-                size: 6,
-                allowsPulse: settings.decorativeMotionEnabled
-            )
-            Text(statusLabel)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundColor(timerStore.isRunning ? modeColor : AppTheme.secondaryText(for: colorScheme))
-            if timerStore.mode == .work, let title = taskStore.activeTask?.title {
-                Text("·")
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.45))
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.8))
-                    .lineLimit(1)
-            }
+        if let title = taskStore.activeTask?.title,
+           !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.8))
+                .lineLimit(1)
         }
     }
 }
