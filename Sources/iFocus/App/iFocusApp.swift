@@ -447,9 +447,11 @@ enum WindowChrome {
         let targetSize = isSettings ? AppWindow.settingsSize : AppWindow.minimumSize
         window.minSize = targetSize
         
-        // Enable authentic macOS window translucency
+        // Non-opaque keeps the system's rounded corners clean. The fill is the app canvas, not
+        // `.clear`: SwiftUI can leave a strip unpainted (seen at the bottom of the sidebar
+        // column, 4–32pt tall), and a clear window then shows the desktop through it.
         window.isOpaque = false
-        window.backgroundColor = .clear
+        window.backgroundColor = AppTheme.windowBackgroundColor
         window.hasShadow = true
         
         window.contentView?.wantsLayer = true

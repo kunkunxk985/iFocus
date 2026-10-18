@@ -58,4 +58,48 @@ final class SettingsWindowChromeTests: XCTestCase {
             XCTAssertEqual(color.alphaComponent, 1, accuracy: 0.01, "\(label) is see-through")
         }
     }
+
+    /// SwiftUI has left the bottom of the main window's sidebar column unpainted (4–32pt) in the
+    /// running app. Whatever a view misses must look like the canvas, never show the desktop
+    /// through a clear window: the left 252pt paint nothing, the rest paints the canvas.
+    func testManagedWindowsShowCanvasWhereContentLeavesAGap() throws {
+        for title in ["iFocus", "设置"] {
+            for (appearanceName, scheme) in [(NSAppearance.Name.darkAqua, ColorScheme.dark), (.aqua, .light)] {
+                let size = NSSize(width: 900, height: 628)
+                let window = NSWindow(
+                    contentRect: NSRect(origin: .zero, size: size),
+                    styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                    backing: .buffered,
+                    defer: false
+                )
+                window.isReleasedWhenClosed = false
+                window.title = title
+                window.appearance = NSAppearance(named: appearanceName)
+                window.contentView = NSHostingView(
+                    rootView: HStack(spacing: 0) {
+                        Color.clear.frame(width: 252)
+                        AppTheme.contentBackground(for: scheme)
+                    }
+                    .frame(width: size.width, height: size.height)
+                    .ignoresSafeArea()
+                )
+                WindowChrome.apply(to: window)
+                let frameView = try XCTUnwrap(window.contentView?.superview)
+                frameView.layoutSubtreeIfNeeded()
+                let rep = try XCTUnwrap(frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds))
+                frameView.cacheDisplay(in: frameView.bounds, to: rep)
+
+                let scale = CGFloat(rep.pixelsWide) / frameView.bounds.width
+                let bottomRow = rep.pixelsHigh - Int(3 * scale)
+                let gap = try XCTUnwrap(rep.colorAt(x: Int(60 * scale), y: bottomRow))
+                let canvas = try XCTUnwrap(rep.colorAt(x: Int(600 * scale), y: bottomRow))
+                let label = "\(title) \(appearanceName.rawValue)"
+                XCTAssertEqual(gap.alphaComponent, 1, accuracy: 0.01, "\(label): gap is see-through")
+                XCTAssertEqual(gap.redComponent, canvas.redComponent, accuracy: 0.01, "\(label): gap differs from canvas")
+                XCTAssertEqual(gap.greenComponent, canvas.greenComponent, accuracy: 0.01, "\(label): gap differs from canvas")
+                XCTAssertEqual(gap.blueComponent, canvas.blueComponent, accuracy: 0.01, "\(label): gap differs from canvas")
+                window.close()
+            }
+        }
+    }
 }

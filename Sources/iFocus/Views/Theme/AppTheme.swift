@@ -193,8 +193,11 @@ enum AppTheme {
     static func menuBackground(for colorScheme: ColorScheme) -> Color {
         colorScheme == .light ? Color.white.opacity(0.96) : Color(hex: "#222226").opacity(0.97)
     }
+    private static let canvasLightHex = "#F6F7F9"
+    private static let canvasDarkHex = "#131316"
+
     static func contentBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color(hex: "#F6F7F9") : Color(hex: "#131316")
+        colorScheme == .light ? Color(hex: canvasLightHex) : Color(hex: canvasDarkHex)
     }
     static func cardBackground(for colorScheme: ColorScheme) -> Color {
         // Dark cards slightly lifted from canvas for quiet depth
@@ -265,10 +268,18 @@ enum AppTheme {
         colorScheme == .light ? Color.black.opacity(0.035) : Color.black.opacity(0.30)
     }
     
+    /// `contentBackground` as an opaque window fill (sRGB, like `Color(hex:)`). SwiftUI paints the
+    /// same canvas on top; this only shows where a view leaves a gap, instead of the desktop.
     static var windowBackgroundColor: NSColor {
         NSColor(name: nil) { appearance in
             let isLight = appearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua
-            return isLight ? NSColor(calibratedWhite: 0.965, alpha: 0.88) : NSColor(calibratedWhite: 0.08, alpha: 0.88)
+            let int = UInt64((isLight ? canvasLightHex : canvasDarkHex).dropFirst(), radix: 16) ?? 0
+            return NSColor(
+                srgbRed: CGFloat((int >> 16) & 0xFF) / 255,
+                green: CGFloat((int >> 8) & 0xFF) / 255,
+                blue: CGFloat(int & 0xFF) / 255,
+                alpha: 1
+            )
         }
     }
 }
