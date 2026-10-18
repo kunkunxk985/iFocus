@@ -264,6 +264,9 @@ struct iFocusApp: App {
                 .environmentObject(taskStore)
                 .preferredColorScheme(settings.appearance.colorScheme)
                 .frame(minWidth: AppWindow.minimumSize.width, minHeight: AppWindow.minimumSize.height)
+                // `ifocus://` links are handled by AppDelegate → DeepLinkRouter. Let the existing
+                // main window take the URL event; otherwise SwiftUI opens one more window per link.
+                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         }
         // Hidden title text + transparent full-size content (no empty unified toolbar —
         // empty toolbars paint a solid top band that reads as a white strip).
