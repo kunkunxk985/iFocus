@@ -20,7 +20,18 @@ let package = Package(
             name: "iFocus",
             dependencies: ["iFocusCore"],
             path: "Sources/iFocus",
-            resources: [.copy("AppIcon.icns")]
+            resources: [.copy("AppIcon.icns")],
+            // SwiftPM's macOS linker invocation can omit -platform_version, which
+            // makes ld record the deployment target as both minos and SDK. Keep
+            // these values in sync with the selected Xcode/macOS SDK.
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-platform_version",
+                    "-Xlinker", "macos",
+                    "-Xlinker", "13.0",
+                    "-Xlinker", "27.0",
+                ]),
+            ]
         ),
         .testTarget(
             name: "iFocusTests",
