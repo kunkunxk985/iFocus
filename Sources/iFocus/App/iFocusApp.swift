@@ -489,8 +489,8 @@ enum WindowChrome {
         return window.title == "iFocus" || window.title == "设置"
     }
     
-    /// Keep AppKit's native traffic lights and actions, with a subtle translucent finish
-    /// on recent macOS releases to sit naturally in the Liquid Glass titlebar.
+    /// Keep AppKit's native traffic lights and let macOS own their appearance.
+    /// In particular, don't alpha-tint the buttons: macOS 26 renders their native Liquid Glass treatment.
     static func layoutTrafficLights(in window: NSWindow) {
         guard isManagedAppWindow(window) else { return }
         let buttons = [
@@ -510,15 +510,12 @@ enum WindowChrome {
 
             var frame = originalFrame
             if #available(macOS 26.0, *) {
-                button.alphaValue = 0.78
                 frame.origin.x += trafficLightOffsetX
                 frame.origin.y += (button.superview?.isFlipped == true ? trafficLightOffsetY : -trafficLightOffsetY)
                 // A slice outside the titlebar view would not receive clicks.
                 if let bounds = button.superview?.bounds {
                     frame.origin.y = max(bounds.minY, min(frame.origin.y, bounds.maxY - frame.height))
                 }
-            } else {
-                button.alphaValue = 1
             }
             button.frame = frame
         }
