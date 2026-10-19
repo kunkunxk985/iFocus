@@ -281,7 +281,8 @@ struct iFocusApp: App {
         }
         // Hidden title text + transparent full-size content (no empty unified toolbar —
         // empty toolbars paint a solid top band that reads as a white strip).
-        .windowStyle(.hiddenTitleBar)
+        // Standard titlebar geometry, so the window buttons sit at the system inset.
+        // The sidebar toggle is a real toolbar item and needs this titlebar to live in.
         .windowResizability(.contentSize)
         .defaultSize(width: AppWindow.defaultSize.width, height: AppWindow.defaultSize.height)
         .commands {
@@ -443,8 +444,10 @@ enum WindowChrome {
             window.titlebarSeparatorStyle = .none
         }
         
-        // Critical: no empty NSToolbar. Unified empty toolbars paint an opaque top band.
-        if window.toolbar != nil {
+        // An *empty* NSToolbar paints an opaque band across the top, so drop one when it
+        // has nothing in it. A toolbar that carries items is ours (the sidebar toggle
+        // lives there) and must survive — clearing it would delete the control.
+        if let toolbar = window.toolbar, toolbar.items.isEmpty {
             window.toolbar = nil
         }
         

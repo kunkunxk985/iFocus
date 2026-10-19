@@ -39,22 +39,23 @@ Two earlier approaches were tried and rejected:
 
 The toggle uses `glassEffect(.regular.tint(.white.opacity(0.14)).interactive(), in: Circle())` on macOS 26 and a hand-mixed circular plate before that. The white tint is load-bearing: untinted glass reads *darker* than a dark sidebar, while a toolbar plate in system apps reads lighter. The glyph is `sidebar.left` with `.hierarchical` rendering, which fills the leading panel the way Mail's does.
 
-### Window buttons sit where the compact titlebar puts them
+### The window buttons and the sidebar toggle both live in a real titlebar
 
-`.windowStyle(.hiddenTitleBar)` compacts the titlebar, so the window buttons land closer to the top-left corner than in a standard titlebar window. Measured from the rendered window: the first button starts 9pt from the left edge with a standard titlebar and about 7pt with `.hiddenTitleBar`. A native window is nearer 14–17pt. That difference is not adjustable from SwiftUI.
+The window uses the standard titlebar (no `.windowStyle(.hiddenTitleBar)`) and the sidebar toggle is a real `ToolbarItem(placement: .navigation)`. That combination is what makes both native: the buttons sit at the system inset, and the toggle is drawn inside the titlebar by AppKit, level with them, with the toolbar's own plate.
 
-**The two requirements conflict, and this is the crux.** With a standard titlebar the buttons sit better, but AppKit draws the titlebar *above* the content, so SwiftUI content cannot render inside it — the sidebar toggle gets clipped at the content's safe-area boundary, or disappears entirely if the row tries to ignore that boundary. With `.hiddenTitleBar` the content does reach into the titlebar, which is what lets the toggle sit level with the buttons, but the titlebar is then the compact variant.
+Why this combination and not the alternatives:
 
-Measured both ways:
-
-| | first button inset | toggle beside buttons |
+| | first button inset | toggle beside the buttons |
 | --- | --- | --- |
-| `.hiddenTitleBar` (current) | ~7pt | works |
-| standard titlebar | 9pt | clipped or hidden |
+| `.hiddenTitleBar` + overlay toggle | ~7pt | works |
+| standard titlebar + overlay toggle | 9pt | clipped, or hidden |
+| **standard titlebar + toolbar item** | **9pt** | **works** |
 
-So the current state is the deliberate choice: a working toggle beside the buttons, at the cost of a slightly tighter inset. Removing `.hiddenTitleBar` also does not reintroduce the opaque top band an earlier note claimed — that band was from an older layout, not from the titlebar itself.
+AppKit draws the titlebar *above* the content, so SwiftUI content cannot render inside that band. An overlay toggle is therefore only possible when `.hiddenTitleBar` removes the band — and that compacts the titlebar and pulls the buttons toward the corner. A real toolbar item sidesteps the problem entirely because AppKit owns that space.
 
-If both are wanted, the remaining option is a real `NSToolbar` item, which places the control inside the titlebar at the system's own position (just after the buttons) rather than at the sidebar's trailing edge. That was tried and rejected on position, not on feasibility.
+The trade-off: a toolbar item is placed by the system just after the window buttons (~78pt), not at the sidebar's trailing edge (~124pt, where Mail puts it). Mail positions its own control; a stock toolbar item cannot.
+
+Rejected along the way: a hand-tuned spacer (`18pt` + a fixed `58pt`), which never lined up because the sidebar width is fluid at 208–252pt; and `.ignoresSafeArea(edges: .top)` on the overlay, which made the toggle vanish outright.
 
 Manual repositioning of the AppKit buttons was tried in an earlier round (`f3ec5d4`) and reverted; do not retry it without a new reason.
 

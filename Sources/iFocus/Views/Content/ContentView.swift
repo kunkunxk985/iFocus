@@ -61,31 +61,18 @@ struct ContentView: View {
 
                     detailPane
                         .environment(\.windowLayout, layout)
+                        // A real toolbar item: the system places it inside the titlebar,
+                        // level with the window buttons, and gives it the toolbar's own
+                        // plate. SwiftUI content cannot draw in that band otherwise.
+                        .toolbar {
+                            ToolbarItem(placement: .navigation) {
+                                SidebarToggleButton(sidebarCollapsed: $sidebarCollapsed)
+                            }
+                        }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .animation(AppTheme.springGentle, value: sidebarCollapsed)
                 .animation(.easeInOut(duration: 0.16), value: layout.scale)
-
-                // Mirrors the native layout: with the sidebar open the toggle sits at the
-                // sidebar's trailing edge, just short of the divider — the position Mail
-                // and Finder use. Collapsed, there is no sidebar to sit in, so it falls
-                // back to just after the window buttons.
-                HStack(alignment: .center, spacing: 0) {
-                    Color.clear
-                        .frame(
-                            width: sidebarCollapsed
-                                ? AppTheme.trafficLightLeading + 58
-                                : max(0, currentSidebarWidth - 48),
-                            height: 1
-                        )
-                        .accessibilityHidden(true)
-                    SidebarToggleButton(sidebarCollapsed: $sidebarCollapsed)
-                    Spacer(minLength: 0)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(height: AppTheme.topHeaderHeight)
-                .offset(y: -AppTheme.titlebarControlOffset)
-                .zIndex(25)
 
                 if isAccountMenuPresented {
                     // Tap-catcher above content, below popover — dismiss account menu.
