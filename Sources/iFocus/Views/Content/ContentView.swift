@@ -66,27 +66,19 @@ struct ContentView: View {
                 .animation(AppTheme.springGentle, value: sidebarCollapsed)
                 .animation(.easeInOut(duration: 0.16), value: layout.scale)
 
-                if sidebarCollapsed {
-                    HStack(alignment: .center, spacing: 14) {
-                        Color.clear
-                            .frame(width: 58, height: 1)
-                            .accessibilityHidden(true)
-                        SidebarToggleButton(sidebarCollapsed: $sidebarCollapsed)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.leading, AppTheme.trafficLightLeading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: AppTheme.topHeaderHeight)
-                    .offset(y: -AppTheme.collapsedTitlebarControlOffset)
-                    .zIndex(25)
-                    .transition(
-                        .asymmetric(
-                            insertion: .opacity.animation(.easeInOut(duration: 0.20)),
-                            removal: .opacity.animation(.easeOut(duration: 0.12))
-                        )
-                    )
-                    .allowsHitTesting(sidebarCollapsed)
+                HStack(alignment: .center, spacing: 14) {
+                    Color.clear
+                        .frame(width: 58, height: 1)
+                        .accessibilityHidden(true)
+                    SidebarToggleButton(sidebarCollapsed: $sidebarCollapsed)
+                    Spacer(minLength: 0)
                 }
+                .padding(.leading, AppTheme.trafficLightLeading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: AppTheme.topHeaderHeight)
+                .offset(y: -AppTheme.titlebarControlOffset)
+                .zIndex(25)
+
                 if isAccountMenuPresented {
                     // Tap-catcher above content, below popover — dismiss account menu.
                     Color.black.opacity(0.001)

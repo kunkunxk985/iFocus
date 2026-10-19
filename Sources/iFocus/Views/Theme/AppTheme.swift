@@ -315,13 +315,10 @@ extension AppTheme {
     /// Must fit close + miniaturize + zoom with padding (was 64 → green sat past divider).
     static let collapsedSidebarWidth: CGFloat = 80
     
-    /// Traffic-light inset matching Gemini / Electron `titleBarStyle: hiddenInset`
-    /// (comfortably clear of the rounded window corner) when the sidebar is expanded.
+    /// Leading offset for the shared sidebar toggle beside the native traffic lights.
     static let trafficLightLeading: CGFloat = 18
-    static let trafficLightTop: CGFloat = 18
-    static let trafficLightSpacing: CGFloat = 8
-    static let titlebarControlOffset: CGFloat = 13
-    static let collapsedTitlebarControlOffset: CGFloat = 4
+    /// Shared vertical alignment for the sidebar toggle in both sidebar states.
+    static let titlebarControlOffset: CGFloat = 4
 }
 
 // MARK: - Depth & Multi-Layer Shadow System

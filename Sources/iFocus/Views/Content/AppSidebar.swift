@@ -130,16 +130,10 @@ struct AppSidebar: View {
         .padding(.vertical, 8)
     }
 
-    /// AppKit draws the native lights in the transparent titlebar; this row keeps the sidebar toggle aligned.
+    /// Reserve the titlebar row; the shared sidebar toggle is positioned by ContentView.
     private var sidebarHeader: some View {
-        HStack(alignment: .center, spacing: 0) {
-            Spacer(minLength: 0)
-
-            SidebarToggleButton(sidebarCollapsed: $sidebarCollapsed)
-                .padding(.trailing, 12)
-                .offset(y: -AppTheme.titlebarControlOffset)
-        }
-        .frame(height: AppTheme.topHeaderHeight)
+        Color.clear
+            .frame(height: AppTheme.topHeaderHeight)
     }
 
     private func sidebarSection<Content: View>(
