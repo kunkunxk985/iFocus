@@ -59,5 +59,19 @@ Rejected along the way: a hand-tuned spacer (`18pt` + a fixed `58pt`), which nev
 
 Manual repositioning of the AppKit buttons was tried in an earlier round (`f3ec5d4`) and reverted; do not retry it without a new reason.
 
+### Known defect: the toolbar plate is a portrait oval
+
+In a real toolbar item, AppKit sizes the item and SwiftUI content is stretched to fit. `Circle` fills whatever rect it is given, so the plate comes out taller than wide and the glyph is stretched with it. Mail's control is a circle because Mail draws it itself.
+
+Three SwiftUI-side attempts failed to square it:
+
+| attempt | result |
+| --- | --- |
+| `.frame(width: 28, height: 28)` on the glyph | 28×35 oval |
+| `.fixedSize()` after the glass | 17.5×21 oval, smaller |
+| `ZStack` square + `aspectRatio(1, .fit)` | collapsed to a narrow vertical capsule |
+
+The plate can only be made a true circle by drawing it outside SwiftUI's layout — a small `NSViewRepresentable` that fills a circle of `min(bounds.width, bounds.height)`. That means hand-drawing the plate instead of using `glassEffect`, so it loses the platform glass. Not attempted.
+
 The window's `backgroundColor` is an opaque colour: the glass blurs what is behind it inside the window, so the sidebar reads as a solid surface rather than picking up the desktop. Making the window clear would give the native translucency, but that previously caused an unpainted strip along the inset panel's bottom edge and has not been re-evaluated since the sidebar went full-bleed.
 
