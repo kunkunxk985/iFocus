@@ -191,6 +191,76 @@ final class StudyPlanTests: XCTestCase {
         XCTAssertNil(store.tasks[0].completedAt)
     }
 
+    func testEditingChecklistCompletionCompletesParentAndSpawnsRecurrence() throws {
+        let store = TaskStore(storageDirectory: tempDir)
+        let openItem = ChecklistItem(title: "今天练习")
+        let task = FocusTask(
+            title: "每日练习",
+            category: .study,
+            dueDate: day(2026, 3, 10),
+            recurrence: .daily,
+            items: [openItem]
+        )
+        store.tasks = [task]
+        store.activeTaskId = task.id
+
+        let completedItem = ChecklistItem(title: openItem.title, doneAt: day(2026, 3, 10))
+        store.updateTask(
+            id: task.id,
+            title: task.title,
+            category: task.category,
+            priority: task.priority,
+            estimatedPomodoros: task.estimatedPomodoros,
+            dueDate: task.dueDate,
+            recurrence: task.recurrence,
+            notes: task.notes,
+            linkURL: task.linkURL,
+            items: [completedItem],
+            itemUnit: task.itemUnit,
+            startDate: task.startDate
+        )
+
+        XCTAssertTrue(store.tasks[0].isCompleted)
+        XCTAssertNotNil(store.tasks[0].completedAt)
+        XCTAssertNil(store.activeTaskId)
+        let next = try XCTUnwrap(store.tasks.first { !$0.isCompleted && $0.recurrence == .daily })
+        XCTAssertEqual(next.title, task.title)
+        XCTAssertEqual(next.checklist.map(\.title), [openItem.title])
+    }
+
+    func testEditingChecklistReopensCompletedParent() {
+        let store = TaskStore(storageDirectory: tempDir)
+        let doneItem = ChecklistItem(title: "章节", doneAt: day(2026, 3, 9))
+        let task = FocusTask(
+            title: "课程",
+            category: .study,
+            isCompleted: true,
+            items: [doneItem],
+            completedAt: day(2026, 3, 9)
+        )
+        store.tasks = [task]
+
+        var reopenedItem = doneItem
+        reopenedItem.doneAt = nil
+        store.updateTask(
+            id: task.id,
+            title: task.title,
+            category: task.category,
+            priority: task.priority,
+            estimatedPomodoros: task.estimatedPomodoros,
+            dueDate: task.dueDate,
+            recurrence: task.recurrence,
+            notes: task.notes,
+            linkURL: task.linkURL,
+            items: [reopenedItem],
+            itemUnit: task.itemUnit,
+            startDate: task.startDate
+        )
+
+        XCTAssertFalse(store.tasks[0].isCompleted)
+        XCTAssertNil(store.tasks[0].completedAt)
+    }
+
     func testOverdueDailyRouteTaskSpawnsNextOccurrenceAfterToday() throws {
         let store = TaskStore(storageDirectory: tempDir)
         let today = Calendar.current.startOfDay(for: Date())

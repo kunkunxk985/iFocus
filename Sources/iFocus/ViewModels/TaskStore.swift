@@ -522,21 +522,28 @@ class TaskStore: ObservableObject {
 
         items[itemIndex].doneAt = items[itemIndex].isDone ? nil : date
         tasks[index].items = items.isEmpty ? nil : items
-        let allDone = !items.isEmpty && items.allSatisfy(\.isDone)
-        let wasCompleted = tasks[index].isCompleted
-        if allDone {
-            tasks[index].isCompleted = true
-            tasks[index].completedAt = date
-            if activeTaskId == taskID { activeTaskId = nil }
-            if !wasCompleted && tasks[index].recurrence != .none {
-                spawnNextRecurrence(from: tasks[index])
-            }
-        } else if wasCompleted {
-            tasks[index].isCompleted = false
-            tasks[index].completedAt = nil
-        }
+        synchronizeChecklistCompletion(forTaskAt: index, at: date)
         saveTasksImmediately()
         saveStateImmediately()
+    }
+
+    /// Keep parent completion, active-task state, and recurrence consistent with checklist edits.
+    private func synchronizeChecklistCompletion(forTaskAt index: Int, at date: Date = Date()) {
+        let items = tasks[index].checklist
+        guard !items.isEmpty else { return }
+
+        let allDone = items.allSatisfy(\.isDone)
+        guard allDone != tasks[index].isCompleted else { return }
+
+        let taskID = tasks[index].id
+        tasks[index].isCompleted = allDone
+        tasks[index].completedAt = allDone ? date : nil
+
+        guard allDone else { return }
+        if activeTaskId == taskID { activeTaskId = nil }
+        if tasks[index].recurrence != .none {
+            spawnNextRecurrence(from: tasks[index])
+        }
     }
 
     func toggleChecklistFlag(taskID: UUID, itemID: UUID) {
@@ -1124,8 +1131,10 @@ class TaskStore: ObservableObject {
                     tasks[index].itemUnit = nil
                 }
                 tasks[index].startDate = studyPlanEdits.startDate.map { Calendar.current.startOfDay(for: $0) }
+                synchronizeChecklistCompletion(forTaskAt: index)
             }
             saveTasksImmediately()
+            saveStateImmediately()
         }
     }
     
