@@ -399,6 +399,10 @@ extension AppearanceMode {
 /// Content draws edge-to-edge under a transparent titlebar so there is no
 /// solid “white strip” between the traffic lights and the app surface.
 enum WindowChrome {
+    private static let trafficLightSize: CGFloat = 14
+    private static let trafficLightLeadingInset: CGFloat = 18
+    private static let trafficLightSpacing: CGFloat = 8
+
     static func applyAll() {
         for window in NSApplication.shared.windows where isManagedAppWindow(window) {
             apply(to: window)
@@ -468,7 +472,8 @@ enum WindowChrome {
         // Clear opaque titlebar container fills that can still flash as a white strip.
         clearTitlebarOpaqueFills(in: window)
         
-        // Keep AppKit's native traffic-light appearance and standard geometry.
+        // Keep AppKit's native traffic-light actions, while making their visual weight
+        // explicit for the transparent titlebar used by iFocus.
         layoutTrafficLights(in: window)
         // AppKit may recreate titlebar buttons after style changes; reassert visibility once.
         DispatchQueue.main.async {
@@ -485,7 +490,8 @@ enum WindowChrome {
         return window.title == "iFocus" || window.title == "设置"
     }
     
-    /// Preserve AppKit's native traffic-light frames, colors, and active/inactive appearance.
+    /// Preserve AppKit's native button actions and colors, with the compact geometry used
+    /// by the Manus-style titlebar. Do not apply alpha: the colors must remain crisp.
     static func layoutTrafficLights(in window: NSWindow) {
         guard isManagedAppWindow(window) else { return }
         guard !window.styleMask.contains(.fullScreen) else { return }
@@ -494,8 +500,25 @@ enum WindowChrome {
             window.standardWindowButton(.miniaturizeButton),
             window.standardWindowButton(.zoomButton)
         ]
-        for case let button? in buttons {
+        for (index, candidate) in buttons.enumerated() {
+            guard let button = candidate else { continue }
             button.isHidden = false
+            button.alphaValue = 1
+            button.isEnabled = true
+            button.wantsLayer = true
+
+            let fallbackFrame = button.frame
+            var frame = fallbackFrame
+            frame.size = CGSize(width: trafficLightSize, height: trafficLightSize)
+            frame.origin.x = trafficLightLeadingInset
+                + CGFloat(index) * (trafficLightSize + trafficLightSpacing)
+            if let superview = button.superview {
+                frame.origin.y = superview.isFlipped
+                    ? superview.bounds.height - trafficLightLeadingInset - trafficLightSize
+                    : trafficLightLeadingInset
+                frame.origin.y = max(superview.bounds.minY, min(frame.origin.y, superview.bounds.maxY - frame.height))
+            }
+            button.frame = frame
         }
     }
     
