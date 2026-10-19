@@ -124,10 +124,12 @@ struct AppSidebar: View {
                 bottomUserBar
             }
         }
-        .adaptiveGlass(cornerRadius: AppTheme.radiusXL, fallbackMaterial: .sidebar)
-        .padding(.leading, 8)
+        // Full-bleed: the material runs to the window's top-left corner so the window
+        // buttons sit on the sidebar's surface. The inset floating panel left them
+        // perched on its rounded corner with ~5pt of clearance, which read as cramped
+        // and gave them no material to sit on.
+        .adaptiveGlass(cornerRadius: 0, fallbackMaterial: .sidebar)
         .padding(.trailing, 4)
-        .padding(.vertical, 8)
     }
 
     /// Reserve the titlebar row; the shared sidebar toggle is positioned by ContentView.
