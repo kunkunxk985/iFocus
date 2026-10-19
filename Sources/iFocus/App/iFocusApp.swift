@@ -394,15 +394,11 @@ extension AppearanceMode {
     }
 }
 
-/// Minimal window chrome — transparent titlebar, relaxed traffic-light insets.
+/// Minimal window chrome — transparent titlebar with native traffic-light geometry.
 ///
 /// Content draws edge-to-edge under a transparent titlebar so there is no
 /// solid “white strip” between the traffic lights and the app surface.
 enum WindowChrome {
-    private static let trafficLightOriginalFrames = NSMapTable<NSButton, NSValue>.weakToStrongObjects()
-    private static let trafficLightOffsetX: CGFloat = 8
-    private static let trafficLightOffsetY: CGFloat = 6
-
     static func applyAll() {
         for window in NSApplication.shared.windows where isManagedAppWindow(window) {
             apply(to: window)
@@ -472,9 +468,9 @@ enum WindowChrome {
         // Clear opaque titlebar container fills that can still flash as a white strip.
         clearTitlebarOpaqueFills(in: window)
         
-        // Keep AppKit's native traffic lights so the current macOS release owns their appearance.
+        // Keep AppKit's native traffic-light appearance and standard geometry.
         layoutTrafficLights(in: window)
-        // System often re-applies default frames after style changes — reassert once.
+        // AppKit may recreate titlebar buttons after style changes; reassert visibility once.
         DispatchQueue.main.async {
             layoutTrafficLights(in: window)
             softenScrollers(in: window)
@@ -489,10 +485,10 @@ enum WindowChrome {
         return window.title == "iFocus" || window.title == "设置"
     }
     
-    /// Keep AppKit's native traffic lights and let macOS own their appearance.
-    /// In particular, don't alpha-tint the buttons: macOS 26 renders their native Liquid Glass treatment.
+    /// Preserve AppKit's native traffic-light frames, colors, and active/inactive appearance.
     static func layoutTrafficLights(in window: NSWindow) {
         guard isManagedAppWindow(window) else { return }
+        guard !window.styleMask.contains(.fullScreen) else { return }
         let buttons = [
             window.standardWindowButton(.closeButton),
             window.standardWindowButton(.miniaturizeButton),
@@ -500,32 +496,13 @@ enum WindowChrome {
         ]
         for case let button? in buttons {
             button.isHidden = false
-            let originalFrame: NSRect
-            if let cachedFrame = trafficLightOriginalFrames.object(forKey: button) {
-                originalFrame = cachedFrame.rectValue
-            } else {
-                originalFrame = button.frame
-                trafficLightOriginalFrames.setObject(NSValue(rect: originalFrame), forKey: button)
-            }
-
-            var frame = originalFrame
-            if #available(macOS 26.0, *) {
-                frame.origin.x += trafficLightOffsetX
-                frame.origin.y += (button.superview?.isFlipped == true ? trafficLightOffsetY : -trafficLightOffsetY)
-                // A slice outside the titlebar view would not receive clicks.
-                if let bounds = button.superview?.bounds {
-                    frame.origin.y = max(bounds.minY, min(frame.origin.y, bounds.maxY - frame.height))
-                }
-            }
-            button.frame = frame
         }
     }
     
-    /// Reaffirm native traffic-light visibility on managed windows after layout or appearance changes.
+    /// Reaffirm native traffic-light visibility after window appearance changes.
     static func layoutMainWindowTrafficLights() {
         for window in NSApplication.shared.windows where isManagedAppWindow(window) {
             layoutTrafficLights(in: window)
-            // System may reset frames after layout animations.
             DispatchQueue.main.async {
                 layoutTrafficLights(in: window)
             }
