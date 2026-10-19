@@ -41,9 +41,20 @@ The toggle uses `glassEffect(.regular.tint(.white.opacity(0.14)).interactive(), 
 
 ### Window buttons sit where the compact titlebar puts them
 
-`.windowStyle(.hiddenTitleBar)` compacts the titlebar, so the window buttons land closer to the top-left corner than in a standard titlebar window. That is the current trade-off, and it is not adjustable from SwiftUI.
+`.windowStyle(.hiddenTitleBar)` compacts the titlebar, so the window buttons land closer to the top-left corner than in a standard titlebar window. Measured from the rendered window: the first button starts 9pt from the left edge with a standard titlebar and about 7pt with `.hiddenTitleBar`. A native window is nearer 14–17pt. That difference is not adjustable from SwiftUI.
 
-Removing `.hiddenTitleBar` restores the standard inset but reintroduces an opaque band across the top of the window (verified: the band appears and the sidebar toggle is swallowed by it), because `clearTitlebarOpaqueFills` runs before SwiftUI builds that titlebar. Making that work would mean re-running the clearing after the titlebar exists — not attempted.
+**The two requirements conflict, and this is the crux.** With a standard titlebar the buttons sit better, but AppKit draws the titlebar *above* the content, so SwiftUI content cannot render inside it — the sidebar toggle gets clipped at the content's safe-area boundary, or disappears entirely if the row tries to ignore that boundary. With `.hiddenTitleBar` the content does reach into the titlebar, which is what lets the toggle sit level with the buttons, but the titlebar is then the compact variant.
+
+Measured both ways:
+
+| | first button inset | toggle beside buttons |
+| --- | --- | --- |
+| `.hiddenTitleBar` (current) | ~7pt | works |
+| standard titlebar | 9pt | clipped or hidden |
+
+So the current state is the deliberate choice: a working toggle beside the buttons, at the cost of a slightly tighter inset. Removing `.hiddenTitleBar` also does not reintroduce the opaque top band an earlier note claimed — that band was from an older layout, not from the titlebar itself.
+
+If both are wanted, the remaining option is a real `NSToolbar` item, which places the control inside the titlebar at the system's own position (just after the buttons) rather than at the sidebar's trailing edge. That was tried and rejected on position, not on feasibility.
 
 Manual repositioning of the AppKit buttons was tried in an earlier round (`f3ec5d4`) and reverted; do not retry it without a new reason.
 
