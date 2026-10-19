@@ -632,8 +632,8 @@ class TaskStore: ObservableObject {
     /// Live storage directory (tasks / sessions / state). Used by backup export/import.
     var storageDirectory: URL { appSupportDir }
 
-    /// Read raw file payloads for backup (empty Data if missing).
-    func backupFilePayloads() -> [String: Data] {
+    /// Read raw file payloads for backup; missing files use valid defaults, unreadable files fail.
+    func backupFilePayloads() throws -> [String: Data] {
         flushPendingSaves()
         var result: [String: Data] = [:]
         let fm = FileManager.default
@@ -647,8 +647,12 @@ class TaskStore: ObservableObject {
             )
         ]
         for (name, url) in mapping {
-            if fm.fileExists(atPath: url.path), let data = try? Data(contentsOf: url) {
-                result[name] = data
+            if fm.fileExists(atPath: url.path) {
+                do {
+                    result[name] = try Data(contentsOf: url)
+                } catch {
+                    throw LocalBackup.BackupError.readFailed(name)
+                }
             } else {
                 // Always include valid empty arrays / objects so restore is consistent.
                 switch name {

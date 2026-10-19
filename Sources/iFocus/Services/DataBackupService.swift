@@ -37,7 +37,7 @@ enum DataBackupService {
         let destination = uniqueDirectory(in: parent, preferredName: folderName)
 
         do {
-            var payloads = taskStore.backupFilePayloads()
+            var payloads = try taskStore.backupFilePayloads()
             if let avatarPath = settings.avatarPath {
                 let avatarURL = URL(fileURLWithPath: avatarPath)
                 if let avatarData = try? Data(contentsOf: avatarURL),

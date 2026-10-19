@@ -287,6 +287,21 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.tasks[0].completedPomodoros, 1)
         XCTAssertEqual(reloaded.tasks[0].timeSpentMinutes, 25)
     }
+
+    func testBackupPayloadsThrowInsteadOfReplacingUnreadableTasksWithEmptyArray() throws {
+        let store = TaskStore(storageDirectory: tempDir)
+        store.newTaskTitle = "必须保住的任务"
+        store.addTask(for: .inboxTask)
+        store.flushPendingSaves()
+
+        let tasksURL = tempDir.appendingPathComponent("tasks.json")
+        try FileManager.default.removeItem(at: tasksURL)
+        try FileManager.default.createDirectory(at: tasksURL, withIntermediateDirectories: true)
+
+        XCTAssertThrowsError(try store.backupFilePayloads()) { error in
+            XCTAssertEqual(error as? LocalBackup.BackupError, .readFailed(LocalBackup.tasksFileName))
+        }
+    }
     
     func testRecurrenceSpawnsNextOnComplete() {
         let store = TaskStore(storageDirectory: tempDir)

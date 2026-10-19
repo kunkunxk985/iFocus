@@ -57,7 +57,7 @@ final class DataBackupServiceTests: XCTestCase {
         )
         TimerSessionPersistence.save(snapshot, to: sourceDir)
 
-        var payloads = sourceTasks.backupFilePayloads()
+        var payloads = try sourceTasks.backupFilePayloads()
         payloads[LocalBackup.avatarFileName] = try makePNGData()
         try LocalBackup.writePackage(
             to: packageDir,
