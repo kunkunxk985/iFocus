@@ -28,3 +28,14 @@ Constraints to keep:
 - `sidebarHeader` reserves 48pt (`AppTheme.topHeaderHeight`) for the button row. Nav content starts below it.
 - Verify the window corner still clips the material, since the content view sets `masksToBounds = false`. A square edge showing outside the rounded corner means the clip broke.
 
+### The sidebar toggle sits at the sidebar's trailing edge
+
+With the sidebar open the toggle is placed `currentSidebarWidth - 48` from the left, i.e. just short of the divider — the position Mail and Finder use. Collapsed, there is no sidebar to sit in, so it falls back to just after the window buttons.
+
+Two earlier approaches were tried and rejected:
+
+- **A hand-tuned spacer** (`18pt` leading + a fixed `58pt` spacer). It never lined up, because the sidebar width is fluid (208–252pt).
+- **A real `ToolbarItem(placement: .navigation)`.** System-positioned, but it landed hard against the window buttons rather than at the sidebar's edge, which is not the layout being matched.
+
+The toggle uses `glassEffect(.regular.interactive(), in: Circle())` on macOS 26 and a hand-mixed circular plate before that. Note the window's `backgroundColor` is an opaque colour: the glass blurs what is behind it inside the window, so the sidebar reads as a solid surface rather than picking up the desktop. Making the window clear would give the native translucency, but that previously caused an unpainted strip along the inset panel's bottom edge and has not been re-evaluated since the sidebar went full-bleed.
+

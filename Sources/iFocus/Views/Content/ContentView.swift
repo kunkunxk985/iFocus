@@ -66,14 +66,22 @@ struct ContentView: View {
                 .animation(AppTheme.springGentle, value: sidebarCollapsed)
                 .animation(.easeInOut(duration: 0.16), value: layout.scale)
 
-                HStack(alignment: .center, spacing: 14) {
+                // Mirrors the native layout: with the sidebar open the toggle sits at the
+                // sidebar's trailing edge, just short of the divider — the position Mail
+                // and Finder use. Collapsed, there is no sidebar to sit in, so it falls
+                // back to just after the window buttons.
+                HStack(alignment: .center, spacing: 0) {
                     Color.clear
-                        .frame(width: 58, height: 1)
+                        .frame(
+                            width: sidebarCollapsed
+                                ? AppTheme.trafficLightLeading + 58
+                                : max(0, currentSidebarWidth - 48),
+                            height: 1
+                        )
                         .accessibilityHidden(true)
                     SidebarToggleButton(sidebarCollapsed: $sidebarCollapsed)
                     Spacer(minLength: 0)
                 }
-                .padding(.leading, AppTheme.trafficLightLeading)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: AppTheme.topHeaderHeight)
                 .offset(y: -AppTheme.titlebarControlOffset)
