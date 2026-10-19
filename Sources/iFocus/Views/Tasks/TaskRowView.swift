@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import iFocusCore
 
 /// Crisp Apple-style checkmark path for animated completion drawing
 private struct CheckmarkShape: Shape {
@@ -100,6 +101,7 @@ struct TaskRowView: View {
     
     @EnvironmentObject private var settings: SettingsStore
     @State private var isHovering = false
+    @State private var isChecklistExpanded = false
     @State private var isGraceCompleted = false
     @State private var isPendingGraceCommit = false
     @State private var graceTimerItem: DispatchWorkItem? = nil
@@ -163,6 +165,7 @@ struct TaskRowView: View {
         let density = settings.uiDensity
         let completedFade = task.isCompleted || isGraceCompleted
         
+        VStack(alignment: .leading, spacing: 0) {
         HStack(alignment: .center, spacing: 0) {
             // Restrained Luminous Priority Accent (replaces harsh 3pt colored bar)
             if !completedFade && !isSelecting && task.priority >= 2 {
@@ -335,6 +338,31 @@ struct TaskRowView: View {
                             )
                         }
                         
+                        if !task.checklist.isEmpty && !isSelecting {
+                            Button {
+                                withAnimation(AppTheme.springInteractive) {
+                                    isChecklistExpanded.toggle()
+                                }
+                            } label: {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "checklist")
+                                        .font(.system(size: 9, weight: .semibold))
+                                    Text("\(ChecklistProgress.done(task.checklist))/\(task.checklist.count) \(task.unitLabel)")
+                                        .font(.system(size: 10, weight: .medium).monospacedDigit())
+                                    Image(systemName: isChecklistExpanded ? "chevron.up" : "chevron.down")
+                                        .font(.system(size: 7, weight: .bold))
+                                }
+                                .foregroundColor(AppTheme.accent.opacity(0.9))
+                            }
+                            .buttonStyle(.plain)
+                            .help(isChecklistExpanded ? "收起学习清单" : "展开学习清单")
+                            .accessibilityLabel("学习进度：\(ChecklistProgress.done(task.checklist))/\(task.checklist.count) \(task.unitLabel)，\(isChecklistExpanded ? "收起" : "展开")清单")
+                        } else if task.planKey != nil {
+                            Label("路线", systemImage: "map")
+                                .font(.system(size: 9.5, weight: .medium))
+                                .foregroundColor(AppTheme.accent.opacity(0.85))
+                        }
+
                         Spacer(minLength: 0)
 
                         if !completedFade && !isSelecting {
@@ -345,6 +373,14 @@ struct TaskRowView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .opacity(completedFade ? 0.72 : 1)
             }
+        }
+        if isChecklistExpanded && !isSelecting && !task.checklist.isEmpty {
+            checklistPanel
+                .padding(.leading, 52)
+                .padding(.trailing, 12)
+                .padding(.bottom, 10)
+                .transition(.move(edge: .top).combined(with: .opacity))
+        }
         }
         .padding(.leading, density == .compact ? 8 : 10)
         .padding(.trailing, density == .compact ? 10 : 12)
@@ -400,6 +436,96 @@ struct TaskRowView: View {
         }
         .buttonStyle(SpringScaleButtonStyle())
         .help(focusButtonHelp)
+    }
+
+    private var checklistPanel: some View {
+        let items = task.checklist
+        let done = ChecklistProgress.done(items)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                ProgressView(value: Double(done), total: Double(max(1, items.count)))
+                    .tint(done == items.count ? Color.green : AppTheme.accent)
+                Text(ChecklistProgress.paceText(
+                    done: done,
+                    total: items.count,
+                    unit: task.unitLabel,
+                    due: task.dueDate,
+                    today: Date(),
+                    calendar: .current
+                ))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                .lineLimit(2)
+            }
+
+            ForEach(items) { item in
+                HStack(alignment: .top, spacing: 7) {
+                    Button {
+                        withAnimation(AppTheme.springInteractive) {
+                            taskStore.toggleChecklistItem(taskID: task.id, itemID: item.id)
+                        }
+                    } label: {
+                        Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundColor(item.isDone ? Color.green : AppTheme.secondaryText(for: colorScheme).opacity(0.65))
+                    }
+                    .buttonStyle(.plain)
+                    .help(item.isDone ? "标记为未完成" : "标记此项完成")
+                    .accessibilityLabel(item.isDone ? "标记未完成：\(item.title)" : "完成：\(item.title)")
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.title)
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundColor(item.isDone
+                                ? AppTheme.secondaryText(for: colorScheme)
+                                : AppTheme.primaryText(for: colorScheme))
+                            .strikethrough(item.isDone)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let note = item.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+                            Text(note)
+                                .font(.system(size: 10))
+                                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
+                                .lineLimit(2)
+                        }
+                    }
+                    Spacer(minLength: 4)
+                    if item.isFlagged {
+                        Label("没懂", systemImage: "flag.fill")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.orange)
+                    }
+                    Button {
+                        taskStore.toggleChecklistFlag(taskID: task.id, itemID: item.id)
+                    } label: {
+                        Image(systemName: item.isFlagged ? "flag.slash" : "flag")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(item.isFlagged ? .orange : AppTheme.secondaryText(for: colorScheme).opacity(0.55))
+                    }
+                    .buttonStyle(.plain)
+                    .help(item.isFlagged ? "取消没懂标记" : "标记没懂，稍后回顾")
+                    .accessibilityLabel(item.isFlagged ? "取消没懂标记：\(item.title)" : "标记没懂：\(item.title)")
+                }
+                .padding(.vertical, 2)
+            }
+            HStack {
+                Text("全部完成后，任务会自动归入已完成。")
+                    .font(.system(size: 9.5))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.75))
+                Spacer()
+                Button("编辑清单", action: onEdit)
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(AppTheme.accent)
+            }
+            .padding(.top, 2)
+        }
+        .padding(.top, 8)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(AppTheme.separatorLow(for: colorScheme))
+                .frame(height: 0.75)
+        }
+        .accessibilityElement(children: .contain)
     }
 
     private var secondaryActionButtons: some View {

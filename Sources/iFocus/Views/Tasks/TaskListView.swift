@@ -47,6 +47,7 @@ struct TaskListView: View {
     @FocusState private var isQuickAddFocused: Bool
     @FocusState private var isSearchFocused: Bool
     @State private var searchText = ""
+    @State private var showStudyPlanImport = false
     /// nil = follow current list defaults; else force today / tomorrow / inbox.
     @State private var dueOverride: TaskStore.DueOverride? = nil
     @Namespace private var filterAnimation
@@ -129,6 +130,7 @@ struct TaskListView: View {
         TaskSearch.matches(
             searchText,
             in: [task.title, task.notes, task.category.rawValue, task.linkURL, task.recurrence.rawValue]
+                + task.checklist.flatMap { [$0.title, $0.note ?? ""] }
         )
     }
     
@@ -207,7 +209,27 @@ struct TaskListView: View {
                         tint: AppTheme.accent
                     )
                     .overlay(alignment: .trailing) {
-                        if !currentTasks.isEmpty {
+                        HStack(spacing: 8) {
+                            if viewState.selectedScreen != .completedTask {
+                                Button {
+                                    showStudyPlanImport = true
+                                } label: {
+                                    Label("学习计划", systemImage: "map")
+                                        .font(.system(size: 11.5, weight: .semibold))
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .tint(AppTheme.accent)
+                                .help("预览并导入加速版 4 周学习路线")
+                                .accessibilityLabel("导入学习计划")
+                                .sheet(isPresented: $showStudyPlanImport) {
+                                    StudyPlanImportSheet {
+                                        viewState.selectedScreen = .todayTask
+                                    }
+                                }
+                            }
+
+                            if !currentTasks.isEmpty {
                             Button {
                                 withAnimation(AppTheme.springInteractive) {
                                     isSelecting.toggle()
@@ -235,6 +257,7 @@ struct TaskListView: View {
                             }
                             .buttonStyle(SpringScaleButtonStyle(pressedScale: 0.94))
                             .padding(.top, 6)
+                            }
                         }
                     }
 
@@ -306,7 +329,7 @@ struct TaskListView: View {
         // Snapshot identity (`EditTaskSession`) — never `sheet(item:)` a live FocusTask
         // that mutates while the timer is running.
         .sheet(item: $editSession) { session in
-            EditTaskView(session: session) { title, category, priority, pomodoros, due, recurrence, notes, linkURL in
+            EditTaskView(session: session) { title, category, priority, pomodoros, due, recurrence, notes, linkURL, items, itemUnit, startDate in
                 taskStore.updateTask(
                     id: session.id,
                     title: title,
@@ -316,11 +339,14 @@ struct TaskListView: View {
                     dueDate: due,
                     recurrence: recurrence,
                     notes: notes,
-                    linkURL: linkURL
+                    linkURL: linkURL,
+                    items: items,
+                    itemUnit: itemUnit,
+                    startDate: startDate
                 )
             }
             // Force full re-init of @State when reopening the same task after save.
-            .id("\(session.id)-\(session.notes)-\(session.linkURL)-\(session.title)-\(session.priority)")
+            .id("\(session.id)-\(session.notes)-\(session.linkURL)-\(session.title)-\(session.priority)-\(session.itemUnit)-\(session.startDate?.timeIntervalSince1970 ?? 0)-\(session.items.map(\.id))")
         }
         .onExitCommand {
             if isSelecting {

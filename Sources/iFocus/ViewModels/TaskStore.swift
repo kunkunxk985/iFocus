@@ -64,9 +64,27 @@ struct FocusTask: Identifiable, Equatable, Codable {
     var notes: String = ""
     /// Optional URL string (opened in browser when valid).
     var linkURL: String = ""
+    // Added in 1.14. All optional: nil means 1.13 behaviour, and old files decode unchanged.
+    /// Series checklist (episodes, chapters…). Use `checklist` to read it.
+    var items: [ChecklistItem]? = nil
+    /// 集 / 章 / 项 / 篇 for progress copy; nil = 项.
+    var itemUnit: String? = nil
+    /// Plan tasks: hidden from 今天 before this day, then shown until done.
+    var startDate: Date? = nil
+    /// Identifies a task created by a plan import, so re-importing never duplicates it.
+    var planKey: String? = nil
+    /// When the task was last marked complete.
+    var completedAt: Date? = nil
+
+    var checklist: [ChecklistItem] { items ?? [] }
+
+    var unitLabel: String { itemUnit ?? ChecklistProgress.defaultUnit }
+
+    /// Checklist / plan tasks show a calm pace instead of 「逾期」.
+    var isPaced: Bool { planKey != nil || startDate != nil || !checklist.isEmpty }
     
     var isOverdue: Bool {
-        TaskFiltering.isOverdue(dueDate: dueDate, isCompleted: isCompleted)
+        !isPaced && TaskFiltering.isOverdue(dueDate: dueDate, isCompleted: isCompleted)
     }
     
     var hasLink: Bool {
@@ -81,7 +99,9 @@ struct FocusTask: Identifiable, Equatable, Codable {
             isCompleted: isCompleted,
             dueDate: dueDate,
             priority: priority,
-            createdAt: createdAt
+            createdAt: createdAt,
+            startDate: startDate,
+            isPaced: isPaced
         )
     }
     
@@ -89,6 +109,7 @@ struct FocusTask: Identifiable, Equatable, Codable {
         case id, title, category, isCompleted, priority
         case estimatedPomodoros, completedPomodoros, dueDate, createdAt, timeSpentMinutes
         case isPinned, sortIndex, recurrence, notes, linkURL
+        case items, itemUnit, startDate, planKey, completedAt
     }
     
     init(
@@ -106,7 +127,12 @@ struct FocusTask: Identifiable, Equatable, Codable {
         sortIndex: Int = 0,
         recurrence: TaskRecurrence = .none,
         notes: String = "",
-        linkURL: String = ""
+        linkURL: String = "",
+        items: [ChecklistItem]? = nil,
+        itemUnit: String? = nil,
+        startDate: Date? = nil,
+        planKey: String? = nil,
+        completedAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -123,6 +149,11 @@ struct FocusTask: Identifiable, Equatable, Codable {
         self.recurrence = recurrence
         self.notes = notes
         self.linkURL = linkURL
+        self.items = items
+        self.itemUnit = itemUnit
+        self.startDate = startDate
+        self.planKey = planKey
+        self.completedAt = completedAt
     }
     
     init(from decoder: Decoder) throws {
@@ -142,6 +173,12 @@ struct FocusTask: Identifiable, Equatable, Codable {
         recurrence = try c.decodeIfPresent(TaskRecurrence.self, forKey: .recurrence) ?? .none
         notes = try c.decodeIfPresent(String.self, forKey: .notes) ?? ""
         linkURL = try c.decodeIfPresent(String.self, forKey: .linkURL) ?? ""
+        // 1.14 fields: never let one of them make the whole task unreadable.
+        items = try? c.decodeIfPresent([ChecklistItem].self, forKey: .items)
+        itemUnit = try? c.decodeIfPresent(String.self, forKey: .itemUnit)
+        startDate = try? c.decodeIfPresent(Date.self, forKey: .startDate)
+        planKey = try? c.decodeIfPresent(String.self, forKey: .planKey)
+        completedAt = try? c.decodeIfPresent(Date.self, forKey: .completedAt)
     }
     
     /// Next due date after completing (or rolling) a recurring task.
@@ -254,6 +291,18 @@ class TaskStore: ObservableObject {
     
     /// Toast payload after delete — UI shows 「撤销」 until dismissed / expired.
     @Published private(set) var undoDeletionBanner: UndoDeletionBanner?
+
+    struct StudyPlanImportResult: Equatable {
+        let addedCount: Int
+        let skippedCount: Int
+        let totalCount: Int
+    }
+
+    private struct StudyPlanTaskEdits {
+        let items: [ChecklistItem]?
+        let itemUnit: String?
+        let startDate: Date?
+    }
     
     struct UndoDeletionBanner: Equatable {
         let token: UUID
@@ -404,11 +453,55 @@ class TaskStore: ObservableObject {
         saveTasksImmediately()
         return task.id
     }
+
+    /// Import the built-in route once per stable plan key; never overwrite user progress.
+    @discardableResult
+    func importAcceleratedStudyPlan(
+        startMonday: Date,
+        calendar: Calendar = .current
+    ) -> StudyPlanImportResult {
+        let drafts = PlanTemplates.accelerated4Weeks(startMonday: startMonday, calendar: calendar)
+        var existingKeys = Set(tasks.compactMap(\.planKey))
+        var nextIndex = (tasks.map(\.sortIndex).max() ?? -1) + 1
+        var added = 0
+
+        for draft in drafts {
+            guard !draft.planKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  existingKeys.insert(draft.planKey).inserted else {
+                continue
+            }
+            let checklist = draft.items.map { ChecklistItem(title: $0) }
+            tasks.append(FocusTask(
+                title: draft.title,
+                category: .study,
+                priority: 2,
+                estimatedPomodoros: 1,
+                dueDate: draft.dueDate,
+                sortIndex: nextIndex,
+                recurrence: draft.repeatsDaily ? .daily : .none,
+                notes: draft.notes,
+                items: checklist.isEmpty ? nil : checklist,
+                itemUnit: draft.unit,
+                startDate: draft.startDate,
+                planKey: draft.planKey
+            ))
+            nextIndex += 1
+            added += 1
+        }
+
+        if added > 0 { saveTasksImmediately() }
+        return StudyPlanImportResult(
+            addedCount: added,
+            skippedCount: drafts.count - added,
+            totalCount: drafts.count
+        )
+    }
     
     func toggleCompletion(for task: FocusTask) {
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
             let wasCompleted = tasks[index].isCompleted
             tasks[index].isCompleted.toggle()
+            tasks[index].completedAt = tasks[index].isCompleted ? Date() : nil
             if tasks[index].isCompleted && activeTaskId == task.id {
                 activeTaskId = nil
             }
@@ -420,19 +513,56 @@ class TaskStore: ObservableObject {
             saveStateImmediately()
         }
     }
+
+    /// Toggle a checklist item and complete its parent task once every item is checked.
+    func toggleChecklistItem(taskID: UUID, itemID: UUID, at date: Date = Date()) {
+        guard let index = tasks.firstIndex(where: { $0.id == taskID }) else { return }
+        var items = tasks[index].checklist
+        guard let itemIndex = items.firstIndex(where: { $0.id == itemID }) else { return }
+
+        items[itemIndex].doneAt = items[itemIndex].isDone ? nil : date
+        tasks[index].items = items.isEmpty ? nil : items
+        let allDone = !items.isEmpty && items.allSatisfy(\.isDone)
+        let wasCompleted = tasks[index].isCompleted
+        if allDone {
+            tasks[index].isCompleted = true
+            tasks[index].completedAt = date
+            if activeTaskId == taskID { activeTaskId = nil }
+            if !wasCompleted && tasks[index].recurrence != .none {
+                spawnNextRecurrence(from: tasks[index])
+            }
+        } else if wasCompleted {
+            tasks[index].isCompleted = false
+            tasks[index].completedAt = nil
+        }
+        saveTasksImmediately()
+        saveStateImmediately()
+    }
+
+    func toggleChecklistFlag(taskID: UUID, itemID: UUID) {
+        guard let taskIndex = tasks.firstIndex(where: { $0.id == taskID }),
+              let itemIndex = tasks[taskIndex].checklist.firstIndex(where: { $0.id == itemID }) else { return }
+        var items = tasks[taskIndex].checklist
+        items[itemIndex].flagged = !items[itemIndex].isFlagged
+        tasks[taskIndex].items = items
+        saveTasksImmediately()
+    }
     
     /// Create the next incomplete instance after completing a recurring task.
     private func spawnNextRecurrence(from completed: FocusTask) {
         guard completed.recurrence != .none else { return }
-        let nextDue = FocusTask.nextDueDate(after: completed.dueDate, recurrence: completed.recurrence)
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let priorDue = completed.dueDate.map { calendar.startOfDay(for: $0) } ?? today
+        let nextDue = FocusTask.nextDueDate(after: max(priorDue, today), recurrence: completed.recurrence, calendar: calendar)
         // Avoid duplicates when user un-completes and completes again.
         if let nextDue {
-            let nextDay = Calendar.current.startOfDay(for: nextDue)
+            let nextDay = calendar.startOfDay(for: nextDue)
             let alreadyOpen = tasks.contains { t in
                 !t.isCompleted
                     && t.recurrence == completed.recurrence
                     && t.title == completed.title
-                    && t.dueDate.map { Calendar.current.isDate($0, inSameDayAs: nextDay) } == true
+                    && t.dueDate.map { calendar.isDate($0, inSameDayAs: nextDay) } == true
             }
             if alreadyOpen { return }
         }
@@ -446,7 +576,9 @@ class TaskStore: ObservableObject {
             sortIndex: nextIndex,
             recurrence: completed.recurrence,
             notes: completed.notes,
-            linkURL: completed.linkURL
+            linkURL: completed.linkURL,
+            items: completed.items?.map { ChecklistItem(title: $0.title) },
+            itemUnit: completed.itemUnit
         )
         tasks.append(next)
     }
@@ -909,6 +1041,60 @@ class TaskStore: ObservableObject {
         notes: String = "",
         linkURL: String = ""
     ) {
+        updateTask(
+            id: id,
+            title: title,
+            category: category,
+            priority: priority,
+            estimatedPomodoros: estimatedPomodoros,
+            dueDate: dueDate,
+            recurrence: recurrence,
+            notes: notes,
+            linkURL: linkURL,
+            studyPlanEdits: nil
+        )
+    }
+
+    func updateTask(
+        id: UUID,
+        title: String,
+        category: TaskCategory,
+        priority: Int,
+        estimatedPomodoros: Int,
+        dueDate: Date?,
+        recurrence: TaskRecurrence,
+        notes: String,
+        linkURL: String,
+        items: [ChecklistItem]?,
+        itemUnit: String?,
+        startDate: Date?
+    ) {
+        updateTask(
+            id: id,
+            title: title,
+            category: category,
+            priority: priority,
+            estimatedPomodoros: estimatedPomodoros,
+            dueDate: dueDate,
+            recurrence: recurrence,
+            notes: notes,
+            linkURL: linkURL,
+            studyPlanEdits: StudyPlanTaskEdits(items: items, itemUnit: itemUnit, startDate: startDate)
+        )
+    }
+
+    private func updateTask(
+        id: UUID,
+        title: String,
+        category: TaskCategory,
+        priority: Int,
+        estimatedPomodoros: Int,
+        dueDate: Date?,
+        recurrence: TaskRecurrence,
+        notes: String,
+        linkURL: String,
+        studyPlanEdits: StudyPlanTaskEdits?
+    ) {
         if let index = tasks.firstIndex(where: { $0.id == id }) {
             let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
             // Keep previous title if the editor submitted blanks.
@@ -927,6 +1113,17 @@ class TaskStore: ObservableObject {
             } else {
                 tasks[index].dueDate = nil
             }
+            if let studyPlanEdits {
+                if let items = studyPlanEdits.items, !items.isEmpty {
+                    tasks[index].items = items
+                    let unit = studyPlanEdits.itemUnit?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    tasks[index].itemUnit = unit?.isEmpty == false ? unit : nil
+                } else {
+                    tasks[index].items = nil
+                    tasks[index].itemUnit = nil
+                }
+                tasks[index].startDate = studyPlanEdits.startDate.map { Calendar.current.startOfDay(for: $0) }
+            }
             saveTasksImmediately()
         }
     }
@@ -937,6 +1134,7 @@ class TaskStore: ObservableObject {
         for id in ids {
             guard let index = tasks.firstIndex(where: { $0.id == id }), !tasks[index].isCompleted else { continue }
             tasks[index].isCompleted = true
+            tasks[index].completedAt = Date()
             if activeTaskId == id { activeTaskId = nil }
             if tasks[index].recurrence != .none {
                 spawnNextRecurrence(from: tasks[index])

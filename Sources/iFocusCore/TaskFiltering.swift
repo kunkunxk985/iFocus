@@ -7,19 +7,27 @@ public struct TaskSnapshot: Equatable, Identifiable {
     public var dueDate: Date?
     public var priority: Int
     public var createdAt: Date
+    /// Series tasks from a study plan: hidden before this day, then in 今天 until done.
+    public var startDate: Date?
+    /// Checklist / plan tasks show a calm pace instead of 「逾期」, so they never count as overdue.
+    public var isPaced: Bool
     
     public init(
         id: UUID = UUID(),
         isCompleted: Bool = false,
         dueDate: Date? = nil,
         priority: Int = 1,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        startDate: Date? = nil,
+        isPaced: Bool = false
     ) {
         self.id = id
         self.isCompleted = isCompleted
         self.dueDate = dueDate
         self.priority = priority
         self.createdAt = createdAt
+        self.startDate = startDate
+        self.isPaced = isPaced
     }
 }
 
@@ -58,6 +66,19 @@ public enum TaskFiltering {
         let dayAfterTomorrow = calendar.date(byAdding: .day, value: 2, to: today) ?? today.addingTimeInterval(172_800)
         let weekLater = calendar.date(byAdding: .day, value: 7, to: today) ?? today.addingTimeInterval(604_800)
         
+        // A task with a start day is in 今天 from that day until it is done, and never in 明天.
+        // Without one, the original due-date rules apply unchanged.
+        if let start = task.startDate {
+            switch list {
+            case .today:
+                return !task.isCompleted && calendar.startOfDay(for: start) <= today
+            case .tomorrow:
+                return false
+            case .week, .planned, .completed, .inbox:
+                break
+            }
+        }
+
         switch list {
         case .today:
             guard !task.isCompleted, let due = task.dueDate else { return false }
@@ -106,7 +127,8 @@ public enum TaskFiltering {
         for task in tasks {
             if matches(task, list: .today, relativeTo: now, calendar: calendar) {
                 counts.today += 1
-                if isOverdue(dueDate: task.dueDate, isCompleted: task.isCompleted, relativeTo: now, calendar: calendar) {
+                if !task.isPaced,
+                   isOverdue(dueDate: task.dueDate, isCompleted: task.isCompleted, relativeTo: now, calendar: calendar) {
                     counts.overdue += 1
                 }
             }
