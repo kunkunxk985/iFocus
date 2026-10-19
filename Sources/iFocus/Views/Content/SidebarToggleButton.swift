@@ -28,8 +28,12 @@ struct SidebarToggleButton: View {
     /// A bare glyph on the sidebar reads as an icon; the plate makes it a control.
     @ViewBuilder
     private var glyph: some View {
-        let icon = Image(systemName: "sidebar.leading")
-            .font(.system(size: 13.5, weight: .medium))
+        let icon = Image(systemName: "sidebar.left")
+            .font(.system(size: 12.5, weight: .medium))
+            // Hierarchical rendering fills the leading panel, which is how the system's
+            // own sidebar control reads. Monochrome draws it as a bare outline and the
+            // glyph ends up looking like a wireframe box.
+            .symbolRenderingMode(.hierarchical)
             .foregroundColor(
                 isHovering
                 ? AppTheme.primaryText(for: colorScheme)
@@ -42,9 +46,11 @@ struct SidebarToggleButton: View {
 
         if #available(macOS 26.0, *) {
             // The platform's own glass, rather than a hand-mixed translucent fill —
-            // it picks up the backdrop and the hover/press response for free.
+            // it picks up the backdrop and the hover/press response for free. The
+            // white tint matters: untinted glass reads *darker* than a dark sidebar,
+            // while a toolbar plate in system apps reads lighter.
             icon
-                .glassEffect(.regular.interactive(), in: Circle())
+                .glassEffect(.regular.tint(.white.opacity(0.14)).interactive(), in: Circle())
                 .contentShape(Circle())
         } else {
             icon

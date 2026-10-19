@@ -37,5 +37,15 @@ Two earlier approaches were tried and rejected:
 - **A hand-tuned spacer** (`18pt` leading + a fixed `58pt` spacer). It never lined up, because the sidebar width is fluid (208–252pt).
 - **A real `ToolbarItem(placement: .navigation)`.** System-positioned, but it landed hard against the window buttons rather than at the sidebar's edge, which is not the layout being matched.
 
-The toggle uses `glassEffect(.regular.interactive(), in: Circle())` on macOS 26 and a hand-mixed circular plate before that. Note the window's `backgroundColor` is an opaque colour: the glass blurs what is behind it inside the window, so the sidebar reads as a solid surface rather than picking up the desktop. Making the window clear would give the native translucency, but that previously caused an unpainted strip along the inset panel's bottom edge and has not been re-evaluated since the sidebar went full-bleed.
+The toggle uses `glassEffect(.regular.tint(.white.opacity(0.14)).interactive(), in: Circle())` on macOS 26 and a hand-mixed circular plate before that. The white tint is load-bearing: untinted glass reads *darker* than a dark sidebar, while a toolbar plate in system apps reads lighter. The glyph is `sidebar.left` with `.hierarchical` rendering, which fills the leading panel the way Mail's does.
+
+### Window buttons sit where the compact titlebar puts them
+
+`.windowStyle(.hiddenTitleBar)` compacts the titlebar, so the window buttons land closer to the top-left corner than in a standard titlebar window. That is the current trade-off, and it is not adjustable from SwiftUI.
+
+Removing `.hiddenTitleBar` restores the standard inset but reintroduces an opaque band across the top of the window (verified: the band appears and the sidebar toggle is swallowed by it), because `clearTitlebarOpaqueFills` runs before SwiftUI builds that titlebar. Making that work would mean re-running the clearing after the titlebar exists — not attempted.
+
+Manual repositioning of the AppKit buttons was tried in an earlier round (`f3ec5d4`) and reverted; do not retry it without a new reason.
+
+The window's `backgroundColor` is an opaque colour: the glass blurs what is behind it inside the window, so the sidebar reads as a solid surface rather than picking up the desktop. Making the window clear would give the native translucency, but that previously caused an unpainted strip along the inset panel's bottom edge and has not been re-evaluated since the sidebar went full-bleed.
 
