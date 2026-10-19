@@ -578,7 +578,8 @@ class TaskStore: ObservableObject {
             notes: completed.notes,
             linkURL: completed.linkURL,
             items: completed.items?.map { ChecklistItem(title: $0.title) },
-            itemUnit: completed.itemUnit
+            itemUnit: completed.itemUnit,
+            planKey: completed.planKey
         )
         tasks.append(next)
     }

@@ -200,7 +200,13 @@ final class StudyPlanTests: XCTestCase {
         let daily = try XCTUnwrap(store.tasks.first { $0.planKey == "accel.leetcode" })
 
         store.toggleCompletion(for: daily)
-        let next = try XCTUnwrap(store.tasks.first { $0.title == daily.title && $0.planKey == nil && !$0.isCompleted })
+        let next = try XCTUnwrap(store.tasks.first { $0.title == daily.title && $0.planKey == daily.planKey && !$0.isCompleted })
+        XCTAssertEqual(next.planKey, "accel.leetcode")
         XCTAssertTrue(Calendar.current.isDateInTomorrow(next.dueDate!))
+
+        let reimported = store.importAcceleratedStudyPlan(startMonday: monday)
+        XCTAssertEqual(reimported.addedCount, 0)
+        XCTAssertEqual(reimported.skippedCount, 10)
+        XCTAssertEqual(store.tasks.filter { $0.planKey == "accel.leetcode" }.count, 2)
     }
 }

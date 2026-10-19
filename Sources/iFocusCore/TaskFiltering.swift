@@ -91,11 +91,11 @@ public enum TaskFiltering {
             let dueDay = calendar.startOfDay(for: due)
             return dueDay >= dayAfterTomorrow && dueDay <= weekLater
         case .planned:
-            return !task.isCompleted && task.dueDate != nil
+            return !task.isCompleted && (task.dueDate != nil || task.startDate != nil)
         case .completed:
             return task.isCompleted
         case .inbox:
-            return !task.isCompleted && task.dueDate == nil
+            return !task.isCompleted && task.dueDate == nil && task.startDate == nil
         }
     }
     

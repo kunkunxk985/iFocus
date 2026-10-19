@@ -71,6 +71,33 @@ final class TaskFilteringTests: XCTestCase {
         XCTAssertEqual(result.count, 1)
         XCTAssertNil(result[0].dueDate)
     }
+
+    func testStartDateOnlyTaskIsPlannedNotInboxBeforeStart() {
+        let task = TaskSnapshot(
+            isCompleted: false,
+            dueDate: nil,
+            createdAt: day(2026, 3, 1),
+            startDate: day(2026, 3, 11),
+            isPaced: true
+        )
+
+        XCTAssertTrue(TaskFiltering.matches(task, list: .planned, relativeTo: now, calendar: calendar))
+        XCTAssertFalse(TaskFiltering.matches(task, list: .inbox, relativeTo: now, calendar: calendar))
+        XCTAssertFalse(TaskFiltering.matches(task, list: .today, relativeTo: now, calendar: calendar))
+    }
+
+    func testStartedStartDateOnlyTaskMovesToTodayWithoutEnteringInbox() {
+        let task = TaskSnapshot(
+            isCompleted: false,
+            dueDate: nil,
+            createdAt: day(2026, 3, 1),
+            startDate: day(2026, 3, 10),
+            isPaced: true
+        )
+
+        XCTAssertTrue(TaskFiltering.matches(task, list: .today, relativeTo: now, calendar: calendar))
+        XCTAssertFalse(TaskFiltering.matches(task, list: .inbox, relativeTo: now, calendar: calendar))
+    }
     
     func testCompletedList() {
         let tasks = [
