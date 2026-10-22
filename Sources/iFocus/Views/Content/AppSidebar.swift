@@ -17,48 +17,50 @@ struct AppSidebar: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var dropTargetScreen: AppScreen?
 
-    private func agendaItems(_ counts: TaskFiltering.SidebarBadgeCounts) -> [SidebarItem] {
+    /// Four lists that do not contain each other: today, tomorrow, the days
+    /// after that through day 7, and tasks with no date.
+    private func taskItems(_ counts: TaskFiltering.SidebarBadgeCounts) -> [SidebarItem] {
         [
             SidebarItem(
                 title: "今天",
                 screen: .todayTask,
                 badge: badgeIfPositive(counts.today),
-                icon: "sun.max.fill"
+                icon: "sun.max"
             ),
             SidebarItem(
                 title: "明天",
                 screen: .tomorrowTask,
                 badge: badgeIfPositive(counts.tomorrow),
-                icon: "sunrise.fill"
+                icon: "sunrise"
             ),
             SidebarItem(
-                title: "本周",
+                title: "稍后",
                 screen: .weekTask,
                 badge: badgeIfPositive(counts.week),
-                icon: "calendar"
+                icon: "clock"
             ),
             SidebarItem(
                 title: "收集箱",
                 screen: .inboxTask,
                 badge: badgeIfPositive(counts.inbox),
-                icon: "tray.fill"
+                icon: "tray"
             )
         ]
     }
 
-    private func libraryItems(_ counts: TaskFiltering.SidebarBadgeCounts) -> [SidebarItem] {
+    private func reviewItems() -> [SidebarItem] {
         [
-            SidebarItem(
-                title: "已计划",
-                screen: .plannedTask,
-                badge: badgeIfPositive(counts.planned),
-                icon: "calendar.badge.clock"
-            ),
             SidebarItem(
                 title: "已完成",
                 screen: .completedTask,
                 badge: nil,
-                icon: "checkmark.circle.fill"
+                icon: "checkmark.circle"
+            ),
+            SidebarItem(
+                title: "数据统计",
+                screen: .analytics,
+                badge: nil,
+                icon: "chart.bar"
             )
         ]
     }
@@ -83,16 +85,9 @@ struct AppSidebar: View {
                             accentColor: AppTheme.accent,
                             emphasizeRunning: timerStore.isRunning
                         )
-                        sidebarRow(
-                            title: "数据统计",
-                            screen: .analytics,
-                            badge: nil,
-                            icon: "chart.bar.xaxis",
-                            accentColor: AppTheme.accent
-                        )
 
-                        sidebarSection("待办") {
-                            ForEach(agendaItems(counts)) { item in
+                        sidebarSection("任务") {
+                            ForEach(taskItems(counts)) { item in
                                 sidebarRow(
                                     title: item.title,
                                     screen: item.screen,
@@ -104,8 +99,8 @@ struct AppSidebar: View {
                             }
                         }
 
-                        sidebarSection("更多") {
-                            ForEach(libraryItems(counts)) { item in
+                        sidebarSection("回顾") {
+                            ForEach(reviewItems()) { item in
                                 sidebarRow(
                                     title: item.title,
                                     screen: item.screen,

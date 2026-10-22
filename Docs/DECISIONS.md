@@ -52,7 +52,7 @@ The Settings window also uses a 52pt native toolbar band. `SettingsWindowToolbar
 
 The previous layout inset the sidebar as an 8pt floating card. That left the traffic lights on the window canvas at (9, 9), outside the card, and the titlebar was only 32pt — the buttons looked detached from the sidebar. Full-bleed plus the toolbar band puts them on the material at the same native inset as the main window.
 
-The Settings sidebar follows the main sidebar's source-list convention: neutral selection, no accent bar, hover fill, 7pt radius. Per-pane icon tiles keep their colours, as Settings panes do. Controls inherit `AppTheme.accent`, so prominent buttons use the user's chosen accent rather than the system blue.
+The Settings sidebar follows the main sidebar's source-list convention: neutral selection, no accent bar, hover fill, 7pt radius. Pane icons are secondary until selected, then use the accent; the old coloured tiles made five panes look like five apps. Controls inherit `AppTheme.accent`, so prominent buttons use the user's chosen accent rather than the system blue. The general pane no longer lists a shortcut cheat sheet; those commands live in the 前往 menu.
 
 ### Settings search and remaining Settings gaps
 
@@ -67,6 +67,8 @@ The Settings UI also exposes 界面密度 (`uiDensity`, which the main window al
 ### Sidebar rows follow the source-list convention
 
 Selection is a neutral fill (`black 7.5%` in light, `white 13%` in dark), with no accent tint and no border. Unselected icons use secondary text; the selected row's icon uses the accent. Counts are plain secondary text with monospaced digits, not pills. An accent fill plus a hairline accent border reads as a custom control, which is what made the sidebar look unlike Mail. Row radius is 7pt, rows are 30pt tall, section headers are 11pt semibold at 70% secondary.
+
+The rail is three groups that do not overlap. 专注钟 stands alone. 任务 is 今天 / 明天 / 稍后 / 收集箱: 稍后 is the old 本周 list, which only holds tasks due from the day after tomorrow through day 7, so it is not named 本周. 回顾 is 已完成 and 数据统计. 已计划 stays reachable by the `planned` deep link but is not a sidebar row, because it repeated every dated task already shown above.
 
 ### Task rows, timer states and shared tokens
 

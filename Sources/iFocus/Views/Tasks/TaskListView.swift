@@ -80,7 +80,7 @@ struct TaskListView: View {
         switch viewState.selectedScreen {
         case .todayTask: return "今天"
         case .tomorrowTask: return "明天"
-        case .weekTask: return "本周"
+        case .weekTask: return "稍后"
         case .plannedTask: return "已计划"
         case .completedTask: return "已完成"
         case .inboxTask: return "收集箱"
@@ -88,8 +88,12 @@ struct TaskListView: View {
         }
     }
     
-    /// Count only. Empty lists don't get an explanatory caption under the title.
+    /// Count, plus a range note on 稍后 so the list is not mistaken for this calendar week.
     private var listSubtitle: String {
+        if viewState.selectedScreen == .weekTask {
+            let count = incompleteFiltered.count
+            return count == 0 ? "后天到 7 天内" : "\(count) 待办 · 后天到 7 天内"
+        }
         if baseTasks.isEmpty {
             return ""
         }
@@ -105,12 +109,12 @@ struct TaskListView: View {
     
     private var listIcon: String {
         switch viewState.selectedScreen {
-        case .todayTask: return "sun.max.fill"
-        case .tomorrowTask: return "sunrise.fill"
-        case .weekTask: return "calendar"
+        case .todayTask: return "sun.max"
+        case .tomorrowTask: return "sunrise"
+        case .weekTask: return "clock"
         case .plannedTask: return "calendar.badge.clock"
-        case .completedTask: return "checkmark.circle.fill"
-        case .inboxTask: return "tray.fill"
+        case .completedTask: return "checkmark.circle"
+        case .inboxTask: return "tray"
         default: return "list.bullet"
         }
     }
@@ -123,7 +127,7 @@ struct TaskListView: View {
         switch viewState.selectedScreen {
         case .todayTask: return "添加今天的任务，回车保存"
         case .tomorrowTask: return "添加明天的任务，回车保存"
-        case .weekTask: return "添加本周任务，回车保存"
+        case .weekTask: return "添加稍后的任务，回车保存"
         case .plannedTask: return "添加计划任务，回车保存"
         case .inboxTask: return "先丢进收集箱…"
         default: return "添加任务，回车保存"
@@ -1019,6 +1023,7 @@ struct TaskListView: View {
     private var emptyState: some View {
         let isCompletedList = viewState.selectedScreen == .completedTask
         let isToday = viewState.selectedScreen == .todayTask
+        let isLater = viewState.selectedScreen == .weekTask
         let filteredEmpty = !baseTasks.isEmpty && currentTasks.isEmpty
 
         if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && currentTasks.isEmpty {
@@ -1062,11 +1067,11 @@ struct TaskListView: View {
 
         return AnyView(
             AppEmptyState(
-                systemImage: isToday ? "sun.max" : "tray",
-                title: isToday ? "今天还没有任务" : "还没有任务",
+                systemImage: isToday ? "sun.max" : (isLater ? "clock" : "tray"),
+                title: isToday ? "今天还没有任务" : (isLater ? "稍后还没有任务" : "还没有任务"),
                 subtitle: isToday
                     ? "先添加一件小事，或者直接开始一段专注。"
-                    : "添加一条任务，开始安排今天。",
+                    : (isLater ? "放后天到 7 天内要做的事。" : "添加一条任务，开始安排今天。"),
                 actionTitle: "添加任务",
                 action: { DispatchQueue.main.async { isQuickAddFocused = true } },
                 secondaryActionTitle: "开始专注",

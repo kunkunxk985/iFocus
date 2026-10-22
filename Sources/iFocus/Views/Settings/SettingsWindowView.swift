@@ -13,21 +13,11 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .general: return "gearshape.fill"
+        case .general: return "gearshape"
         case .timer: return "timer"
-        case .appearance: return "paintpalette.fill"
-        case .data: return "externaldrive.fill"
-        case .status: return "checkmark.shield.fill"
-        }
-    }
-
-    var iconColor: Color {
-        switch self {
-        case .general: return Color(hex: "#3B82F6")
-        case .timer: return Color(hex: "#E85A3C")
-        case .appearance: return Color(hex: "#8B5CF6")
-        case .data: return Color(hex: "#10B981")
-        case .status: return Color(hex: "#0EA5E9")
+        case .appearance: return "paintpalette"
+        case .data: return "externaldrive"
+        case .status: return "checkmark.shield"
         }
     }
 
@@ -46,7 +36,7 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
     var searchTerms: String {
         switch self {
         case .general:
-            return "登录 开机 自动打开 智能 今日 清单 快捷键 空格 暂停 常用操作 新手 引导 欢迎 帮助 教程 回顾 分类 标签 自定义 颜色 图标 管理"
+            return "登录 开机 自动打开 智能 今日 清单 快捷键 空格 暂停 新手 引导 欢迎 帮助 教程 分类 标签 自定义 颜色 图标 管理"
         case .timer:
             return "正计时 专注时长 短休息 长休息 长休 自动休息 自动专注 严格自律 每日目标 暂停提醒 系统专注模式"
         case .appearance:
@@ -242,25 +232,18 @@ struct SettingsWindowView: View {
                 selectedPanel = panel
             }
         } label: {
-            HStack(spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 6.5, style: .continuous)
-                        .fill(panel.iconColor.opacity(isSelected ? 0.18 : 0.12))
-                        .frame(width: 26, height: 26)
-                    Image(systemName: panel.icon)
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundColor(panel.iconColor)
-
-                    if panel == .status, healthIssueCount > 0 {
-                        Circle()
-                            .fill(AppTheme.warning)
-                            .frame(width: 6, height: 6)
-                            .overlay(
-                                Circle().stroke(AppTheme.cardBackground(for: colorScheme), lineWidth: 1.5)
-                            )
-                            .offset(x: 9, y: -9)
+            HStack(spacing: 9) {
+                Image(systemName: panel.icon)
+                    .font(.system(size: 13.5, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(isSelected ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme))
+                    .frame(width: 20, height: 20)
+                    .overlay(alignment: .topTrailing) {
+                        if panel == .status, healthIssueCount > 0 {
+                            Circle()
+                                .fill(AppTheme.warning)
+                                .frame(width: 6, height: 6)
+                        }
                     }
-                }
 
                 Text(panel.rawValue)
                     .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
@@ -315,23 +298,9 @@ struct SettingsWindowView: View {
 
     private var panelHeader: some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(activePanel.iconColor.opacity(0.14))
-                    .frame(width: 34, height: 34)
-                Image(systemName: activePanel.icon)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(activePanel.iconColor)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(activePanel.rawValue)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                Text(activePanel.subtitle)
-                    .font(.system(size: 12))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-            }
+            Text(activePanel.rawValue)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(AppTheme.primaryText(for: colorScheme))
             Spacer()
         }
         .padding(.horizontal, 28)
@@ -362,10 +331,10 @@ struct SettingsWindowView: View {
     // 1. General Panel (通用)
     private var generalPanel: some View {
         VStack(alignment: .leading, spacing: 18) {
-            SettingsGroup(title: "启动与习惯") {
+            SettingsGroup(title: "启动") {
                 SettingsRow(
-                    title: "登录时自动打开 iFocus",
-                    subtitle: "开机登录 Mac 时自动在后台就绪"
+                    title: "登录时自动打开",
+                    subtitle: "开机后在后台打开"
                 ) {
                     Toggle("", isOn: Binding(
                         get: { settings.launchAtLogin },
@@ -403,8 +372,7 @@ struct SettingsWindowView: View {
                 SettingsDivider()
 
                 SettingsRow(
-                    title: "智能进入今日清单",
-                    subtitle: "若今天有待办事项，启动时优先进入「今天」"
+                    title: "有今天的任务时，先打开今天",
                 ) {
                     Toggle("", isOn: $settings.smartLaunchLanding)
                         .toggleStyle(.switch)
@@ -413,11 +381,8 @@ struct SettingsWindowView: View {
                 }
             }
 
-            SettingsGroup(title: "快捷键与操作") {
-                SettingsRow(
-                    title: "开始 / 暂停快捷键",
-                    subtitle: "应用在前台时随时起停计时"
-                ) {
+            SettingsGroup(title: "快捷键") {
+                SettingsRow(title: "开始 / 暂停") {
                     Picker("", selection: $settings.toggleShortcut) {
                         ForEach(ToggleShortcutPreset.allCases) { preset in
                             Text(preset.label).tag(preset)
@@ -427,43 +392,21 @@ struct SettingsWindowView: View {
                     .frame(width: 140)
                     .accessibilityLabel("开始 / 暂停快捷键")
                 }
-
-                SettingsDivider()
-
-                SettingsRow(
-                    title: "常用操作一览",
-                    subtitle: "提高日常使用效率",
-                    alignment: .top
-                ) {
-                    VStack(alignment: .trailing, spacing: 5) {
-                        shortcutBadge("空格", "专注页快速起停")
-                        shortcutBadge("⌘1", "专注钟")
-                        shortcutBadge("⌘2", "数据统计")
-                        shortcutBadge("⌘3", "今天清单")
-                        shortcutBadge("⌘,", "打开设置")
-                    }
-                }
             }
 
-            SettingsGroup(title: "任务与分类") {
-                SettingsRow(
-                    title: "管理分类",
-                    subtitle: "名称、颜色与图标会同步到任务、筛选、统计和资料"
-                ) {
+            SettingsGroup(title: "其他") {
+                SettingsRow(title: "任务分类") {
                     Button("管理…") {
                         showCategoryManager = true
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                 }
-            }
 
-            SettingsGroup(title: "引导与帮助") {
-                SettingsRow(
-                    title: "新手引导",
-                    subtitle: "重新了解专注、清单与提醒设置"
-                ) {
-                    Button("重新播放…") {
+                SettingsDivider()
+
+                SettingsRow(title: "新手引导") {
+                    Button("重新播放") {
                         UserDefaults.standard.set(true, forKey: AppNavigation.pendingOnboardingReplayKey)
                         NotificationCenter.default.post(name: AppNavigation.showOnboarding, object: nil)
                         WindowChromeController.shared.showMainWindow()
@@ -475,34 +418,13 @@ struct SettingsWindowView: View {
         }
     }
 
-    private func shortcutBadge(_ key: String, _ desc: String) -> some View {
-        HStack(spacing: 6) {
-            Text(desc)
-                .font(.system(size: 11.5))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-            Text(key)
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(AppTheme.elevatedBackground(for: colorScheme))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                )
-        }
-    }
-
     // 2. Timer Panel (专注与计时)
     private var timerPanel: some View {
         VStack(alignment: .leading, spacing: 18) {
             SettingsGroup(title: "番茄时钟节奏") {
                 SettingsRow(
                     title: "专注用正计时",
-                    subtitle: "从 00:00 往上数，学完点「完成」记录；满 \(TimerStore.countUpCapMinutes / 60) 小时自动结束"
+                    subtitle: "从 00:00 往上数，满 \(TimerStore.countUpCapMinutes / 60) 小时自动结束"
                 ) {
                     Toggle("", isOn: $settings.countUpWork)
                         .toggleStyle(.switch)
@@ -517,7 +439,6 @@ struct SettingsWindowView: View {
 
                 DurationSettingRow(
                     title: "专注时长",
-                    subtitle: "单次专注倒计时",
                     minutes: $settings.workMinutes,
                     range: 1...90,
                     step: 5,
@@ -530,7 +451,6 @@ struct SettingsWindowView: View {
 
                 DurationSettingRow(
                     title: "短休息",
-                    subtitle: "单个番茄结束后的放松时长",
                     minutes: $settings.shortBreakMinutes,
                     range: 1...30,
                     step: 1,
@@ -543,7 +463,6 @@ struct SettingsWindowView: View {
 
                 DurationSettingRow(
                     title: "长休息",
-                    subtitle: "完成数个番茄后深度休息时长",
                     minutes: $settings.longBreakMinutes,
                     range: 5...60,
                     step: 5,
@@ -554,10 +473,7 @@ struct SettingsWindowView: View {
 
                 SettingsDivider()
 
-                SettingsRow(
-                    title: "长休触发间隔",
-                    subtitle: "每完成特定个专注番茄后进入长休"
-                ) {
+                SettingsRow(title: "长休间隔") {
                     HStack(spacing: 6) {
                         Text("每 \(settings.longBreakEvery) 个番茄")
                             .font(.system(size: 12.5, weight: .semibold, design: .rounded))
@@ -570,11 +486,8 @@ struct SettingsWindowView: View {
                 }
             }
 
-            SettingsGroup(title: "自动化流转") {
-                SettingsRow(
-                    title: "专注结束后自动休息",
-                    subtitle: "番茄倒计时归零后自动开启休息计时"
-                ) {
+            SettingsGroup(title: "自动开始") {
+                SettingsRow(title: "专注结束后自动休息") {
                     Toggle("", isOn: $settings.autoStartBreaks)
                         .toggleStyle(.switch)
                         .labelsHidden()
@@ -583,10 +496,7 @@ struct SettingsWindowView: View {
 
                 SettingsDivider()
 
-                SettingsRow(
-                    title: "休息结束后自动专注",
-                    subtitle: "休息倒计时结束后自动开启下一轮专注"
-                ) {
+                SettingsRow(title: "休息结束后自动专注") {
                     Toggle("", isOn: $settings.autoStartWork)
                         .toggleStyle(.switch)
                         .labelsHidden()
@@ -596,8 +506,8 @@ struct SettingsWindowView: View {
                 SettingsDivider()
 
                 SettingsRow(
-                    title: "严格自律模式",
-                    subtitle: "专注进行中禁用跳过按键，避免中途分心"
+                    title: "进行中不能跳过",
+                    subtitle: "打开后，专注时不能提前结束这一段"
                 ) {
                     Toggle("", isOn: $settings.strictMode)
                         .toggleStyle(.switch)
@@ -608,8 +518,8 @@ struct SettingsWindowView: View {
                 SettingsDivider()
 
                 SettingsRow(
-                    title: "开始专注时提示系统专注模式",
-                    subtitle: "开始前提醒开启系统专注模式，减少通知打扰"
+                    title: "开始前提示系统专注",
+                    subtitle: "提醒去系统设置里减少通知"
                 ) {
                     Toggle("", isOn: $settings.showFocusModeHintOnStart)
                         .toggleStyle(.switch)
@@ -618,11 +528,8 @@ struct SettingsWindowView: View {
                 }
             }
 
-            SettingsGroup(title: "每日目标与提醒") {
-                SettingsRow(
-                    title: "每日目标番茄数",
-                    subtitle: "今天计划达成的专注目标"
-                ) {
+            SettingsGroup(title: "目标与提醒") {
+                SettingsRow(title: "每天的目标") {
                     HStack(spacing: 6) {
                         Text("\(settings.dailyGoal) 个番茄")
                             .font(.system(size: 12.5, weight: .semibold, design: .rounded))
@@ -637,8 +544,8 @@ struct SettingsWindowView: View {
                 SettingsDivider()
 
                 SettingsRow(
-                    title: "暂停过久提醒",
-                    subtitle: "计时暂停超过设定时长后提醒恢复专注"
+                    title: "暂停太久时提醒",
+                    subtitle: "超过设定时间还没继续，就提示一下"
                 ) {
                     HStack(spacing: 8) {
                         if settings.pauseReminderEnabled {
@@ -665,10 +572,7 @@ struct SettingsWindowView: View {
     private var appearancePanel: some View {
         VStack(alignment: .leading, spacing: 18) {
             SettingsGroup(title: "界面外观") {
-                SettingsRow(
-                    title: "外观模式",
-                    subtitle: "窗口与界面主题明暗"
-                ) {
+                SettingsRow(title: "外观") {
                     Picker("", selection: $settings.appearance) {
                         ForEach(AppearanceMode.allCases) { mode in
                             Text(mode.rawValue).tag(mode)
@@ -682,10 +586,7 @@ struct SettingsWindowView: View {
 
                 SettingsDivider()
 
-                SettingsRow(
-                    title: "界面密度",
-                    subtitle: "列表、卡片与专注页的间距"
-                ) {
+                SettingsRow(title: "间距") {
                     Picker("", selection: $settings.uiDensity) {
                         ForEach(UIDensity.allCases) { density in
                             Text(density.label).tag(density)
@@ -699,10 +600,7 @@ struct SettingsWindowView: View {
 
                 SettingsDivider()
 
-                SettingsRow(
-                    title: "主强调色",
-                    subtitle: "按钮、图表与状态指示色"
-                ) {
+                SettingsRow(title: "强调色") {
                     HStack(spacing: 10) {
                         ForEach(AccentPreset.allCases) { preset in
                             let selected = settings.accentPreset == preset
@@ -735,10 +633,7 @@ struct SettingsWindowView: View {
 
                 SettingsDivider()
 
-                SettingsRow(
-                    title: "菜单栏图标样式",
-                    subtitle: "顶部系统菜单栏常驻显示"
-                ) {
+                SettingsRow(title: "菜单栏") {
                     Picker("", selection: $settings.menuBarDisplayStyle) {
                         ForEach(MenuBarDisplayStyle.allCases) { style in
                             Text(style.label).tag(style)
@@ -752,8 +647,8 @@ struct SettingsWindowView: View {
                 SettingsDivider()
 
                 SettingsRow(
-                    title: "动态光晕与微动效",
-                    subtitle: "表盘呼吸感光圈与达成微弹动效"
+                    title: "圆环呼吸",
+                    subtitle: "专注时圆环轻轻缩放"
                 ) {
                     Toggle("", isOn: $settings.decorativeMotionEnabled)
                         .toggleStyle(.switch)
@@ -763,10 +658,7 @@ struct SettingsWindowView: View {
             }
 
             SettingsGroup(title: "声音与反馈") {
-                SettingsRow(
-                    title: "结束提示音",
-                    subtitle: "专注钟或休息倒计时完成时播放"
-                ) {
+                SettingsRow(title: "结束时播放提示音") {
                     Toggle("", isOn: $settings.soundEnabled)
                         .toggleStyle(.switch)
                         .labelsHidden()
@@ -776,10 +668,7 @@ struct SettingsWindowView: View {
                 if settings.soundEnabled {
                     SettingsDivider()
 
-                    SettingsRow(
-                        title: "提示音效",
-                        subtitle: "可点按试听音效"
-                    ) {
+                    SettingsRow(title: "提示音") {
                         HStack(spacing: 8) {
                             Picker("", selection: $settings.soundName) {
                                 ForEach(SettingsStore.availableSounds, id: \.self) { name in
@@ -811,10 +700,7 @@ struct SettingsWindowView: View {
 
                 SettingsDivider()
 
-                SettingsRow(
-                    title: "触觉反馈",
-                    subtitle: "完成任务、切换模式与按键时的触感反馈"
-                ) {
+                SettingsRow(title: "按键触感") {
                     Toggle("", isOn: $settings.hapticsEnabled)
                         .toggleStyle(.switch)
                         .labelsHidden()
@@ -824,8 +710,7 @@ struct SettingsWindowView: View {
                 SettingsDivider()
 
                 SettingsRow(
-                    title: "程序坞图标轻弹",
-                    subtitle: "计时结束时程序坞图标轻弹一次"
+                    title: "结束时程序坞图标跳一下"
                 ) {
                     Toggle("", isOn: $settings.dockBounceOnComplete)
                         .toggleStyle(.switch)
@@ -839,29 +724,7 @@ struct SettingsWindowView: View {
     // 4. Data & Backup Panel (数据与备份)
     private var dataPanel: some View {
         VStack(alignment: .leading, spacing: 18) {
-            SettingsGroup(title: "本地数据状态") {
-                SettingsRow(
-                    title: "当前记录概览",
-                    subtitle: "\(taskStore.tasks.count) 个任务 · \(taskStore.focusSessions.count) 次专注历史"
-                ) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "checkmark.shield.fill")
-                            .font(.system(size: 12))
-                            .foregroundColor(Color(hex: "#10B981"))
-                        Text("纯本地离线存储")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(Color(hex: "#10B981"))
-                    }
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(Color(hex: "#10B981").opacity(0.12))
-                    )
-                }
-            }
-
-            SettingsGroup(title: "备份与恢复") {
+            SettingsGroup(title: "备份") {
                 SettingsRow(
                     title: "导出完整数据备份",
                     subtitle: "包含所有任务、专注记录与设置"
@@ -887,8 +750,8 @@ struct SettingsWindowView: View {
                 SettingsDivider()
 
                 SettingsRow(
-                    title: "从备份文件恢复",
-                    subtitle: "安全导入此前的备份，覆盖前会自动备份当前数据"
+                    title: "从备份恢复",
+                    subtitle: "会先留下现在的数据，再覆盖"
                 ) {
                     Button("从备份恢复…") {
                         switch DataBackupService.selectBackup() {
@@ -925,32 +788,10 @@ struct SettingsWindowView: View {
                 )
             }
 
-            SettingsGroup(title: "数据安全与存储目录") {
+            SettingsGroup(title: "文件") {
                 SettingsRow(
-                    title: "每日自动安全快照",
-                    subtitle: "每次启动自动保留最近 5 天的数据快照，升级无忧"
-                ) {
-                    HStack(spacing: 5) {
-                        Circle()
-                            .fill(Color(hex: "#10B981"))
-                            .frame(width: 6, height: 6)
-                        Text("自动保护中")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(Color(hex: "#10B981"))
-                    }
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(Color(hex: "#10B981").opacity(0.12))
-                    )
-                }
-
-                SettingsDivider()
-
-                SettingsRow(
-                    title: "在访达中显示数据",
-                    subtitle: "查看 tasks.json 与 focus_sessions.json 所在目录"
+                    title: "本机记录",
+                    subtitle: "\(taskStore.tasks.count) 个任务 · \(taskStore.focusSessions.count) 次专注。每天自动留一份最近 5 天的快照。"
                 ) {
                     Button("打开数据文件夹") {
                         settings.openDataFolderInFinder()
@@ -962,8 +803,8 @@ struct SettingsWindowView: View {
                 SettingsDivider()
 
                 SettingsRow(
-                    title: "学习记录（表格与周报）",
-                    subtitle: "每次记录专注都会自动更新 ~/StudyLog 里的 sessions.csv 和每周报告"
+                    title: "学习记录",
+                    subtitle: "表格和每周报告"
                 ) {
                     Button("打开学习记录") {
                         settings.openStudyLogFolderInFinder()
@@ -1117,7 +958,7 @@ struct SettingsDivider: View {
 
 private struct DurationSettingRow: View {
     let title: String
-    let subtitle: String
+    var subtitle: String? = nil
     @Binding var minutes: Int
     let range: ClosedRange<Int>
     let step: Int
@@ -1131,9 +972,11 @@ private struct DurationSettingRow: View {
                 Text(title)
                     .font(.system(size: 13.5, weight: .medium))
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                Text(subtitle)
-                    .font(.system(size: 11.5))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.system(size: 11.5))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                }
             }
             Spacer(minLength: 12)
 

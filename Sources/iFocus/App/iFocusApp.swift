@@ -311,18 +311,19 @@ struct iFocusApp: App {
             CommandMenu("前往") {
                 Button("专注钟") { AppNavigation.post(.timer) }
                     .keyboardShortcut("1", modifiers: .command)
-                Button("数据统计") { AppNavigation.post(.analytics) }
-                    .keyboardShortcut("2", modifiers: .command)
                 Divider()
                 Button("今天") { AppNavigation.post(.todayTask) }
                     .keyboardShortcut("3", modifiers: .command)
                 Button("明天") { AppNavigation.post(.tomorrowTask) }
                     .keyboardShortcut("4", modifiers: .command)
-                Button("本周") { AppNavigation.post(.weekTask) }
+                Button("稍后") { AppNavigation.post(.weekTask) }
                     .keyboardShortcut("5", modifiers: .command)
                 Button("收集箱") { AppNavigation.post(.inboxTask) }
                     .keyboardShortcut("6", modifiers: .command)
                 Divider()
+                Button("已完成") { AppNavigation.post(.completedTask) }
+                Button("数据统计") { AppNavigation.post(.analytics) }
+                    .keyboardShortcut("2", modifiers: .command)
                 Button("个人资料") { AppNavigation.post(.profile) }
                     .keyboardShortcut("7", modifiers: .command)
             }
