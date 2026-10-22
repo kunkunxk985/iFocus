@@ -36,7 +36,7 @@ final class StudyLogWriter {
             endedAt: session.timestamp,
             minutes: session.durationMinutes,
             taskTitle: session.taskTitle,
-            category: session.taskCategory?.rawValue
+            category: session.taskCategory?.name
         )
     }
 

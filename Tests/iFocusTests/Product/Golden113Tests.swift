@@ -6,10 +6,20 @@ import iFocusCore
 /// files and a backup package; `Tests/Fixtures/golden-1.13` holds what the unmodified 1.13
 /// code exported from them (fixed clock, Asia/Shanghai, Monday-first weeks).
 final class Golden113Tests: XCTestCase {
-    static let fixturesRoot = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .appendingPathComponent("Fixtures", isDirectory: true)
+    /// Walk up from this file so the fixture root stays valid if the test moves
+    /// under `Tests/iFocusTests/<layer>/`.
+    static let fixturesRoot: URL = {
+        var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let manager = FileManager.default
+        while directory.path != "/" {
+            let candidate = directory.appendingPathComponent("Fixtures", isDirectory: true)
+            if manager.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+            directory.deleteLastPathComponent()
+        }
+        preconditionFailure("Fixtures directory not found above \(#filePath)")
+    }()
     static let shanghai = TimeZone(identifier: "Asia/Shanghai")!
     static let fixedNow = ISO8601DateFormatter().date(from: "2026-10-18T12:00:00Z")!
 

@@ -138,31 +138,32 @@ enum AppTheme {
         let raw = UserDefaults.standard.string(forKey: accentDefaultsKey) ?? AccentPreset.tomato.rawValue
         return (AccentPreset(rawValue: raw) ?? .tomato).nsColor
     }
-    
-    // Quiet-tool spacing / radius tokens (prefer these over one-off values).
-    static let spaceXS: CGFloat = 4
-    static let spaceS: CGFloat = 8
-    static let spaceM: CGFloat = 12
-    static let spaceL: CGFloat = 16
-    static let spaceXL: CGFloat = 24
+
+    // MARK: - Semantic status colors
+    // One source for the red/amber/green/violet meanings used across
+    // task rows, timer states, and empty-state accents.
+    static let success = Color(hex: "#10B981")
+    static let warning = Color(hex: "#F59E0B")
+    static let danger = Color(hex: "#EF4444")
+    static let paused = Color(hex: "#D97706")
+    static let violet = Color(hex: "#8B5CF6")
+
+    // MARK: - Shared symbol metrics
+    // Keep metadata glyphs, action glyphs, and badge glyphs from drifting
+    // between 8.5 and 12pt as rows gain features.
+    static let iconBadge: CGFloat = 8.5
+    static let iconMeta: CGFloat = 9.5
+    static let iconAction: CGFloat = 11
     
     // Standardized Continuous Squircle Corner Radii
     static let radiusXS: CGFloat = 6
-    static let radiusS: CGFloat = 8
     static let radiusM: CGFloat = 12
     static let radiusCard: CGFloat = 16
-    static let radiusXL: CGFloat = 20
-    static let radiusPill: CGFloat = 999
 
     /// Shared card radius — analytics / settings / profile / list stats all use this.
     static let cornerRadiusCard: CGFloat = radiusCard
     static let cornerRadiusControl: CGFloat = 10
-    static let cornerRadiusRow: CGFloat = radiusM
 
-    /// Concentric nested corner radius helper: R_inner = max(R_outer - padding, radiusXS)
-    static func nestedRadius(outer: CGFloat, padding: CGFloat) -> CGFloat {
-        max(outer - padding, radiusXS)
-    }
     
     /// Continuous squircle RoundedRectangle shape helper
     static func squircle(radius: CGFloat) -> RoundedRectangle {
@@ -174,22 +175,6 @@ enum AppTheme {
     static let springSnappy = Animation.spring(response: 0.18, dampingFraction: 0.78)
     static let springGentle = Animation.spring(response: 0.32, dampingFraction: 0.82)
 
-    // Backgrounds — warm ivory/creamy light canvas & rich graphite dark canvas
-    static func appBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color(hex: "#F6F7F9") : Color(hex: "#131316")
-    }
-    static func sidebarBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color(hex: "#ECEEF1") : Color(hex: "#161619")
-    }
-    static func sidebarTint(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color.white.opacity(0.12) : Color.black.opacity(0.15)
-    }
-    static func sidebarRowBackground(for colorScheme: ColorScheme) -> Color {
-        Color.white.opacity(0.001)
-    }
-    static func glassControlBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color.white.opacity(0.78) : Color.white.opacity(0.08)
-    }
     static func menuBackground(for colorScheme: ColorScheme) -> Color {
         colorScheme == .light ? Color.white.opacity(0.96) : Color(hex: "#222226").opacity(0.97)
     }
@@ -222,31 +207,10 @@ enum AppTheme {
     static func separatorLow(for colorScheme: ColorScheme) -> Color {
         colorScheme == .light ? Color.black.opacity(0.04) : Color.white.opacity(0.06)
     }
-    static func overlayThin(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? Color.black.opacity(0.05) : Color.black.opacity(0.14)
-    }
     static func overlayLow(for colorScheme: ColorScheme) -> Color {
         colorScheme == .light ? Color.black.opacity(0.035) : Color.black.opacity(0.08)
     }
     
-    // Shared card chrome
-    static func cardFill(for colorScheme: ColorScheme) -> some View {
-        squircle(radius: cornerRadiusCard)
-            .fill(cardBackground(for: colorScheme))
-    }
-    
-    static func cardStroke(for colorScheme: ColorScheme) -> some View {
-        squircle(radius: cornerRadiusCard)
-            .stroke(separatorLow(for: colorScheme), lineWidth: 1)
-    }
-    
-    // Micro-highlight inner strokes: specular top-edge linear gradient
-    static let microHighlightGradient = LinearGradient(
-        colors: [Color.white.opacity(0.12), Color.white.opacity(0.02)],
-        startPoint: .top,
-        endPoint: .bottom
-    )
-
     static func cardInnerHighlight(for colorScheme: ColorScheme) -> LinearGradient {
         if colorScheme == .dark {
             return LinearGradient(
@@ -305,20 +269,6 @@ extension AppTheme {
     /// Clears the transparent titlebar / traffic-light band so detail content
     /// doesn’t sit flush against the top of the window.
     static let detailTopInset: CGFloat = 52
-
-    /// Clearance under traffic lights and the sidebar toggle before the first row.
-    static let sidebarTopInset: CGFloat = 48
-    
-    /// Narrow rail still needs room under the three window buttons (~14×3 + gaps).
-    static let collapsedSidebarTopInset: CGFloat = 48
-    
-    /// Must fit close + miniaturize + zoom with padding (was 64 → green sat past divider).
-    static let collapsedSidebarWidth: CGFloat = 80
-    
-    /// Leading offset for the shared sidebar toggle beside the native traffic lights.
-    static let trafficLightLeading: CGFloat = 18
-    /// Shared vertical alignment for the sidebar toggle in both sidebar states.
-    static let titlebarControlOffset: CGFloat = 4
 }
 
 // MARK: - Depth & Multi-Layer Shadow System
@@ -617,74 +567,33 @@ struct PulseDot: View {
 // MARK: - Typography Scale & Hierarchy
 
 enum TypeScale {
-    // Hero & Display
-    static let hero = Font.system(size: 40, weight: .bold, design: .rounded)
-    static let timerDigit = Font.system(size: 56, weight: .light, design: .rounded)
-    static let kpiValue = Font.system(size: 24, weight: .bold, design: .rounded)
-
     // Titles
-    static let largeTitle = Font.system(size: 26, weight: .bold, design: .rounded)
     static let title2 = Font.system(size: 20, weight: .semibold, design: .rounded)
-    static let title3 = Font.system(size: 16, weight: .semibold, design: .rounded)
 
     // Body & Content
     static let headline = Font.system(size: 14, weight: .semibold, design: .default)
     static let body = Font.system(size: 13, weight: .regular, design: .default)
-    static let callout = Font.system(size: 12, weight: .medium, design: .default)
     static let subheadline = Font.system(size: 11.5, weight: .regular, design: .default)
-    static let footnote = Font.system(size: 11, weight: .regular, design: .default)
     static let caption = Font.system(size: 10, weight: .medium, design: .default)
     static let micro = Font.system(size: 9.5, weight: .semibold, design: .default)
     static let eyebrow = Font.system(size: 10, weight: .semibold, design: .default)
 
+    // List row tokens
+    static let meta = Font.system(size: 10, weight: .medium, design: .default)
+    static let tag = Font.system(size: 9.5, weight: .bold, design: .default)
+    static func rowTitle(compact: Bool) -> Font {
+        .system(size: compact ? 13 : 14, weight: .medium)
+    }
+
     // Optical Tracking Tokens (Points)
     static let trackingDisplay: CGFloat = -0.6
     static let trackingTitle: CGFloat = -0.3
-    static let trackingHeadline: CGFloat = -0.15
-    static let trackingBody: CGFloat = 0.0
     static let trackingEyebrow: CGFloat = 0.35
-    static let trackingMicro: CGFloat = 0.25
 }
 
 extension View {
-    func trackingTight() -> some View {
-        self.tracking(TypeScale.trackingTitle)
-    }
-
     func trackingEyebrow() -> some View {
         self.tracking(TypeScale.trackingEyebrow)
-    }
-}
-
-/// Compact keyboard-key chrome for hints (Space / ⌘R).
-struct KeyCap: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let label: String
-    
-    var body: some View {
-        Text(label)
-            .font(.system(size: 10, weight: .bold, design: .rounded))
-            .tracking(TypeScale.trackingMicro)
-            .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.85))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(
-                AppTheme.squircle(radius: 5)
-                    .fill(AppTheme.elevatedBackground(for: colorScheme))
-            )
-            .overlay(
-                AppTheme.squircle(radius: 5)
-                    .strokeBorder(AppTheme.separator(for: colorScheme), lineWidth: 1)
-            )
-            .overlay(
-                AppTheme.squircle(radius: 5)
-                    .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.5)
-            )
-            .shadow(
-                color: Color.black.opacity(colorScheme == .light ? 0.04 : 0.20),
-                radius: 1,
-                y: 1
-            )
     }
 }
 
@@ -735,33 +644,6 @@ struct EyebrowTag: View {
     }
 }
 
-/// Soft card hover lift for interactive surfaces.
-struct SoftHoverLift: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-    var cornerRadius: CGFloat = AppTheme.cornerRadiusRow
-    @State private var hovering = false
-    
-    func body(content: Content) -> some View {
-        content
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(hovering
-                          ? AppTheme.accent.opacity(colorScheme == .light ? 0.04 : 0.07)
-                          : Color.clear)
-                    .allowsHitTesting(false)
-            )
-            // Minimal hover — quiet tools don't scale rows on mouse-over.
-            .animation(.easeOut(duration: 0.12), value: hovering)
-            .onHover { hovering = $0 }
-    }
-}
-
-extension View {
-    func softHoverLift(cornerRadius: CGFloat = AppTheme.cornerRadiusRow) -> some View {
-        modifier(SoftHoverLift(cornerRadius: cornerRadius))
-    }
-}
-
 /// Unified empty / zero-data surface.
 struct AppEmptyState: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -770,6 +652,8 @@ struct AppEmptyState: View {
     var subtitle: String? = nil
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
+    var secondaryActionTitle: String? = nil
+    var secondaryAction: (() -> Void)? = nil
     /// Compact for in-card voids; full for page-level empty shells.
     var compact: Bool = false
 
@@ -815,16 +699,25 @@ struct AppEmptyState: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if let actionTitle, let action {
-                Button(action: action) {
-                    Text(actionTitle)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 8)
-                        .background(Capsule().fill(AppTheme.accent))
+            if actionTitle != nil || secondaryActionTitle != nil {
+                HStack(spacing: 8) {
+                    if let actionTitle, let action {
+                        Button(action: action) {
+                            Text(actionTitle)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 8)
+                                .background(Capsule().fill(AppTheme.accent))
+                        }
+                        .buttonStyle(SoftScaleButtonStyle())
+                    }
+                    if let secondaryActionTitle, let secondaryAction {
+                        Button(secondaryActionTitle, action: secondaryAction)
+                            .buttonStyle(.bordered)
+                            .controlSize(.regular)
+                    }
                 }
-                .buttonStyle(SoftScaleButtonStyle())
                 .padding(.top, 2)
             }
         }

@@ -17,10 +17,15 @@ struct TimerView: View {
     @State private var celebratePulse = false
     @State private var ringBreath = false
     @State private var playInvite = false
+    @StateObject private var focusMode = FocusModeController.shared
     @AppStorage("timerImmersiveMode") private var immersiveMode = false
 
     private var modeColor: Color { timerStore.mode.accent }
     private var density: UIDensity { settings.uiDensity }
+
+    /// Native full-screen focus always presents the immersive stage, even if the
+    /// windowed immersive preference is off.
+    private var stageImmersive: Bool { immersiveMode || focusMode.isActive }
 
     private var progress: Double {
         _ = clockVersion
@@ -32,12 +37,37 @@ struct TimerView: View {
         return timerStore.timeString
     }
 
+    private var isPaused: Bool {
+        !timerStore.isRunning && timerStore.isSessionInProgress
+    }
+
     private var modeTitle: String {
+        let base: String
         switch timerStore.mode {
-        case .work: return timerStore.isRunning ? "专注中" : "专注"
-        case .shortBreak: return timerStore.isRunning ? "短休息中" : "短休息"
-        case .longBreak: return timerStore.isRunning ? "长休息中" : "长休息"
+        case .work: base = "专注"
+        case .shortBreak: base = "短休息"
+        case .longBreak: base = "长休息"
         }
+        if isPaused { return "\(base) · 已暂停" }
+        return timerStore.isRunning ? "\(base)中" : base
+    }
+
+    private func stageControlButton(
+        systemName: String,
+        help: String,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.75))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(SoftScaleButtonStyle())
+        .help(help)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     /// Shown after a count-up stopped at the cap: the time is logged, one click continues.
@@ -76,38 +106,72 @@ struct TimerView: View {
                 height: max(geo.size.height, stageLayout.height * 0.96),
                 densityScale: density.scale
             )
-            let ringSize = TimerLayoutMath.ringSize(
+            let baseRingSize = TimerLayoutMath.ringSize(
                 layout: layout,
                 stageWidth: geo.size.width,
                 stageHeight: geo.size.height,
-                immersive: immersiveMode
+                immersive: stageImmersive
             )
+            // Full-screen focus gives the ring more of the stage than windowed immersive.
+            let ringSize = baseRingSize * (focusMode.isActive ? 1.22 : 1)
 
             ZStack {
                 ambientBackground
 
                 VStack(spacing: layout.sectionSpacing) {
-                    HStack {
+                    HStack(spacing: 4) {
                         Spacer()
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.22)) {
-                                immersiveMode.toggle()
+
+                        if focusMode.isActive {
+                            Button {
+                                FocusModeController.shared.exit()
+                            } label: {
+                                Label("退出专注", systemImage: "arrow.down.right.and.arrow.up.left")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(
+                                        Capsule()
+                                            .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.82))
+                                    )
+                                    .overlay(
+                                        Capsule()
+                                            .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                                    )
                             }
-                        } label: {
-                            Image(systemName: immersiveMode
-                                  ? "arrow.down.right.and.arrow.up.left"
-                                  : "arrow.up.left.and.arrow.down.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.75))
-                                .frame(width: 28, height: 28)
-                                .contentShape(Rectangle())
+                            .buttonStyle(SoftScaleButtonStyle())
+                            .help("退出专注模式 (Esc)")
+                            .accessibilityLabel("退出专注模式")
+                        } else {
+                            stageControlButton(
+                                systemName: "pip",
+                                help: "迷你计时窗",
+                                accessibilityLabel: "显示迷你计时窗"
+                            ) {
+                                NotificationCenter.default.post(name: AppNavigation.toggleMiniTimer, object: nil)
+                            }
+                            stageControlButton(
+                                systemName: "arrow.up.left.and.arrow.down.right",
+                                help: "全屏专注模式",
+                                accessibilityLabel: "进入全屏专注模式"
+                            ) {
+                                NotificationCenter.default.post(name: AppNavigation.toggleFocusMode, object: nil)
+                            }
+                            stageControlButton(
+                                systemName: immersiveMode ? "rectangle.expand.vertical" : "rectangle.compress.vertical",
+                                help: immersiveMode ? "退出沉浸" : "沉浸模式：只保留环与控制",
+                                accessibilityLabel: immersiveMode ? "退出沉浸模式" : "进入沉浸模式"
+                            ) {
+                                withAnimation(.easeInOut(duration: 0.22)) {
+                                    immersiveMode.toggle()
+                                }
+                            }
                         }
-                        .buttonStyle(SoftScaleButtonStyle())
-                        .help(immersiveMode ? "退出沉浸" : "沉浸模式：只保留环与控制")
                     }
                     .padding(.top, layout.stageTopChrome)
 
-                    if !immersiveMode {
+                    if !stageImmersive {
                         TimerTopMeta(
                             layout: layout,
                             modeColor: modeColor,
@@ -137,7 +201,8 @@ struct TimerView: View {
                         isWorkMode: timerStore.mode == .work,
                         sessionIndex: timerStore.completedPomodoros + 1,
                         completedInCycle: timerStore.completedPomodoros % max(1, settings.longBreakEvery),
-                        cycleLength: max(1, settings.longBreakEvery)
+                        cycleLength: max(1, settings.longBreakEvery),
+                        isPaused: isPaused
                     )
                     .scaleEffect(
                         settings.decorativeMotionEnabled && celebratePulse
@@ -155,16 +220,16 @@ struct TimerView: View {
                         value: ringBreath
                     )
 
-                    Spacer(minLength: 4)
-
                     if let cap = timerStore.capRestart, !timerStore.isRunning, !timerStore.isSessionInProgress {
                         capRestartButton(cap)
+                            .padding(.top, 10)
                             .transition(.opacity)
                     }
 
-                    if !immersiveMode {
+                    if !stageImmersive {
                         TimerModeSwitcher(layout: layout)
                             .frame(maxWidth: min(layout.modeSwitcherMaxWidth, layout.width - layout.horizontalPadding * 2))
+                            .padding(.top, 14)
                             .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
 
@@ -175,14 +240,15 @@ struct TimerView: View {
                         showResetConfirm: $showResetConfirm,
                         onPlayToggle: requestStartOrToggle
                     )
-                    .padding(.top, 4)
+                    .padding(.top, 8)
 
-                    Color.clear.frame(height: TimerLayoutMath.lerp(6, 12, layout.eased))
+                    Spacer(minLength: 4)
+                    Color.clear.frame(height: TimerLayoutMath.lerp(4, 10, layout.eased))
                 }
                 .frame(maxWidth: 640)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.horizontal, layout.horizontalPadding)
-                .animation(.easeInOut(duration: 0.22), value: immersiveMode)
+                .animation(.easeInOut(duration: 0.22), value: stageImmersive)
                 .animation(.easeInOut(duration: 0.18), value: layout.scale)
                 .animation(.easeInOut(duration: 0.18), value: ringSize)
             }
@@ -209,7 +275,7 @@ struct TimerView: View {
         ) {
             Button("直接开始") { timerStore.toggle() }
             Button("打开系统专注设置…") {
-                openSystemFocusSettings()
+                SystemSettingsLinks.openFocus()
                 timerStore.toggle()
             }
             Button("不再提示并开始") {
@@ -240,6 +306,10 @@ struct TimerView: View {
                 startRadius: 30,
                 endRadius: 500
             )
+
+            if focusMode.isActive {
+                Color.black.opacity(colorScheme == .light ? 0.10 : 0.14)
+            }
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: quiet ? 0.2 : 0.4), value: timerStore.mode)
@@ -285,15 +355,4 @@ struct TimerView: View {
         }
     }
 
-    private func openSystemFocusSettings() {
-        let urls = [
-            "x-apple.systempreferences:com.apple.Focus-Settings.extension",
-            "x-apple.systempreferences:com.apple.preference.notifications"
-        ]
-        for value in urls {
-            if let url = URL(string: value), NSWorkspace.shared.open(url) {
-                return
-            }
-        }
-    }
 }

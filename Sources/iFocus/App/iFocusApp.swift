@@ -37,6 +37,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         DispatchQueue.main.async {
             ViewMenuSanitizer.attachToViewMenu()
         }
+        // The first SwiftUI toolbar install can land after activation. Reassert once it settles.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            WindowChrome.reassertTransparentTitlebars()
+        }
 
         // Observe frame changes on the main window for layout memory.
         NotificationCenter.default.addObserver(
@@ -244,6 +248,7 @@ struct iFocusApp: App {
         _taskStore = StateObject(wrappedValue: taskStore)
         _timerStore = StateObject(wrappedValue: timerStore)
         _menuBarController = StateObject(wrappedValue: MenuBarController(timerStore: timerStore))
+        FloatingTimerWindowController.shared.configure(timerStore: timerStore)
         AppDelegate.taskStore = taskStore
         AppDelegate.timerStore = timerStore
         
@@ -343,10 +348,26 @@ struct iFocusApp: App {
                     NotificationCenter.default.post(name: AppNavigation.skipTimer, object: nil)
                 }
                 .keyboardShortcut(.rightArrow, modifiers: .command)
+
+                Divider()
+
+                Button("迷你计时窗") {
+                    NotificationCenter.default.post(name: AppNavigation.toggleMiniTimer, object: nil)
+                }
+                .keyboardShortcut("m", modifiers: [.command, .option])
+
+                Button("全屏专注模式") {
+                    NotificationCenter.default.post(name: AppNavigation.toggleFocusMode, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: [.command, .option])
             }
             CommandMenu("任务") {
-                Button("搜索任务") {
-                    NotificationCenter.default.post(name: AppNavigation.searchTasks, object: nil)
+                Button("搜索") {
+                    if NSApp.keyWindow?.title == "设置" {
+                        SettingsWindowToolbar.shared.focusSearchField()
+                    } else {
+                        NotificationCenter.default.post(name: AppNavigation.searchTasks, object: nil)
+                    }
                 }
                 .keyboardShortcut("f", modifiers: .command)
                 Button("新建任务") {
@@ -383,6 +404,37 @@ private enum AppWindow {
     static let minimumSize = AppWindowMetrics.minimum
     static let defaultSize = AppWindowMetrics.defaultSize
     static let settingsSize = CGSize(width: 900, height: 600)
+}
+
+/// Marketing/build version, preferring the packaged Info.plist and falling back to VERSION in dev.
+enum AppVersion {
+    static var short: String {
+        if let fromBundle = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+           !fromBundle.isEmpty, fromBundle != "1.0" {
+            return fromBundle
+        }
+        return versionFileLines()?.first ?? "dev"
+    }
+    static var build: String {
+        if let fromBundle = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
+           !fromBundle.isEmpty {
+            return fromBundle
+        }
+        return versionFileLines()?.dropFirst().first ?? "0"
+    }
+
+    private static func versionFileLines() -> [String]? {
+        var dir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        for _ in 0..<6 {
+            let candidate = dir.appendingPathComponent("VERSION")
+            if let text = try? String(contentsOf: candidate, encoding: .utf8) {
+                let lines = text.split(whereSeparator: \.isNewline).map(String.init)
+                if lines.count >= 2 { return lines }
+            }
+            dir.deleteLastPathComponent()
+        }
+        return nil
+    }
 }
 
 extension AppearanceMode {
@@ -479,6 +531,29 @@ enum WindowChrome {
             softenScrollers(in: window)
         }
         softenScrollers(in: window)
+    }
+
+    /// Installing or rebuilding an NSToolbar can reset the transparent-titlebar flags after
+    /// the window has become key, leaving an opaque white band over the sidebar until the
+    /// next key change. Reassert only the chrome flags, without touching style/toolbar.
+    static func reassertTransparentTitlebar(in window: NSWindow) {
+        guard isManagedAppWindow(window) else { return }
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        if #available(macOS 11.0, *) {
+            window.titlebarSeparatorStyle = .none
+        }
+        clearTitlebarOpaqueFills(in: window)
+        DispatchQueue.main.async {
+            window.titlebarAppearsTransparent = true
+            clearTitlebarOpaqueFills(in: window)
+        }
+    }
+
+    static func reassertTransparentTitlebars() {
+        for window in NSApplication.shared.windows where isManagedAppWindow(window) {
+            reassertTransparentTitlebar(in: window)
+        }
     }
 
     /// Never restyle system panels such as NSOpenPanel/NSSavePanel. Replacing

@@ -133,29 +133,6 @@ struct ProgressRow: View {
     }
 }
 
-struct TipRow: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let text: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(AppTheme.accent.opacity(colorScheme == .light ? 0.12 : 0.20))
-                    .frame(width: 20, height: 20)
-                Image(systemName: "sparkles")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(AppTheme.accent)
-            }
-            .padding(.top, 1)
-            Text(text)
-                .font(.subheadline)
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-}
-
 struct EmptyStateView: View {
     let systemImage: String
     let title: String

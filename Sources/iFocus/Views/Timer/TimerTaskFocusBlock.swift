@@ -34,7 +34,7 @@ struct TimerTaskFocusBlock: View {
                         .font(.system(size: titleSize, weight: .semibold))
                         .foregroundColor(AppTheme.primaryText(for: colorScheme))
                         .lineLimit(1)
-                    Text("\(task.category.rawValue) · \(task.completedPomodoros)/\(task.estimatedPomodoros) 番茄")
+                    Text("\(task.category.name) · \(task.completedPomodoros)/\(task.estimatedPomodoros) 番茄")
                         .font(.caption)
                         .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                 }
@@ -116,7 +116,7 @@ struct TimerTaskFocusBlock: View {
     private func glyphView(_ systemName: String, color: Color, size: CGFloat) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(color.opacity(0.14))
+                .fill(color.opacity(0.16))
                 .frame(width: size, height: size)
             Image(systemName: systemName)
                 .font(.system(size: size * 0.38, weight: .semibold))
@@ -126,13 +126,17 @@ struct TimerTaskFocusBlock: View {
 
     private func blockBackground(emphasized: Bool) -> some View {
         RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
-            .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.9 : 0.7))
+            .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.96 : 0.82))
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
                     .stroke(
-                        emphasized ? modeColor.opacity(0.18) : AppTheme.separatorLow(for: colorScheme),
+                        emphasized ? modeColor.opacity(0.24) : AppTheme.separator(for: colorScheme),
                         lineWidth: 1
                     )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
+                    .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.75)
             )
     }
 }

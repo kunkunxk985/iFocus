@@ -25,6 +25,7 @@ Distribution/
 **/clang-module-cache/
 .agents/
 .work/
+.workbuddy/
 outputs/
 
 # Crash / temp

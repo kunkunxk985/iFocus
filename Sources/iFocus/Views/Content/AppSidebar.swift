@@ -15,6 +15,7 @@ struct AppSidebar: View {
     @EnvironmentObject var timerStore: TimerStore
     @Environment(\.openWindow) private var openWindow
     @Environment(\.colorScheme) private var colorScheme
+    @State private var dropTargetScreen: AppScreen?
 
     private func agendaItems(_ counts: TaskFiltering.SidebarBadgeCounts) -> [SidebarItem] {
         [
@@ -73,7 +74,7 @@ struct AppSidebar: View {
 
                 ScrollView {
                     let counts = taskStore.sidebarBadgeCounts()
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 1) {
                         sidebarRow(
                             title: "专注钟",
                             screen: .timer,
@@ -115,7 +116,7 @@ struct AppSidebar: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, 8)
                     .padding(.top, 4)
                     .padding(.bottom, 16)
                 }
@@ -132,7 +133,7 @@ struct AppSidebar: View {
         .padding(.trailing, 4)
     }
 
-    /// Reserve the titlebar row; the shared sidebar toggle is positioned by ContentView.
+    /// Reserve the titlebar band; the toggle itself is a window-toolbar item.
     private var sidebarHeader: some View {
         Color.clear
             .frame(height: AppTheme.topHeaderHeight)
@@ -142,12 +143,12 @@ struct AppSidebar: View {
         _ title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 1) {
             Text(title)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.65))
-                .padding(.horizontal, 10)
-                .padding(.top, 14)
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.7))
+                .padding(.horizontal, 8)
+                .padding(.top, 18)
                 .padding(.bottom, 4)
 
             content()
@@ -178,6 +179,55 @@ struct AppSidebar: View {
             )
         }
         .buttonStyle(SidebarRowButtonStyle(isSelected: isSelected))
+        .dropDestination(for: String.self) { items, _ in
+            handleTaskDrop(items, to: screen)
+        } isTargeted: { targeted in
+            guard supportsTaskDrop(screen) else { return }
+            if targeted {
+                dropTargetScreen = screen
+            } else if dropTargetScreen == screen {
+                dropTargetScreen = nil
+            }
+        }
+        .overlay {
+            if dropTargetScreen == screen {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(AppTheme.accent.opacity(0.8), lineWidth: 1.5)
+            }
+        }
+    }
+
+    private func supportsTaskDrop(_ screen: AppScreen) -> Bool {
+        switch screen {
+        case .todayTask, .tomorrowTask, .inboxTask, .completedTask:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func handleTaskDrop(_ items: [String], to screen: AppScreen) -> Bool {
+        guard supportsTaskDrop(screen),
+              let raw = items.first,
+              let id = UUID(uuidString: raw),
+              taskStore.tasks.contains(where: { $0.id == id })
+        else { return false }
+
+        let filter: TaskStore.TaskFilter
+        switch screen {
+        case .todayTask: filter = .todayTask
+        case .tomorrowTask: filter = .tomorrowTask
+        case .inboxTask: filter = .inboxTask
+        case .completedTask: filter = .completedTask
+        default: return false
+        }
+
+        taskStore.moveTask(id: id, to: filter)
+        withAnimation(.easeOut(duration: 0.15)) {
+            viewState.selectedScreen = screen
+        }
+        dropTargetScreen = nil
+        return true
     }
 
     private var bottomUserBar: some View {
@@ -265,11 +315,13 @@ private struct SidebarRowLabel: View {
         HStack(spacing: 9) {
             ZStack {
                 Image(systemName: icon)
-                    .font(.system(size: 13.5, weight: isSelected ? .semibold : .medium))
+                    .font(.system(size: 13.5, weight: isSelected ? .semibold : .regular))
+                    // Source lists keep their icon colour whether the row is selected
+                    // or not — the fill behind the row is what moves.
                     .foregroundColor(
                         isSelected
-                        ? AppTheme.accent
-                        : AppTheme.secondaryText(for: colorScheme)
+                        ? accentColor
+                        : accentColor.opacity(colorScheme == .light ? 0.78 : 0.85)
                     )
 
                 if emphasizeRunning {
@@ -282,42 +334,35 @@ private struct SidebarRowLabel: View {
             .frame(width: 20, height: 20)
 
             Text(title)
-                .font(.system(size: 13.5, weight: isSelected ? .semibold : .medium))
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                 .foregroundColor(
                     isSelected
                     ? AppTheme.primaryText(for: colorScheme)
-                    : AppTheme.primaryText(for: colorScheme).opacity(0.88)
+                    : AppTheme.primaryText(for: colorScheme).opacity(0.86)
                 )
                 .lineLimit(1)
 
             Spacer(minLength: 4)
 
             if let badge, !badge.isEmpty {
+                // Plain count, the way Mail prints "94 封邮件" — a pill reads as a badge,
+                // not as part of a source list.
                 Text(badge)
-                    .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                    .font(.system(size: 11, weight: .medium))
+                    .monospacedDigit()
                     .foregroundColor(badgeForeground)
-                    .padding(.horizontal, 6.5)
-                    .padding(.vertical, 2)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(badgeBackground)
-                    )
             }
         }
-        .padding(.horizontal, 9)
+        .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .contentShape(RoundedRectangle(cornerRadius: 8.5, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 
     private var badgeForeground: Color {
-        if showsOverdue || isSelected { return .white }
-        return AppTheme.secondaryText(for: colorScheme)
-    }
-
-    private var badgeBackground: Color {
-        if showsOverdue { return Color.red.opacity(0.88) }
-        if isSelected { return AppTheme.accent }
-        return colorScheme == .light ? Color.black.opacity(0.06) : Color.white.opacity(0.12)
+        if showsOverdue { return Color.red.opacity(0.9) }
+        return isSelected
+            ? AppTheme.primaryText(for: colorScheme).opacity(0.75)
+            : AppTheme.secondaryText(for: colorScheme).opacity(0.8)
     }
 }
 
@@ -329,37 +374,30 @@ private struct SidebarRowButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(
-                RoundedRectangle(cornerRadius: 8.5, style: .continuous)
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(backgroundFill(isPressed: configuration.isPressed))
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8.5, style: .continuous)
-                    .strokeBorder(borderStroke, lineWidth: 0.5)
-            )
-            .scaleEffect(configuration.isPressed ? 0.985 : 1.0)
-            .animation(.spring(response: 0.20, dampingFraction: 0.74), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.99 : 1.0)
+            .animation(.easeOut(duration: 0.10), value: configuration.isPressed)
             .animation(.easeOut(duration: 0.12), value: isHovering)
             .animation(.easeOut(duration: 0.16), value: isSelected)
             .onHover { isHovering = $0 }
     }
 
+    /// A source list selects with a neutral fill — accent fills and hairline borders
+    /// read as a custom control, which is exactly what a native sidebar never does.
     private func backgroundFill(isPressed: Bool) -> Color {
         if isSelected {
-            let alpha: Double = colorScheme == .light ? 0.11 : 0.20
-            return isPressed ? AppTheme.accent.opacity(alpha + 0.05) : AppTheme.accent.opacity(alpha)
+            if colorScheme == .light {
+                return Color.black.opacity(isPressed ? 0.10 : 0.075)
+            }
+            return Color.white.opacity(isPressed ? 0.17 : 0.13)
         }
         if isPressed {
-            return colorScheme == .light ? Color.black.opacity(0.07) : Color.white.opacity(0.12)
+            return colorScheme == .light ? Color.black.opacity(0.06) : Color.white.opacity(0.10)
         }
         if isHovering {
-            return colorScheme == .light ? Color.black.opacity(0.045) : Color.white.opacity(0.07)
-        }
-        return Color.clear
-    }
-
-    private var borderStroke: Color {
-        if isSelected {
-            return AppTheme.accent.opacity(colorScheme == .light ? 0.20 : 0.32)
+            return colorScheme == .light ? Color.black.opacity(0.035) : Color.white.opacity(0.06)
         }
         return Color.clear
     }

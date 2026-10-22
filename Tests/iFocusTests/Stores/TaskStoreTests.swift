@@ -61,6 +61,56 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertEqual(store.newTaskRecurrence, .none)
     }
     
+    func testMoveTaskBetweenListsUpdatesDueDate() {
+        let store = TaskStore(storageDirectory: tempDir)
+        store.newTaskTitle = "搬家"
+        store.addTask(for: .inboxTask)
+        let id = store.tasks[0].id
+        XCTAssertNil(store.tasks[0].dueDate)
+
+        store.moveTask(id: id, to: .todayTask)
+        XCTAssertTrue(Calendar.current.isDateInToday(store.tasks[0].dueDate!))
+        XCTAssertNil(store.tasks[0].startDate)
+
+        store.moveTask(id: id, to: .tomorrowTask)
+        XCTAssertTrue(Calendar.current.isDateInTomorrow(store.tasks[0].dueDate!))
+
+        store.moveTask(id: id, to: .inboxTask)
+        XCTAssertNil(store.tasks[0].dueDate)
+
+        let reloaded = TaskStore(storageDirectory: tempDir)
+        XCTAssertNil(reloaded.tasks[0].dueDate)
+    }
+
+    func testMoveTaskToCompletedAndBackReopens() {
+        let store = TaskStore(storageDirectory: tempDir)
+        store.newTaskTitle = "收尾"
+        store.addTask(for: .todayTask)
+        let id = store.tasks[0].id
+
+        store.moveTask(id: id, to: .completedTask)
+        XCTAssertTrue(store.tasks[0].isCompleted)
+        XCTAssertNotNil(store.tasks[0].completedAt)
+
+        store.moveTask(id: id, to: .todayTask)
+        XCTAssertFalse(store.tasks[0].isCompleted)
+        XCTAssertNil(store.tasks[0].completedAt)
+        XCTAssertTrue(Calendar.current.isDateInToday(store.tasks[0].dueDate!))
+    }
+
+    func testAddOnboardingSampleTaskIsDueToday() {
+        let store = TaskStore(storageDirectory: tempDir)
+        store.addOnboardingSampleTask()
+
+        XCTAssertEqual(store.tasks.count, 1)
+        let task = store.tasks[0]
+        XCTAssertEqual(task.title, "读完一节书")
+        XCTAssertEqual(task.category, .study)
+        XCTAssertFalse(task.isCompleted)
+        XCTAssertNotNil(task.dueDate)
+        XCTAssertTrue(Calendar.current.isDateInToday(task.dueDate!))
+    }
+
     func testDeleteTasksCanUndo() {
         let store = TaskStore(storageDirectory: tempDir)
         store.newTaskTitle = "可撤销"

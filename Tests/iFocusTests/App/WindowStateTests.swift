@@ -116,10 +116,8 @@ final class WindowStateTests: XCTestCase {
         NotificationCenter.default.removeObserver(sub)
     }
 
-    func testAppThemeTrafficLightLeadingConstant() {
-        XCTAssertEqual(AppTheme.trafficLightLeading, 18)
+    func testAppThemeHeaderHeight() {
         XCTAssertEqual(AppTheme.topHeaderHeight, 48)
-        XCTAssertEqual(AppTheme.titlebarControlOffset, 4)
     }
 
     func testViewMenuSanitizerRemovesDuplicateItems() {

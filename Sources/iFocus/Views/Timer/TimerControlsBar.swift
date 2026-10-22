@@ -113,6 +113,12 @@ struct TimerControlsBar: View {
     @EnvironmentObject var settings: SettingsStore
     @Environment(\.colorScheme) private var colorScheme
 
+    private var playHelp: String {
+        if timerStore.isRunning { return "暂停 (空格)" }
+        if timerStore.isSessionInProgress { return "继续 (空格)" }
+        return "开始 (空格)"
+    }
+
     var body: some View {
         let main = layout.controlMainSize
         let side = layout.controlSideSize
@@ -209,7 +215,8 @@ struct TimerControlsBar: View {
             }
             .buttonStyle(SpringScaleButtonStyle(pressedScale: 0.94, animation: AppTheme.springInteractive))
             .keyboardShortcut(.space, modifiers: [])
-            .help(timerStore.isRunning ? "暂停 (空格)" : "开始 (空格)")
+            .help(playHelp)
+            .accessibilityLabel(playHelp)
 
             // MARK: - Reset Button (Embossed circular control)
             EmbossedControlButton(
@@ -338,6 +345,7 @@ struct EmbossedControlButton: View {
         .onHover { hovering in
             isHovering = hovering
         }
+        .accessibilityLabel(title)
         .disabled(disabled)
     }
 }

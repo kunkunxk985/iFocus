@@ -1,0 +1,149 @@
+digraph iFocusModules {
+    rankdir=TB;
+    graph [fontname="PingFang SC", fontsize=12, bgcolor="transparent", pad=0.25, nodesep=0.3, ranksep=0.5, compound=true];
+    node [fontname="PingFang SC", fontsize=10, shape=box, style="rounded,filled", fillcolor="#FFFFFF", color="#CBD5E1", penwidth=1, margin="0.12,0.07"];
+    edge [fontname="PingFang SC", fontsize=9, color="#64748B", arrowsize=0.7];
+
+    subgraph cluster_app {
+        label="App · 进程入口与 macOS 集成";
+        color="#DBEAFE";
+        style="rounded";
+
+        app_shell [label="iFocusApp + AppDelegate\nWindowChrome · 命令 · 窗口"];
+        menu [label="App/MenuBar\nMenuBarController"];
+        routing [label="App/Navigation\nDeepLinkRouter · AppNavigation"];
+        window_state [label="App/Windows\n状态 · 迷你窗 · 专注模式"];
+        log [label="AppLog"];
+    }
+
+    subgraph cluster_views {
+        label="Views · SwiftUI + AppKit chrome";
+        color="#E0F2FE";
+        style="rounded";
+
+        content [label="ContentView + AppSidebar\nSidebarToolbar"];
+        pages [label="TimerView · TaskListView\nAnalyticsView · ProfileView"];
+        settings_view [label="SettingsWindowView\nSettingsWindowToolbar"];
+        theme [label="DesignSystem\nAppTheme · 共用组件 · 材质"];
+    }
+
+    subgraph cluster_state {
+        label="ViewModels · 可观察状态";
+        color="#EDE9FE";
+        style="rounded";
+
+        timer_store [label="TimerStore\n计时 · 通知 · 快照"];
+        task_store [label="TaskStore\n任务 · 记录 · JSON"];
+        settings_store [label="SettingsStore\n偏好 · 登录项 · 导出"];
+        analytics_model [label="AnalyticsDashboardModel"];
+        session_snapshot [label="TimerSessionSnapshot"];
+        content_state [label="ContentViewState"];
+    }
+
+    subgraph cluster_services {
+        label="Services · 本地服务";
+        color="#FFEDD5";
+        style="rounded";
+
+        backup_service [label="DataBackupService"];
+        login [label="LaunchAtLogin\nSMAppService"];
+        study_service [label="StudyLogWriter"];
+        upgrade_service [label="PreUpgradeGuard"];
+    }
+
+    subgraph cluster_core {
+        label="iFocusCore · Foundation only";
+        color="#D1FAE5";
+        style="rounded";
+
+        filtering [label="TaskFiltering · TaskSearch"];
+        stats [label="FocusStats · AnalyticsTimeRange"];
+        formatting [label="TimerFormatting"];
+        plan [label="StudyPlan"];
+        backup_format [label="LocalBackup"];
+        study_format [label="StudyLogExport"];
+    }
+
+    subgraph cluster_storage {
+        label="本地持久化";
+        color="#F1F5F9";
+        style="rounded";
+
+        json_files [label="Application Support\nJSON 文件"];
+        defaults [label="UserDefaults"];
+        study_files [label="~/StudyLog"];
+        backup_folder [label="备份文件夹"];
+        pre_upgrade [label="pre-upgrade/"];
+    }
+
+    tests [label="iFocusTests\nCore · Stores · Services\nApp · Views · Product", fillcolor="#F8FAFC"];
+
+    app_shell -> content [label="hosts"];
+    app_shell -> menu [label="installs"];
+    app_shell -> routing [label="wires"];
+    app_shell -> timer_store [label="creates / injects"];
+    app_shell -> task_store;
+    app_shell -> settings_store;
+    app_shell -> upgrade_service [label="runs at launch"];
+    app_shell -> window_state [label="tracks"];
+    app_shell -> log;
+
+    content -> pages [label="detail screens"];
+    content -> content_state [label="navigation"];
+    pages -> timer_store;
+    pages -> task_store;
+    pages -> analytics_model;
+    pages -> theme;
+    pages -> filtering [label="list/search"];
+    pages -> stats [label="analytics/profile"];
+
+    settings_view -> settings_store;
+    settings_view -> task_store [label="counts"];
+    settings_view -> timer_store [label="notification status"];
+    settings_view -> backup_service;
+    settings_view -> login [label="open login items"];
+    settings_view -> theme;
+
+    menu -> timer_store;
+    menu -> task_store;
+    menu -> settings_store;
+    routing -> timer_store;
+    routing -> content [label="navigate"];
+
+    timer_store -> task_store [label="commit session"];
+    timer_store -> session_snapshot;
+    timer_store -> formatting;
+    timer_store -> settings_store;
+
+    task_store -> filtering;
+    task_store -> study_service [label="export sessions"];
+    task_store -> json_files;
+
+    settings_store -> defaults;
+    settings_store -> login [label="login-item preference"];
+
+    analytics_model -> stats;
+    analytics_model -> task_store [label="derives from", style="dashed"];
+    analytics_model -> timer_store [label="derives from", style="dashed"];
+
+    session_snapshot -> json_files [label="timer_session.json"];
+    window_state -> defaults [label="window frame / sidebar"];
+
+    backup_service -> backup_format;
+    backup_service -> task_store [label="read/restore", style="dashed"];
+    backup_service -> settings_store [label="read/restore", style="dashed"];
+    backup_service -> json_files;
+    backup_service -> backup_folder;
+
+    study_service -> study_format;
+    study_service -> study_files;
+
+    upgrade_service -> json_files [label="reads"];
+    upgrade_service -> pre_upgrade [label="copies"];
+
+    tests -> task_store;
+    tests -> timer_store;
+    tests -> filtering;
+    tests -> stats;
+    tests -> backup_format;
+}

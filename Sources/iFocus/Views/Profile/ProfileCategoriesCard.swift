@@ -2,7 +2,7 @@ import SwiftUI
 import iFocusCore
 
 struct ProfileCategoryStat: Identifiable {
-    var id: String { category.rawValue }
+    var id: String { category.id }
     let category: TaskCategory
     let minutes: Int
     let count: Int
@@ -46,7 +46,7 @@ struct ProfileCategoriesCard: View {
                         let pctInt = Int((Double(item.minutes) / Double(totalMinutes) * 100).rounded())
                         VStack(alignment: .leading, spacing: 5) {
                             HStack(alignment: .center) {
-                                Label(item.category.rawValue, systemImage: item.category.icon)
+                                Label(item.category.name, systemImage: item.category.icon)
                                     .font(.system(size: 12.5, weight: .semibold))
                                     .foregroundColor(item.category.color)
 

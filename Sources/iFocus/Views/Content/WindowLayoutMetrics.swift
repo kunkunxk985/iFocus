@@ -160,6 +160,26 @@ struct WindowLayoutMetrics: Equatable {
     }
 }
 
+// MARK: - Window geometry mirrors
+
+/// Window geometry mirrors used by the app entry and Settings copy.
+enum AppWindowMetrics {
+    static let minimum = WindowLayoutMetrics.minimum
+    static let defaultSize = WindowLayoutMetrics.defaultSize
+}
+
+// MARK: - Sidebar chrome
+
+/// Sidebar width formula used by the content layout.
+enum SidebarChrome {
+    /// Expanded sidebar width for a given window width. Fluid: 208 → 252pt.
+    static func expandedWidth(for windowWidth: CGFloat) -> CGFloat {
+        let fluid = min(1, max(0, (windowWidth - WindowLayoutMetrics.minimum.width)
+                               / max(1, WindowLayoutMetrics.reference.width - WindowLayoutMetrics.minimum.width)))
+        return 208 + fluid * 44
+    }
+}
+
 // MARK: - Environment
 
 private struct WindowLayoutKey: EnvironmentKey {
@@ -173,31 +193,5 @@ extension EnvironmentValues {
     var windowLayout: WindowLayoutMetrics {
         get { self[WindowLayoutKey.self] }
         set { self[WindowLayoutKey.self] = newValue }
-    }
-}
-
-extension View {
-    /// Publish continuous layout metrics from the nearest GeometryReader size.
-    func windowLayoutMetrics(densityScale: CGFloat = 1) -> some View {
-        modifier(WindowLayoutEnvironmentModifier(densityScale: densityScale))
-    }
-}
-
-private struct WindowLayoutEnvironmentModifier: ViewModifier {
-    let densityScale: CGFloat
-
-    func body(content: Content) -> some View {
-        GeometryReader { geo in
-            content
-                .environment(
-                    \.windowLayout,
-                    WindowLayoutMetrics(
-                        width: geo.size.width,
-                        height: geo.size.height,
-                        densityScale: densityScale
-                    )
-                )
-                .frame(width: geo.size.width, height: geo.size.height)
-        }
     }
 }

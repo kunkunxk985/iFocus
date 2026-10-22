@@ -41,6 +41,7 @@ struct EditTaskView: View {
     @Environment(\.colorScheme) private var colorScheme
     
     let session: EditTaskSession
+    let categories: [TaskCategory]
     var onSave: (
         _ title: String,
         _ category: TaskCategory,
@@ -72,15 +73,23 @@ struct EditTaskView: View {
     
     init(
         session: EditTaskSession,
+        categories: [TaskCategory],
         onSave: @escaping (
             String, TaskCategory, Int, Int, Date?, TaskRecurrence, String, String,
             [ChecklistItem]?, String?, Date?
         ) -> Void
     ) {
         self.session = session
+        var availableCategories = categories
+        if !availableCategories.contains(where: { $0.id == session.category.id }) {
+            availableCategories.insert(session.category, at: 0)
+        }
+        self.categories = availableCategories
         self.onSave = onSave
         _title = State(initialValue: session.title)
-        _category = State(initialValue: session.category)
+        _category = State(initialValue:
+            availableCategories.first(where: { $0.id == session.category.id }) ?? session.category
+        )
         _priority = State(initialValue: session.priority)
         _estimatedPomodoros = State(initialValue: session.estimatedPomodoros)
         _recurrence = State(initialValue: session.recurrence)
@@ -128,12 +137,12 @@ struct EditTaskView: View {
                     
                     fieldRow("分类") {
                         Picker("", selection: $category) {
-                            ForEach(TaskCategory.allCases) { cat in
-                                Text(cat.rawValue).tag(cat)
+                            ForEach(categories) { cat in
+                                Label(cat.name, systemImage: cat.icon).tag(cat)
                             }
                         }
                         .labelsHidden()
-                        .frame(width: 140)
+                        .frame(width: 160)
                     }
                     
                     Divider().opacity(0.5)

@@ -11,6 +11,13 @@ enum AppNavigation {
     static let newTask = Notification.Name("iFocus.newTask")
     static let searchTasks = Notification.Name("iFocus.searchTasks")
     static let toggleSidebar = Notification.Name("iFocus.toggleSidebar")
+    static let toggleMiniTimer = Notification.Name("iFocus.toggleMiniTimer")
+    static let toggleFocusMode = Notification.Name("iFocus.toggleFocusMode")
+    static let showOnboarding = Notification.Name("iFocus.showOnboarding")
+
+    /// Survives closing/reopening the main window: the Settings replay button sets it,
+    /// and whichever ContentView appears next consumes it.
+    static let pendingOnboardingReplayKey = "iFocus.pendingOnboardingReplay"
     
     /// Post via `object` so Swift enums don't get lost in ObjC userInfo bridging.
     static func post(_ screen: AppScreen) {

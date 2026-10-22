@@ -34,7 +34,7 @@ struct TodayFocusOverview: View {
                 }
 
                 ProgressView(value: progress)
-                    .tint(progress >= 1 ? Color(hex: "#10B981") : AppTheme.accent)
+                    .tint(progress >= 1 ? AppTheme.success : AppTheme.accent)
                     .frame(maxWidth: 300)
                     .accessibilityLabel("今日番茄目标")
                     .accessibilityValue("\(timerStore.completedPomodoros) / \(dailyGoal)")

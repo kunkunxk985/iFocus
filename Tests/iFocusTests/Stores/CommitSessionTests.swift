@@ -236,8 +236,8 @@ final class CommitSessionTests: XCTestCase {
         encoder.dateEncodingStrategy = .iso8601
         var array = try XCTUnwrap(JSONSerialization.jsonObject(with: encoder.encode([good])) as? [[String: Any]])
         var bad = array[0]
-        bad["id"] = UUID().uuidString
-        bad["category"] = "未来的分类"
+        // Unknown category names are now preserved; a malformed id is still unreadable.
+        bad["id"] = "not-a-uuid"
         array.append(bad)
         try JSONSerialization.data(withJSONObject: array).write(to: tempDir.appendingPathComponent("tasks.json"))
 

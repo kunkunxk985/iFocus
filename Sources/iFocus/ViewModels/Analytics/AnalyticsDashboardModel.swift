@@ -176,7 +176,8 @@ struct AnalyticsDashboardModel {
         sessions: [FocusSession],
         tasks: [FocusTask]
     ) -> [(name: String, icon: String, color: Color, minutes: Int)] {
-        var minutesStats = [TaskCategory: Int]()
+        var minutesByID = [String: Int]()
+        var categoryByID = [String: TaskCategory]()
         for session in sessions {
             let cat: TaskCategory?
             if let c = session.taskCategory {
@@ -190,14 +191,16 @@ struct AnalyticsDashboardModel {
                 cat = .other
             }
             guard let cat else { continue }
-            minutesStats[cat, default: 0] += session.durationMinutes
+            if categoryByID[cat.id] == nil { categoryByID[cat.id] = cat }
+            minutesByID[cat.id, default: 0] += session.durationMinutes
         }
-        return minutesStats
-            .map { (name: $0.key.rawValue, icon: $0.key.icon, color: $0.key.color, minutes: $0.value) }
-            .filter { $0.minutes > 0 }
-            .sorted { $0.minutes > $1.minutes }
-            .prefix(3)
-            .map { $0 }
+        return minutesByID.compactMap { id, minutes -> (name: String, icon: String, color: Color, minutes: Int)? in
+            guard minutes > 0, let category = categoryByID[id] else { return nil }
+            return (name: category.name, icon: category.icon, color: category.color, minutes: minutes)
+        }
+        .sorted { $0.minutes > $1.minutes }
+        .prefix(3)
+        .map { $0 }
     }
 
     func resolvedCategory(for session: FocusSession, tasks: [FocusTask]) -> TaskCategory? {
@@ -228,4 +231,3 @@ struct AnalyticsDashboardModel {
 }
 
 // Compatibility alias used by older call sites / tests.
-typealias AnalyticsRange = AnalyticsTimeRange

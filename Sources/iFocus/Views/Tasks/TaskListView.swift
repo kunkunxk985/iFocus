@@ -17,7 +17,7 @@ private enum TaskListChip: Hashable, Identifiable {
         case .pinned: return "pinned"
         case .hasNotes: return "notes"
         case .hasLink: return "link"
-        case .category(let c): return "cat-\(c.rawValue)"
+        case .category(let c): return "cat-\(c.id)"
         }
     }
     
@@ -28,7 +28,7 @@ private enum TaskListChip: Hashable, Identifiable {
         case .pinned: return "置顶"
         case .hasNotes: return "有备注"
         case .hasLink: return "有链接"
-        case .category(let c): return c.rawValue
+        case .category(let c): return c.name
         }
     }
 }
@@ -39,8 +39,20 @@ struct TaskListView: View {
     @EnvironmentObject var timerStore: TimerStore
     @EnvironmentObject var viewState: ContentViewState
     @Environment(\.colorScheme) private var colorScheme
-    /// Stable sheet identity — never bind sheet(item:) to a live mutating task value.
-    @State private var editSession: EditTaskSession? = nil
+    /// One sheet per screen; edit sessions keep a stable snapshot identity.
+    private enum TaskListSheet: Identifiable {
+        case edit(EditTaskSession)
+        case categories
+
+        var id: String {
+            switch self {
+            case .edit(let session): return "edit-\(session.id)"
+            case .categories: return "categories"
+            }
+        }
+    }
+
+    @State private var activeSheet: TaskListSheet? = nil
     @State private var isSelecting = false
     @State private var selectedIDs: Set<UUID> = []
     @State private var activeChip: TaskListChip = .all
@@ -129,7 +141,7 @@ struct TaskListView: View {
     private func matchesSearch(_ task: FocusTask) -> Bool {
         TaskSearch.matches(
             searchText,
-            in: [task.title, task.notes, task.category.rawValue, task.linkURL, task.recurrence.rawValue]
+            in: [task.title, task.notes, task.category.name, task.linkURL, task.recurrence.rawValue]
                 + task.checklist.flatMap { [$0.title, $0.note ?? ""] }
         )
     }
@@ -158,10 +170,8 @@ struct TaskListView: View {
         for chip in candidates where chipCount(chip) > 0 {
             chips.append(chip)
         }
-        // 学习 always; other categories only while an unfinished task uses them.
-        chips.append(.category(.study))
-        let used = Set(taskStore.incompleteTasks.map(\.category))
-        for cat in TaskCategory.allCases where cat != .study && used.contains(cat) {
+        // Categories appear only when the current list actually contains one.
+        for cat in taskStore.allCategories where chipCount(.category(cat)) > 0 {
             chips.append(.category(cat))
         }
         return chips
@@ -181,7 +191,7 @@ struct TaskListView: View {
         case .hasLink:
             return task.hasLink
         case .category(let cat):
-            return task.category == cat
+            return task.category.id == cat.id
         }
     }
     
@@ -193,7 +203,7 @@ struct TaskListView: View {
             case .pinned: return task.isPinned
             case .hasNotes: return !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case .hasLink: return task.hasLink
-            case .category(let cat): return task.category == cat
+            case .category(let cat): return task.category.id == cat.id
             }
         }.count
     }
@@ -230,33 +240,21 @@ struct TaskListView: View {
                             }
 
                             if !currentTasks.isEmpty {
-                            Button {
-                                withAnimation(AppTheme.springInteractive) {
-                                    isSelecting.toggle()
-                                    if !isSelecting { selectedIDs.removeAll() }
-                                }
-                            } label: {
-                                Text(isSelecting ? "完成" : "批量")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(isSelecting ? AppTheme.accent : AppTheme.primaryText(for: colorScheme))
-                                    .padding(.horizontal, 11)
-                                    .padding(.vertical, 5)
-                                    .background(
-                                        Capsule()
-                                            .fill(AppTheme.cardBackground(for: colorScheme))
-                                            .overlay(
-                                                Capsule()
-                                                    .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                                            )
-                                            .overlay(
-                                                Capsule()
-                                                    .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.75)
-                                            )
-                                            .multiLayerShadow(elevation: .row, colorScheme: colorScheme)
+                                Button {
+                                    withAnimation(AppTheme.springInteractive) {
+                                        isSelecting.toggle()
+                                        if !isSelecting { selectedIDs.removeAll() }
+                                    }
+                                } label: {
+                                    Label(
+                                        isSelecting ? "完成" : "批量",
+                                        systemImage: isSelecting ? "checkmark" : "checklist"
                                     )
-                            }
-                            .buttonStyle(SpringScaleButtonStyle(pressedScale: 0.94))
-                            .padding(.top, 6)
+                                    .font(.system(size: 11.5, weight: .semibold))
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .tint(AppTheme.accent)
                             }
                         }
                     }
@@ -322,31 +320,43 @@ struct TaskListView: View {
         }
         .onChange(of: baseTasks.map(\.id)) { _ in
             // Category chip may disappear when no tasks left in that category.
-            if !availableChips.contains(activeChip) {
+            if !availableChips.contains(where: { $0.id == activeChip.id }) {
+                activeChip = .all
+            }
+        }
+        .onChange(of: taskStore.allCategories) { _ in
+            // A renamed category keeps working by id; a deleted one falls back to 全部.
+            if !availableChips.contains(where: { $0.id == activeChip.id }) {
                 activeChip = .all
             }
         }
         // Snapshot identity (`EditTaskSession`) — never `sheet(item:)` a live FocusTask
         // that mutates while the timer is running.
-        .sheet(item: $editSession) { session in
-            EditTaskView(session: session) { title, category, priority, pomodoros, due, recurrence, notes, linkURL, items, itemUnit, startDate in
-                taskStore.updateTask(
-                    id: session.id,
-                    title: title,
-                    category: category,
-                    priority: priority,
-                    estimatedPomodoros: pomodoros,
-                    dueDate: due,
-                    recurrence: recurrence,
-                    notes: notes,
-                    linkURL: linkURL,
-                    items: items,
-                    itemUnit: itemUnit,
-                    startDate: startDate
-                )
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .edit(let session):
+                EditTaskView(session: session, categories: taskStore.allCategories) { title, category, priority, pomodoros, due, recurrence, notes, linkURL, items, itemUnit, startDate in
+                    taskStore.updateTask(
+                        id: session.id,
+                        title: title,
+                        category: category,
+                        priority: priority,
+                        estimatedPomodoros: pomodoros,
+                        dueDate: due,
+                        recurrence: recurrence,
+                        notes: notes,
+                        linkURL: linkURL,
+                        items: items,
+                        itemUnit: itemUnit,
+                        startDate: startDate
+                    )
+                }
+                // Force full re-init of @State when reopening the same task after save.
+                .id("\(session.id)-\(session.notes)-\(session.linkURL)-\(session.title)-\(session.priority)-\(session.itemUnit)-\(session.startDate?.timeIntervalSince1970 ?? 0)-\(session.items.map(\.id))")
+            case .categories:
+                CategoryManagementView()
+                    .environmentObject(taskStore)
             }
-            // Force full re-init of @State when reopening the same task after save.
-            .id("\(session.id)-\(session.notes)-\(session.linkURL)-\(session.title)-\(session.priority)-\(session.itemUnit)-\(session.startDate?.timeIntervalSince1970 ?? 0)-\(session.items.map(\.id))")
         }
         .onExitCommand {
             if isSelecting {
@@ -440,17 +450,16 @@ struct TaskListView: View {
     }
     
     private var filterChipsBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(availableChips) { chip in
-                    let selected = activeChip == chip
+        ChipFlowLayout(spacing: 5, rowSpacing: 4) {
+            ForEach(availableChips) { chip in
+                    let selected = activeChip.id == chip.id
                     let count = chipCount(chip)
                     Button {
                         withAnimation(AppTheme.springInteractive) {
                             activeChip = chip
                         }
                     } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: 4) {
                             Text(chip.title)
                                 .font(.system(size: 12, weight: selected ? .semibold : .medium))
                                 .foregroundColor(
@@ -478,7 +487,7 @@ struct TaskListView: View {
                                         )
                                 )
                         }
-                        .padding(.horizontal, 11)
+                        .padding(.horizontal, 9)
                         .padding(.vertical, 6)
                         .background {
                             if selected {
@@ -492,19 +501,36 @@ struct TaskListView: View {
                                         Capsule()
                                             .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.75)
                                     )
-                                    .multiLayerShadow(elevation: .row, colorScheme: colorScheme)
                                     .matchedGeometryEffect(id: "activeFilterPill", in: filterAnimation)
                             }
                         }
                     }
                     .buttonStyle(.plain)
-                }
             }
-            .padding(.horizontal, 2)
-            .padding(.vertical, 3)
+
+            if !taskStore.customCategories.isEmpty {
+                Button {
+                    activeSheet = .categories
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 9.5, weight: .semibold))
+                        Text("管理分类")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.8))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 5)
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("管理自定义分类的名称、颜色与图标")
+                .accessibilityLabel("管理自定义分类")
+            }
         }
+        .padding(.vertical, 3)
     }
-    
+
     private var batchToolbar: some View {
         let isCompletedList = viewState.selectedScreen == .completedTask
         return VStack(alignment: .leading, spacing: 10) {
@@ -597,7 +623,14 @@ struct TaskListView: View {
             .accessibilityHidden(true)
         }
         .padding(14)
-        .background(SoftCardBackground(cornerRadius: 14))
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.radiusM, style: .continuous)
+                .fill(AppTheme.elevatedBackground(for: colorScheme).opacity(0.7))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.radiusM, style: .continuous)
+                .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+        )
     }
     
     private func batchButton(
@@ -611,7 +644,7 @@ struct TaskListView: View {
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
-        .tint(destructive ? .red : AppTheme.accent)
+        .tint(destructive ? AppTheme.danger : AppTheme.accent)
     }
     
     private var addTaskSection: some View {
@@ -740,8 +773,14 @@ struct TaskListView: View {
             Section("任务属性") {
                 newTaskCategoryButton(.study)
                 Menu("更多分类") {
-                    ForEach(TaskCategory.allCases.filter { $0 != .study }) { category in
+                    ForEach(taskStore.allCategories.filter { $0.id != TaskCategory.study.id }) { category in
                         newTaskCategoryButton(category)
+                    }
+                    Divider()
+                    Button {
+                        activeSheet = .categories
+                    } label: {
+                        Label("管理分类…", systemImage: "slider.horizontal.3")
                     }
                 }
                 Picker("优先级", selection: $taskStore.newTaskPriority) {
@@ -770,7 +809,7 @@ struct TaskListView: View {
                 Image(systemName: taskStore.newTaskCategory.icon)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(taskStore.newTaskCategory.color)
-                Text(taskStore.newTaskCategory.rawValue)
+                Text(taskStore.newTaskCategory.name)
                     .lineLimit(1)
                 Image(systemName: "timer")
                     .font(.system(size: 9.5, weight: .semibold))
@@ -796,7 +835,7 @@ struct TaskListView: View {
         .buttonStyle(SpringScaleButtonStyle(pressedScale: 0.96))
         .help("设置新任务的分类、优先级、预估番茄数和重复周期")
         .accessibilityLabel(
-            "任务属性设置：\(taskStore.newTaskCategory.rawValue)，\(taskStore.newTaskPriority) 级优先级，\(taskStore.newTaskPomodoros) 个番茄，\(taskStore.newTaskRecurrence.rawValue)"
+            "任务属性设置：\(taskStore.newTaskCategory.name)，\(taskStore.newTaskPriority) 级优先级，\(taskStore.newTaskPomodoros) 个番茄，\(taskStore.newTaskRecurrence.rawValue)"
         )
     }
     
@@ -805,10 +844,10 @@ struct TaskListView: View {
         Button {
             taskStore.newTaskCategory = category
         } label: {
-            if taskStore.newTaskCategory == category {
-                Label(category.rawValue, systemImage: "checkmark")
+            if taskStore.newTaskCategory.id == category.id {
+                Label(category.name, systemImage: "checkmark")
             } else {
-                Text(category.rawValue)
+                Label(category.name, systemImage: category.icon)
             }
         }
     }
@@ -861,7 +900,7 @@ struct TaskListView: View {
         guard !taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         guard let id = taskStore.addTask(for: currentFilter, dueOverride: dueOverride) else { return }
         if openEditor, let task = taskStore.tasks.first(where: { $0.id == id }) {
-            editSession = EditTaskSession(task: task)
+            activeSheet = .edit(EditTaskSession(task: task))
         }
     }
     
@@ -871,12 +910,12 @@ struct TaskListView: View {
                 emptyState
             } else if viewState.selectedScreen == .todayTask {
                 if !overdueTasks.isEmpty {
-                    taskSection(title: "已逾期", tint: Color(hex: "#EF4444"), tasks: overdueTasks)
+                    taskSection(title: "已逾期", tint: AppTheme.danger, tasks: overdueTasks)
                 }
                 if !dueTodayTasks.isEmpty {
                     taskSection(
                         title: overdueTasks.isEmpty ? "今日待办" : "今天",
-                        tint: Color(hex: "#F59E0B"),
+                        tint: AppTheme.warning,
                         tasks: dueTodayTasks
                     )
                 }
@@ -969,7 +1008,7 @@ struct TaskListView: View {
                     selectedIDs.insert(task.id)
                 }
             },
-            onEdit: { editSession = EditTaskSession(task: task) },
+            onEdit: { activeSheet = .edit(EditTaskSession(task: task)) },
             onToggleTimer: { timerStore.toggle() },
             onStartFocus: {
                 timerStore.startFocus(on: task.id)
@@ -987,63 +1026,98 @@ struct TaskListView: View {
                 AppEmptyState(
                     systemImage: "magnifyingglass",
                     title: "未找到相关任务",
-                    subtitle: nil,
+                    subtitle: "换个关键词，或清除搜索。",
                     actionTitle: "清除搜索",
                     action: { searchText = "" }
                 )
-                .padding(.vertical, 28)
                 .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
             )
         }
-        
+
         if filteredEmpty {
             return AnyView(
                 AppEmptyState(
                     systemImage: "line.3.horizontal.decrease.circle",
                     title: "没有匹配的任务",
-                    subtitle: nil,
+                    subtitle: "当前筛选下没有任务。",
                     actionTitle: "显示全部",
                     action: { activeChip = .all }
                 )
-                .padding(.vertical, 28)
                 .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
             )
         }
-        
+
         if isCompletedList {
             return AnyView(
                 AppEmptyState(
                     systemImage: "checkmark.circle",
-                    title: "暂无完成记录",
-                    subtitle: nil,
-                    actionTitle: nil,
-                    action: nil
+                    title: "还没有完成记录",
+                    subtitle: "完成任务后会出现在这里。",
+                    actionTitle: "去今天",
+                    action: { viewState.selectedScreen = .todayTask }
                 )
-                .padding(.vertical, 28)
                 .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
             )
         }
-        
-        // Quiet single-focus empty for 今天; others stay minimal.
+
         return AnyView(
-            VStack(spacing: 12) {
-                Text(isToday ? "暂无今日待办" : "暂无任务")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                if !isToday {
-                    Button("去专注钟") {
-                        viewState.selectedScreen = .timer
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .padding(.top, 2)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 36)
-            .padding(.horizontal, 24)
+            AppEmptyState(
+                systemImage: isToday ? "sun.max" : "tray",
+                title: isToday ? "今天还没有任务" : "还没有任务",
+                subtitle: isToday
+                    ? "先添加一件小事，或者直接开始一段专注。"
+                    : "添加一条任务，开始安排今天。",
+                actionTitle: "添加任务",
+                action: { DispatchQueue.main.async { isQuickAddFocused = true } },
+                secondaryActionTitle: "开始专注",
+                secondaryAction: { viewState.selectedScreen = .timer }
+            )
             .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
         )
+    }
+}
+
+
+// MARK: - Chip flow layout
+
+/// Wraps filter chips instead of hiding the tail behind a horizontal scroller.
+private struct ChipFlowLayout: Layout {
+    var spacing: CGFloat = 6
+    var rowSpacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > maxWidth {
+                x = 0
+                y += rowHeight + rowSpacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: maxWidth, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + rowSpacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
     }
 }
 

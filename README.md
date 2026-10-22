@@ -102,6 +102,15 @@ bash Scripts/smoke_test.sh --replace-running
 
 升级时先退出旧版，再将新版 `iFocus.app` 拖入“应用程序”并选择替换。应用数据不在 `.app` 包内，正常覆盖安装不会删除上述数据；不要使用清理软件删除 `Application Support/iFocus`。
 
+## 专注体验
+
+- 菜单栏左键打开快捷面板，右键打开完整菜单。
+- 迷你计时窗用 ⌥⌘M、菜单栏面板或专注钟右上角的 `pip` 按钮；可拖动圆环移动，位置会记住。
+- 全屏专注模式用 ⌥⌘F 或专注钟右上角按钮；隐藏侧栏和窗口 chrome，按 Esc 或「退出专注」返回。
+- 任务悬停后出现「…」快速移动、改优先级或删除；也可拖动手柄到侧栏的今天 / 明天 / 收集箱 / 已完成。已完成任务拖回活动列表会重新打开。
+- 首次启动是五步引导，可选添加一条示例任务；之后可在「设置 › 通用 › 引导与帮助」重新播放。
+- 分类可以自定义名称、颜色和图标，任务、筛选、统计与资料共用同一套定义。内置分类保持固定；在任务属性菜单、筛选栏或「设置 › 通用 › 任务与分类」里管理。
+
 ## 设置入口
 
 正式设置界面是独立窗口 **`SettingsWindowView`**（菜单「设置…」或 ⌘,）。  
@@ -112,28 +121,48 @@ bash Scripts/smoke_test.sh --replace-running
 ```
 VERSION                 # 营销版本 + build（唯一来源）
 Sources/
-  iFocus/               # App 本体（SwiftUI + AppKit）
-    App/                # 入口 iFocusApp、窗口外观、菜单栏、深链接、开机启动、日志
-    Services/           # 本地备份、学习记录（~/StudyLog）写出
-    ViewModels/         # TimerStore、TaskStore、SettingsStore 等状态
+  iFocus/               # App 本体（SwiftUI + AppKit），同一模块
+    App/                # 进程入口与 macOS 集成
+      iFocusApp.swift   # 入口、窗口外观、命令
+      AppLog.swift
+      Navigation/       # 深链与页面路由
+      MenuBar/          # 状态栏宿主
+      Windows/          # 窗口状态、迷你计时窗、全屏专注
+    Services/           # 本地备份、学习记录、升级前保护、登录项、系统设置
+    ViewModels/         # 可观察状态，按领域分目录
+      Timer/            # TimerStore、可恢复快照
+      Tasks/            # TaskStore、TaskCategory
+      Settings/
+      Analytics/
     Views/
       Content/          # 主窗口骨架：ContentView、侧栏、全局浮层、窗口尺寸
-      Timer/            # 专注钟页
-      Tasks/            # 清单页、任务行、编辑任务
+      MenuBar/          # 状态栏面板（SwiftUI；宿主在 App/MenuBar）
+      Timer/            # 专注钟页、迷你计时视图
+      Tasks/            # 清单页、任务行、编辑任务、分类管理
       Analytics/        # 数据统计页（Chrome / Charts / Cards）
       Profile/          # 个人资料页
       Settings/         # 设置窗口
-      Theme/            # 颜色、字号、间距、触感反馈
-      Components/       # 多个页面共用的小组件
+      DesignSystem/     # 颜色、字号、间距、材质与共用小组件
     AppIcon.icns
   iFocusCore/           # 纯逻辑（过滤、统计、时间范围、备份包、学习记录导出）
-Tests/iFocusTests/
+Tests/iFocusTests/      # 与上面的层对齐：Core、Stores、Services、App、Views、Product
+  Fixtures/             # 仍在 Tests/Fixtures，不随测试文件下移
 Scripts/
   package_app.sh        # 读 VERSION 写入 Info.plist，并同步安装
   package_dmg.sh
   smoke_test.sh
   run_deep_qa.sh
 ```
+
+## 架构文档
+
+当前状态的 C4 结构、数据流与模块分层见：
+
+- `Docs/Architecture/ifocus.architecture-understanding.md`（阅读入口）
+- `Docs/Architecture/ifocus.structurizr.dsl`（C4 源）
+- `Docs/Architecture/ifocus-data-flow.dot`（数据流）
+- `Docs/Architecture/ifocus-modules.dot`（模块依赖）
+- `Docs/Architecture/ifocus.evidence.md`（证据与未知项）
 
 ## 版本一致性
 

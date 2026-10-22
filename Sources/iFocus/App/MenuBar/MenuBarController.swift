@@ -1,11 +1,12 @@
 import AppKit
 import Combine
+import SwiftUI
 
 /// Menu-bar Pro: live countdown, left-click toggle, right-click full menu.
 /// Quiet tool — no mini-dashboard, no animated chrome.
 ///
 /// `NSStatusBar.statusItem` must not be created during `App.init`.
-final class MenuBarController: NSObject, ObservableObject {
+final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
     private var statusItem: NSStatusItem?
     private let timerStore: TimerStore
     private var cancellables: Set<AnyCancellable> = []
@@ -13,6 +14,9 @@ final class MenuBarController: NSObject, ObservableObject {
     private var launchObserver: NSObjectProtocol?
     /// Built once; content refreshed on `menuNeedsUpdate` / store changes.
     private var statusMenu: NSMenu?
+    private var popover: NSPopover?
+    private var popoverHosting: NSHostingController<MenuBarPanelView>?
+    private var lastPopoverCloseAt: Date?
     /// Menu-bar icon only changes with mode, activity, or accent — not every second.
     private var cachedStatusIconKey: String?
     private var cachedStatusIcon: NSImage?
@@ -32,6 +36,8 @@ final class MenuBarController: NSObject, ObservableObject {
         case restartAfterCap = 112
         case show = 105
         case quit = 106
+        case miniWindow = 113
+        case focusMode = 114
     }
 
     init(timerStore: TimerStore) {
@@ -101,7 +107,7 @@ final class MenuBarController: NSObject, ObservableObject {
             button.imagePosition = .imageLeading
             button.imageHugsTitle = true
             button.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
-            button.toolTip = "iFocus · 左键开始/暂停 · 右键菜单"
+            button.toolTip = "iFocus · 左键打开面板 · 右键菜单"
             button.setButtonType(.momentaryLight)
             // Left-click toggles; right-click opens menu (pro quiet pattern).
             button.target = self
@@ -182,6 +188,16 @@ final class MenuBarController: NSObject, ObservableObject {
 
         menu.addItem(.separator())
 
+        let miniItem = NSMenuItem(title: "迷你计时窗", action: #selector(toggleMiniWindowFromMenu), keyEquivalent: "")
+        miniItem.tag = MenuTag.miniWindow.rawValue
+        menu.addItem(miniItem)
+
+        let focusItem = NSMenuItem(title: "全屏专注模式", action: #selector(toggleFocusModeFromMenu), keyEquivalent: "")
+        focusItem.tag = MenuTag.focusMode.rawValue
+        menu.addItem(focusItem)
+
+        menu.addItem(.separator())
+
         let showItem = NSMenuItem(title: "显示主界面", action: #selector(showMainWindow), keyEquivalent: "")
         showItem.tag = MenuTag.show.rawValue
         menu.addItem(showItem)
@@ -206,7 +222,7 @@ final class MenuBarController: NSObject, ObservableObject {
 
     @objc private func statusItemPrimaryAction(_ sender: Any?) {
         guard let event = NSApp.currentEvent else {
-            toggleTimer()
+            togglePopover()
             return
         }
         switch event.type {
@@ -216,15 +232,16 @@ final class MenuBarController: NSObject, ObservableObject {
             if event.modifierFlags.contains(.control) || event.modifierFlags.contains(.option) {
                 popUpStatusMenu()
             } else {
-                toggleTimer()
+                togglePopover()
             }
         default:
-            toggleTimer()
+            togglePopover()
         }
     }
 
     private func popUpStatusMenu() {
         guard let statusItem, let button = statusItem.button, let menu = statusMenu else { return }
+        closePopover()
         updateStatusItem()
         // Prevent performClick from also firing the toggle action while the menu is up.
         let previousAction = button.action
@@ -242,6 +259,81 @@ final class MenuBarController: NSObject, ObservableObject {
                 button.action = previousAction ?? #selector(self.statusItemPrimaryAction(_:))
             }
         }
+    }
+
+    // MARK: - Popover panel
+
+    private func togglePopover() {
+        if let popover, popover.isShown {
+            closePopover()
+            return
+        }
+        // A click on the status item also lets a transient popover close itself;
+        // don't treat that same click as a request to reopen.
+        if let last = lastPopoverCloseAt, Date().timeIntervalSince(last) < 0.2 {
+            return
+        }
+        presentPopover()
+    }
+
+    private func presentPopover() {
+        guard let button = statusItem?.button, let taskStore = timerStore.taskStore else { return }
+        let root = MenuBarPanelView(
+            timerStore: timerStore,
+            taskStore: taskStore,
+            settings: timerStore.settings,
+            onClose: { [weak self] in self?.closePopover() },
+            onOpenMain: { [weak self] in self?.openMainFromPanel() },
+            onOpenSettings: { [weak self] in self?.openSettingsFromPanel() },
+            onQuit: { NSApp.terminate(nil) }
+        )
+        let hosting = NSHostingController(rootView: root)
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.animates = true
+        popover.contentSize = NSSize(width: 300, height: 244)
+        popover.contentViewController = hosting
+        popover.delegate = self
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        button.highlight(true)
+        self.popover = popover
+        self.popoverHosting = hosting
+    }
+
+    private func closePopover() {
+        guard let popover else { return }
+        popover.performClose(nil)
+        self.popover = nil
+        self.popoverHosting = nil
+        statusItem?.button?.highlight(false)
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        lastPopoverCloseAt = Date()
+        popover = nil
+        popoverHosting = nil
+        statusItem?.button?.highlight(false)
+    }
+
+    private func openMainFromPanel() {
+        closePopover()
+        WindowChromeController.shared.showMainWindow()
+        AppNavigation.post(.timer)
+    }
+
+    private func openSettingsFromPanel() {
+        closePopover()
+        NotificationCenter.default.post(name: AppNavigation.openSettings, object: nil)
+    }
+
+    @objc private func toggleMiniWindowFromMenu() {
+        closePopover()
+        NotificationCenter.default.post(name: AppNavigation.toggleMiniTimer, object: nil)
+    }
+
+    @objc private func toggleFocusModeFromMenu() {
+        closePopover()
+        NotificationCenter.default.post(name: AppNavigation.toggleFocusMode, object: nil)
     }
 
     private func bindStores() {
@@ -311,7 +403,7 @@ final class MenuBarController: NSObject, ObservableObject {
                 )
             }
             button.setAccessibilityLabel(
-                "iFocus \(time) 今日 \(done)/\(goal)。左键开始或暂停，右键打开菜单。"
+                "iFocus \(time) 今日 \(done)/\(goal)。左键打开面板，右键打开菜单。"
             )
         }
 
@@ -323,7 +415,7 @@ final class MenuBarController: NSObject, ObservableObject {
 
         let taskTitle = timerStore.taskStore?.activeTask?.title
         var tooltip = "iFocus\n\(mode.rawValue) \(time) · \(runStateLabel)\n今日 \(done)/\(goal) 番茄"
-        tooltip += "\n左键：开始/暂停 · 右键：菜单"
+        tooltip += "\n左键：面板 · 右键：菜单"
         if idleTooLong {
             tooltip += "\n已暂停 \(timerStore.pauseIdleMinutes) 分钟"
         }

@@ -2,6 +2,40 @@ import SwiftUI
 import AppKit
 import iFocusCore
 
+// MARK: - Row formatting
+
+private let dueFormatter: DateFormatter = {
+    let f = DateFormatter()
+    f.dateFormat = "M月d日"
+    f.locale = Locale(identifier: "zh_CN")
+    return f
+}()
+
+private let dueFormatterWithYear: DateFormatter = {
+    let f = DateFormatter()
+    f.dateFormat = "yyyy年M月d日"
+    f.locale = Locale(identifier: "zh_CN")
+    return f
+}()
+
+private func priorityIcon(_ n: Int) -> String {
+    switch n {
+    case 1: return "exclamationmark.circle"
+    case 2: return "exclamationmark.circle.fill"
+    case 3: return "exclamationmark.triangle"
+    default: return "exclamationmark.triangle.fill"
+    }
+}
+
+private func priorityColor(_ n: Int) -> Color {
+    switch n {
+    case 1: return .secondary
+    case 2: return AppTheme.warning
+    case 3: return AppTheme.danger
+    default: return AppTheme.violet
+    }
+}
+
 /// Crisp Apple-style checkmark path for animated completion drawing
 private struct CheckmarkShape: Shape {
     func path(in rect: CGRect) -> Path {
@@ -41,7 +75,7 @@ private struct AnimatedTaskCheckbox: View {
                 Circle()
                     .strokeBorder(
                         isCompleted
-                        ? Color(hex: "#10B981")
+                        ? AppTheme.success
                         : AppTheme.secondaryText(for: colorScheme).opacity(0.40),
                         lineWidth: isCompleted ? 1.5 : 1.25
                     )
@@ -49,7 +83,7 @@ private struct AnimatedTaskCheckbox: View {
                         Circle()
                             .fill(
                                 isCompleted
-                                ? Color(hex: "#10B981")
+                                ? AppTheme.success
                                 : (isPressed ? AppTheme.accent.opacity(0.08) : Color.clear)
                             )
                     )
@@ -155,9 +189,9 @@ struct TaskRowView: View {
     private var priorityRailColor: Color {
         switch task.priority {
         case 1: return Color.clear
-        case 2: return Color(hex: "#F59E0B")
-        case 3: return Color(hex: "#EF4444")
-        default: return Color(hex: "#8B5CF6")
+        case 2: return AppTheme.warning
+        case 3: return AppTheme.danger
+        default: return AppTheme.violet
         }
     }
     
@@ -182,16 +216,18 @@ struct TaskRowView: View {
             // Drag Handle (comfortable tactile grip for task reordering with hover feedback)
             if !completedFade && !isSelecting {
                 Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 10.5, weight: .semibold))
+                    .font(.system(size: AppTheme.iconAction, weight: .medium))
                     .foregroundColor(
                         isHovering
-                        ? AppTheme.secondaryText(for: colorScheme).opacity(0.75)
-                        : AppTheme.secondaryText(for: colorScheme).opacity(0.22)
+                        ? AppTheme.secondaryText(for: colorScheme).opacity(0.65)
+                        : AppTheme.secondaryText(for: colorScheme).opacity(0.16)
                     )
-                    .frame(width: 14, height: 22)
+                    .frame(width: 16, height: 24)
                     .contentShape(Rectangle())
                     .animation(AppTheme.springSnappy, value: isHovering)
-                    .help("拖拽可重新排序")
+                    .help("拖到侧栏改期 · 列表内拖动排序")
+                    .accessibilityLabel("拖动任务到侧栏改期，或在列表内排序")
+                    .draggable(task.id.uuidString)
                     .padding(.trailing, 4)
             }
             
@@ -205,11 +241,13 @@ struct TaskRowView: View {
                             .foregroundColor(isSelected ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme).opacity(0.5))
                     }
                     .buttonStyle(SpringScaleButtonStyle())
+                    .accessibilityLabel(isSelected ? "取消选择" : "选择任务")
                 } else {
                     AnimatedTaskCheckbox(isCompleted: completedFade) {
                         handleCheckboxTap()
                     }
                     .help(completedFade ? "标为未完成" : "标为完成")
+                    .accessibilityLabel(completedFade ? "标为未完成" : "标为完成")
                     
                     if !completedFade {
                         focusButton(density: density)
@@ -221,13 +259,13 @@ struct TaskRowView: View {
                     HStack(spacing: 6) {
                         if task.isPinned {
                             Image(systemName: "pin.fill")
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(.system(size: AppTheme.iconMeta, weight: .semibold))
                                 .foregroundColor(AppTheme.accent.opacity(0.85))
                                 .help("已置顶")
                         }
                         
                         Text(task.title)
-                            .font(.system(size: density == .compact ? 13.5 : 14.5, weight: .medium))
+                            .font(TypeScale.rowTitle(compact: density == .compact))
                             .foregroundColor(
                                 completedFade
                                 ? AppTheme.secondaryText(for: colorScheme).opacity(0.65)
@@ -241,9 +279,9 @@ struct TaskRowView: View {
                         if task.priority >= 2 && !completedFade {
                             HStack(spacing: 3) {
                                 Image(systemName: priorityIcon(task.priority))
-                                    .font(.system(size: 8.5, weight: .bold))
+                                    .font(.system(size: AppTheme.iconBadge, weight: .bold))
                                 Text("\(task.priority) 级")
-                                    .font(TypeScale.eyebrow)
+                                    .font(TypeScale.tag)
                             }
                             .foregroundColor(priorityColor(task.priority))
                             .padding(.horizontal, 5)
@@ -260,7 +298,7 @@ struct TaskRowView: View {
                         
                         if isActive && !completedFade {
                             Text(isRunning ? "专注中" : "当前")
-                                .font(.system(size: 9.5, weight: .bold))
+                                .font(TypeScale.tag)
                                 .foregroundColor(AppTheme.accent)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
@@ -272,13 +310,13 @@ struct TaskRowView: View {
                         
                         if task.isOverdue && !completedFade {
                             Text("逾期")
-                                .font(.system(size: 9.5, weight: .bold))
-                                .foregroundColor(Color(hex: "#EF4444"))
+                                .font(TypeScale.tag)
+                                .foregroundColor(AppTheme.danger)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Capsule().fill(Color(hex: "#EF4444").opacity(colorScheme == .light ? 0.10 : 0.18)))
+                                .background(Capsule().fill(AppTheme.danger.opacity(colorScheme == .light ? 0.10 : 0.18)))
                                 .overlay(
-                                    Capsule().strokeBorder(Color(hex: "#EF4444").opacity(0.25), lineWidth: 0.75)
+                                    Capsule().strokeBorder(AppTheme.danger.opacity(0.25), lineWidth: 0.75)
                                 )
                         }
                         
@@ -291,25 +329,25 @@ struct TaskRowView: View {
                         
                         HStack(spacing: 3) {
                             Image(systemName: task.category.icon)
-                                .font(.system(size: 8.5, weight: .semibold))
-                            Text(task.category.rawValue)
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(size: AppTheme.iconMeta, weight: .semibold))
+                            Text(task.category.name)
+                                .font(TypeScale.meta)
                         }
                         .foregroundColor(task.category.color.opacity(0.85))
                         
                         if task.recurrence != .none {
                             HStack(spacing: 3) {
                                 Image(systemName: "repeat")
-                                    .font(.system(size: 8.5, weight: .semibold))
+                                    .font(.system(size: AppTheme.iconMeta, weight: .semibold))
                                 Text(task.recurrence.rawValue)
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(TypeScale.meta)
                             }
-                            .foregroundColor(Color(hex: "#8B5CF6").opacity(0.85))
+                            .foregroundColor(AppTheme.violet.opacity(0.85))
                         }
                         
                         if hasNotes {
                             Image(systemName: "text.alignleft")
-                                .font(.system(size: 9, weight: .medium))
+                                .font(.system(size: AppTheme.iconMeta, weight: .medium))
                                 .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.55))
                                 .help(task.notes)
                         }
@@ -317,7 +355,7 @@ struct TaskRowView: View {
                         if task.hasLink {
                             Button(action: openTaskLink) {
                                 Image(systemName: "link")
-                                    .font(.system(size: 9, weight: .medium))
+                                    .font(.system(size: AppTheme.iconMeta, weight: .medium))
                                     .foregroundColor(AppTheme.accent.opacity(0.80))
                             }
                             .buttonStyle(.plain)
@@ -327,13 +365,13 @@ struct TaskRowView: View {
                         if let due = task.dueDate {
                             HStack(spacing: 3) {
                                 Image(systemName: "calendar")
-                                    .font(.system(size: 8.5, weight: .semibold))
+                                    .font(.system(size: AppTheme.iconMeta, weight: .semibold))
                                 Text(dueLabel(for: due))
-                                    .font(.system(size: 10, weight: .medium).monospacedDigit())
+                                    .font(TypeScale.meta.monospacedDigit())
                             }
                             .foregroundColor(
                                 task.isOverdue && !task.isCompleted
-                                ? Color(hex: "#EF4444").opacity(0.88)
+                                ? AppTheme.danger.opacity(0.88)
                                 : AppTheme.secondaryText(for: colorScheme).opacity(0.65)
                             )
                         }
@@ -346,11 +384,13 @@ struct TaskRowView: View {
                             } label: {
                                 HStack(spacing: 3) {
                                     Image(systemName: "checklist")
-                                        .font(.system(size: 9, weight: .semibold))
+                                        .font(.system(size: AppTheme.iconMeta, weight: .semibold))
                                     Text("\(ChecklistProgress.done(task.checklist))/\(task.checklist.count) \(task.unitLabel)")
-                                        .font(.system(size: 10, weight: .medium).monospacedDigit())
-                                    Image(systemName: isChecklistExpanded ? "chevron.up" : "chevron.down")
-                                        .font(.system(size: 7, weight: .bold))
+                                        .font(TypeScale.meta.monospacedDigit())
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 7.5, weight: .bold))
+                                        .rotationEffect(.degrees(isChecklistExpanded ? -180 : 0))
+                                        .animation(.easeOut(duration: 0.16), value: isChecklistExpanded)
                                 }
                                 .foregroundColor(AppTheme.accent.opacity(0.9))
                             }
@@ -359,7 +399,7 @@ struct TaskRowView: View {
                             .accessibilityLabel("学习进度：\(ChecklistProgress.done(task.checklist))/\(task.checklist.count) \(task.unitLabel)，\(isChecklistExpanded ? "收起" : "展开")清单")
                         } else if task.planKey != nil {
                             Label("路线", systemImage: "map")
-                                .font(.system(size: 9.5, weight: .medium))
+                                .font(TypeScale.meta)
                                 .foregroundColor(AppTheme.accent.opacity(0.85))
                         }
 
@@ -429,13 +469,14 @@ struct TaskRowView: View {
                         )
                     )
                 Image(systemName: focusButtonIcon)
-                    .font(.system(size: 9.5, weight: .bold))
+                    .font(.system(size: AppTheme.iconMeta, weight: .bold))
                     .foregroundColor(isActive ? .white : AppTheme.secondaryText(for: colorScheme))
             }
             .frame(width: 25 * density.scale, height: 25 * density.scale)
         }
         .buttonStyle(SpringScaleButtonStyle())
         .help(focusButtonHelp)
+        .accessibilityLabel(focusButtonHelp)
     }
 
     private var checklistPanel: some View {
@@ -444,7 +485,7 @@ struct TaskRowView: View {
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 ProgressView(value: Double(done), total: Double(max(1, items.count)))
-                    .tint(done == items.count ? Color.green : AppTheme.accent)
+                    .tint(done == items.count ? AppTheme.success : AppTheme.accent)
                 Text(ChecklistProgress.paceText(
                     done: done,
                     total: items.count,
@@ -453,7 +494,7 @@ struct TaskRowView: View {
                     today: Date(),
                     calendar: .current
                 ))
-                .font(.system(size: 10, weight: .medium))
+                .font(TypeScale.meta)
                 .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                 .lineLimit(2)
             }
@@ -467,7 +508,7 @@ struct TaskRowView: View {
                     } label: {
                         Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 14, weight: .regular))
-                            .foregroundColor(item.isDone ? Color.green : AppTheme.secondaryText(for: colorScheme).opacity(0.65))
+                            .foregroundColor(item.isDone ? AppTheme.success : AppTheme.secondaryText(for: colorScheme).opacity(0.65))
                     }
                     .buttonStyle(.plain)
                     .help(item.isDone ? "标记为未完成" : "标记此项完成")
@@ -475,7 +516,7 @@ struct TaskRowView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.title)
-                            .font(.system(size: 11.5, weight: .medium))
+                            .font(TypeScale.subheadline.weight(.medium))
                             .foregroundColor(item.isDone
                                 ? AppTheme.secondaryText(for: colorScheme)
                                 : AppTheme.primaryText(for: colorScheme))
@@ -492,14 +533,14 @@ struct TaskRowView: View {
                     if item.isFlagged {
                         Label("没懂", systemImage: "flag.fill")
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(.orange)
+                            .foregroundColor(AppTheme.warning)
                     }
                     Button {
                         taskStore.toggleChecklistFlag(taskID: task.id, itemID: item.id)
                     } label: {
                         Image(systemName: item.isFlagged ? "flag.slash" : "flag")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(item.isFlagged ? .orange : AppTheme.secondaryText(for: colorScheme).opacity(0.55))
+                            .font(.system(size: AppTheme.iconMeta, weight: .medium))
+                            .foregroundColor(item.isFlagged ? AppTheme.warning : AppTheme.secondaryText(for: colorScheme).opacity(0.55))
                     }
                     .buttonStyle(.plain)
                     .help(item.isFlagged ? "取消没懂标记" : "标记没懂，稍后回顾")
@@ -509,12 +550,12 @@ struct TaskRowView: View {
             }
             HStack {
                 Text("全部完成后，任务会自动归入已完成。")
-                    .font(.system(size: 9.5))
+                    .font(TypeScale.meta)
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.75))
                 Spacer()
                 Button("编辑清单", action: onEdit)
                     .buttonStyle(.plain)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(TypeScale.meta.weight(.semibold))
                     .foregroundColor(AppTheme.accent)
             }
             .padding(.top, 2)
@@ -534,13 +575,13 @@ struct TaskRowView: View {
                 taskStore.togglePin(for: task)
             } label: {
                 Image(systemName: task.isPinned ? "pin.fill" : "pin")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: AppTheme.iconAction, weight: .medium))
                     .foregroundColor(
                         task.isPinned
                         ? AppTheme.accent
                         : AppTheme.secondaryText(for: colorScheme).opacity(0.60)
                     )
-                    .frame(width: 22, height: 22)
+                    .frame(width: 24, height: 24)
                     .background(
                         Circle()
                             .fill(task.isPinned ? AppTheme.accent.opacity(0.12) : AppTheme.elevatedBackground(for: colorScheme).opacity(isHovering ? 0.8 : 0))
@@ -548,13 +589,14 @@ struct TaskRowView: View {
             }
             .buttonStyle(SpringScaleButtonStyle())
             .help(task.isPinned ? "取消置顶" : "置顶")
+            .accessibilityLabel(task.isPinned ? "取消置顶" : "置顶")
             .opacity(task.isPinned || isHovering || isActive ? 1 : 0)
 
             Button(action: onEdit) {
                 Image(systemName: "pencil")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: AppTheme.iconAction, weight: .medium))
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.60))
-                    .frame(width: 22, height: 22)
+                    .frame(width: 24, height: 24)
                     .background(
                         Circle()
                             .fill(AppTheme.elevatedBackground(for: colorScheme).opacity(isHovering ? 0.8 : 0))
@@ -562,11 +604,50 @@ struct TaskRowView: View {
             }
             .buttonStyle(SpringScaleButtonStyle())
             .help("编辑（也可双击）")
+            .accessibilityLabel("编辑任务")
+            .opacity(isHovering || isActive ? 1 : 0)
+
+            Menu {
+                Section("移到") {
+                    Button("今天") { taskStore.moveTask(id: task.id, to: .todayTask) }
+                    Button("明天") { taskStore.moveTask(id: task.id, to: .tomorrowTask) }
+                    Button("收集箱") { taskStore.moveTask(id: task.id, to: .inboxTask) }
+                }
+                Menu("优先级") {
+                    ForEach(1...4, id: \.self) { priority in
+                        Button {
+                            taskStore.updatePriority(for: task, to: priority)
+                        } label: {
+                            Text("\(priority) 级")
+                            if task.priority == priority { Image(systemName: "checkmark") }
+                        }
+                    }
+                }
+                Divider()
+                Button("删除任务", role: .destructive) {
+                    taskStore.deleteTask(task)
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: AppTheme.iconAction, weight: .semibold))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.60))
+                    .frame(width: 24, height: 24)
+                    .background(
+                        Circle()
+                            .fill(AppTheme.elevatedBackground(for: colorScheme).opacity(isHovering ? 0.8 : 0))
+                    )
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("更多操作")
+            .accessibilityLabel("更多任务操作")
             .opacity(isHovering || isActive ? 1 : 0)
         }
         .animation(AppTheme.springSnappy, value: isHovering)
-        .allowsHitTesting(showSecondaryActions)
+        .allowsHitTesting(isHovering || isActive)
     }
+
     
     private var focusButtonIcon: String {
         if isActive && isRunning { return "pause.fill" }
@@ -585,55 +666,69 @@ struct TaskRowView: View {
         if calendar.isDateInToday(due) { return "今天" }
         if calendar.isDateInTomorrow(due) { return "明天" }
         if calendar.isDateInYesterday(due) { return "昨天" }
-        return dueFormatter.string(from: due)
+        let sameYear = calendar.component(.year, from: due) == calendar.component(.year, from: Date())
+        return (sameYear ? dueFormatter : dueFormatterWithYear).string(from: due)
     }
     
     private var pomodoroProgress: some View {
         HStack(spacing: 3) {
             Image(systemName: "timer")
-                .font(.system(size: 9, weight: .semibold))
+                .font(.system(size: AppTheme.iconMeta, weight: .semibold))
                 .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.55))
             if task.completedPomodoros > task.estimatedPomodoros {
                 Text("+\(task.completedPomodoros - task.estimatedPomodoros)")
-                    .font(.system(size: 10, weight: .medium).monospacedDigit())
+                    .font(TypeScale.meta.monospacedDigit())
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.7))
             } else if task.estimatedPomodoros > 0 {
                 Text("\(task.completedPomodoros)/\(task.estimatedPomodoros)")
-                    .font(.system(size: 10, weight: .medium).monospacedDigit())
+                    .font(TypeScale.meta.monospacedDigit())
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.65))
             }
         }
     }
     
     private var rowBackground: some View {
-        let isOverdue = task.isOverdue && !task.isCompleted
+        let selected = isSelecting && isSelected
+        let emphasized = selected || isActive
+        let fill: Color
+        if selected {
+            fill = AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.16)
+        } else if isActive {
+            fill = AppTheme.accent.opacity(colorScheme == .light ? 0.055 : 0.10)
+        } else if isHovering {
+            fill = AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.96 : 0.86)
+        } else {
+            // Resting rows stay quiet: no shadow, a barely-there surface.
+            fill = AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.68 : 0.60)
+        }
+        let stroke: Color
+        if emphasized {
+            stroke = AppTheme.accent.opacity(selected ? 0.34 : 0.24)
+        } else if isHovering {
+            stroke = AppTheme.separator(for: colorScheme)
+        } else {
+            stroke = AppTheme.separatorLow(for: colorScheme).opacity(0.7)
+        }
         return AppTheme.squircle(radius: AppTheme.radiusM)
-            .fill(
-                isActive
-                ? AppTheme.cardBackground(for: colorScheme)
-                : AppTheme.cardBackground(for: colorScheme)
+            .fill(fill)
+            .overlay(
+                AppTheme.squircle(radius: AppTheme.radiusM)
+                    .strokeBorder(stroke, lineWidth: 1)
             )
             .overlay(
                 AppTheme.squircle(radius: AppTheme.radiusM)
                     .strokeBorder(
-                        isActive
-                        ? AppTheme.accent.opacity(0.38)
-                        : (isOverdue
-                           ? Color(hex: "#EF4444").opacity(0.24)
-                           : (isHovering
-                              ? AppTheme.separator(for: colorScheme)
-                              : AppTheme.separatorLow(for: colorScheme))),
-                        lineWidth: isActive ? 1.25 : 1
+                        AppTheme.cardInnerHighlight(for: colorScheme),
+                        lineWidth: isHovering || emphasized ? 0.75 : 0
                     )
             )
-            .overlay(
-                AppTheme.squircle(radius: AppTheme.radiusM)
-                    .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.75)
+            .shadow(
+                color: isHovering || emphasized ? AppTheme.softShadow(for: colorScheme) : .clear,
+                radius: isHovering ? 8 : 4,
+                y: 2
             )
-            .multiLayerShadow(
-                elevation: isHovering ? .elevated : .row,
-                colorScheme: colorScheme
-            )
+            .animation(.easeOut(duration: 0.12), value: isHovering)
+            .animation(.easeOut(duration: 0.16), value: selected)
     }
     
     @ViewBuilder
@@ -679,13 +774,13 @@ struct TaskRowView: View {
         }
         
         Menu("修改分类") {
-            ForEach(TaskCategory.allCases) { category in
+            ForEach(taskStore.allCategories) { category in
                 Button {
                     taskStore.updateCategory(for: task, to: category)
                 } label: {
                     HStack {
-                        Text(category.rawValue)
-                        if task.category == category { Image(systemName: "checkmark") }
+                        Label(category.name, systemImage: category.icon)
+                        if task.category.id == category.id { Image(systemName: "checkmark") }
                     }
                 }
             }

@@ -44,26 +44,32 @@ struct ProfileView: View {
     }
     
     private var categoryStats: [ProfileCategoryStat] {
-        var minutesStats = [TaskCategory: Int]()
-        var countStats = [TaskCategory: Int]()
+        var minutesByID = [String: Int]()
+        var countByID = [String: Int]()
+        var categoriesByID = Dictionary(
+            uniqueKeysWithValues: taskStore.categoriesInUse.map { ($0.id, $0) }
+        )
         for session in taskStore.focusSessions {
-            if let category = session.taskCategory {
-                minutesStats[category, default: 0] += session.durationMinutes
-                countStats[category, default: 0] += 1
+            let category: TaskCategory
+            if let stored = session.taskCategory {
+                category = stored
             } else if let taskId = session.taskId,
                       let task = taskStore.tasks.first(where: { $0.id == taskId }) {
-                minutesStats[task.category, default: 0] += session.durationMinutes
-                countStats[task.category, default: 0] += 1
+                category = task.category
             } else {
-                minutesStats[.other, default: 0] += session.durationMinutes
-                countStats[.other, default: 0] += 1
+                category = .other
             }
+            if categoriesByID[category.id] == nil {
+                categoriesByID[category.id] = category
+            }
+            minutesByID[category.id, default: 0] += session.durationMinutes
+            countByID[category.id, default: 0] += 1
         }
-        return TaskCategory.allCases.map { cat in
+        return taskStore.categoriesInUse.map { cat in
             ProfileCategoryStat(
-                category: cat,
-                minutes: minutesStats[cat] ?? 0,
-                count: countStats[cat] ?? 0
+                category: categoriesByID[cat.id] ?? cat,
+                minutes: minutesByID[cat.id] ?? 0,
+                count: countByID[cat.id] ?? 0
             )
         }
         .sorted { $0.minutes > $1.minutes }

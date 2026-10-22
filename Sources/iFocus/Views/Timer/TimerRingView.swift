@@ -17,6 +17,7 @@ struct TimerRingView: View {
     var sessionIndex: Int = 1
     var completedInCycle: Int = 0
     var cycleLength: Int = 4
+    var isPaused: Bool = false
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var animatedProgress: CGFloat = 1.0
@@ -29,6 +30,7 @@ struct TimerRingView: View {
     }
 
     private var modeIcon: String {
+        if isPaused { return "pause.fill" }
         if isWorkMode {
             return "flame.fill"
         } else if modeTitle.contains("长") {
@@ -215,7 +217,7 @@ struct TimerRingView: View {
                 EyebrowTag(
                     text: modeTitle,
                     icon: modeIcon,
-                    color: modeColor,
+                    color: isPaused ? AppTheme.paused : modeColor,
                     isPill: true
                 )
 

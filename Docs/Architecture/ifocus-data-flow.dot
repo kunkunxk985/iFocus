@@ -1,0 +1,137 @@
+digraph iFocusDataFlow {
+    rankdir=TB;
+    graph [fontname="PingFang SC", fontsize=12, bgcolor="transparent", pad=0.25, nodesep=0.35, ranksep=0.55, compound=true];
+    node [fontname="PingFang SC", fontsize=10, shape=box, style="rounded,filled", fillcolor="#FFFFFF", color="#CBD5E1", penwidth=1, margin="0.14,0.08"];
+    edge [fontname="PingFang SC", fontsize=9, color="#64748B", arrowsize=0.7];
+
+    user [label="用户\n计划任务 · 开始专注", shape=oval, fillcolor="#DBEAFE", color="#2563EB"];
+    automation [label="Shortcuts / Alfred\nifocus://", fillcolor="#F3F4F6", color="#9CA3AF"];
+
+    subgraph cluster_ui {
+        label="UI 层 · SwiftUI + AppKit";
+        color="#DBEAFE";
+        style="rounded";
+
+        main [label="主窗口\n侧栏 · 专注钟 · 任务 · 统计 · 资料"];
+        settings [label="设置窗口\n偏好 · 备份 · 通知"];
+        menu [label="菜单栏\n倒计时与快捷操作"];
+    }
+
+    subgraph cluster_app {
+        label="App shell";
+        color="#E0F2FE";
+        style="rounded";
+
+        deepLink [label="DeepLinkRouter + AppNavigation\nURL / 通知路由"];
+    }
+
+    subgraph cluster_state {
+        label="状态与领域层 · ObservableObject";
+        color="#EDE9FE";
+        style="rounded";
+
+        timer [label="TimerStore\n计时状态机 · 快照 · 通知"];
+        tasks [label="TaskStore\n任务 + 专注记录"];
+        prefs [label="SettingsStore\n偏好 · 外观 · 登录项"];
+        analytics [label="AnalyticsDashboardModel\n统计派生"];
+    }
+
+    subgraph cluster_services {
+        label="本地服务";
+        color="#FFEDD5";
+        style="rounded";
+
+        backup [label="DataBackupService\n导出 / 恢复"];
+        study [label="StudyLogWriter\nCSV + 周报"];
+        upgrade [label="PreUpgradeGuard\n版本前复制"];
+        login [label="LaunchAtLogin\nSMAppService"];
+    }
+
+    subgraph cluster_core {
+        label="iFocusCore · 纯逻辑";
+        color="#D1FAE5";
+        style="rounded";
+
+        core [label="过滤 · 搜索 · 统计\n格式化 · 计划 · 备份格式"];
+    }
+
+    subgraph cluster_storage {
+        label="本地持久化";
+        color="#F1F5F9";
+        style="rounded";
+
+        files [label="Application Support\nJSON\n任务 · 记录 · 状态 · 快照"];
+        defaults [label="UserDefaults\n偏好 · 窗口布局"];
+        studyFiles [label="~/StudyLog\nCSV + 周报"];
+        backupFolder [label="备份文件夹\nJSON + manifest"];
+        preUpgrade [label="pre-upgrade/\n版本前副本"];
+    }
+
+    subgraph cluster_os {
+        label="macOS / 外部";
+        color="#F3F4F6";
+        style="rounded";
+
+        notifications [label="通知中心\nUNUserNotificationCenter"];
+        finder [label="Finder\n数据 / 学习记录"];
+        sysSettings [label="系统设置\n通知 / 登录项 / 专注模式"];
+    }
+
+    user -> main [label="任务与计时操作"];
+    user -> settings [label="偏好设置"];
+    user -> menu [label="快捷操作"];
+    automation -> deepLink [label="URL"];
+
+    deepLink -> timer [label="start / pause / toggle / skip"];
+    deepLink -> main [label="navigate"];
+
+    main -> timer [label="开始 / 暂停 / 跳过 / 重置"];
+    main -> tasks [label="增删改查 · 列表筛选"];
+    main -> prefs [label="读取密度 / 外观"];
+    main -> analytics [label="读取派生统计"];
+
+    settings -> prefs [label="读写偏好"];
+    settings -> tasks [label="记录概览"];
+    settings -> timer [label="通知状态 / 测试"];
+    settings -> backup [label="导出 / 恢复"];
+
+    menu -> timer [label="起停 / 模式 / 跳过"];
+    menu -> tasks [label="任务选择"];
+
+    timer -> tasks [label="commitSession\nlogFocusSession"];
+    tasks -> analytics [label="任务 / 记录"];
+    timer -> analytics [label="今日统计"];
+
+    tasks -> core [label="过滤 / 搜索"];
+    timer -> core [label="时间格式化"];
+    analytics -> core [label="统计 / 时间范围"];
+    backup -> core [label="备份格式"];
+    study -> core [label="CSV / 周报格式"];
+
+    tasks -> study [label="提交会话"];
+    study -> studyFiles [label="写入"];
+
+    tasks -> files [label="tasks.json / focus_sessions.json\napp_state.json"];
+    timer -> files [label="timer_session.json"];
+    prefs -> defaults [label="设置"];
+
+    upgrade -> files [label="读取"];
+    upgrade -> preUpgrade [label="复制"];
+
+    backup -> files [label="读取 / 恢复"];
+    backup -> prefs [label="设置 JSON 读写"];
+    backup -> backupFolder [label="写入 / 读取"];
+
+    timer -> notifications [label="预约结束提醒"];
+    notifications -> user [label="结束提醒"];
+
+    prefs -> login [label="应用登录项偏好"];
+    login -> sysSettings [label="注册登录项"];
+
+    settings -> finder [label="打开数据 / 学习记录"];
+    settings -> sysSettings [label="打开系统设置"];
+    user -> finder [label="查看"];
+    user -> sysSettings [label="授权 / 设置"];
+
+    user -> backupFolder [label="选择 / 保管"];
+}

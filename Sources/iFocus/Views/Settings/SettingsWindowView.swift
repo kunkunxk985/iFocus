@@ -7,6 +7,7 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
     case timer = "专注与计时"
     case appearance = "外观与声音"
     case data = "数据与备份"
+    case status = "状态中心"
 
     var id: String { rawValue }
 
@@ -16,6 +17,7 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
         case .timer: return "timer"
         case .appearance: return "paintpalette.fill"
         case .data: return "externaldrive.fill"
+        case .status: return "checkmark.shield.fill"
         }
     }
 
@@ -25,6 +27,7 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
         case .timer: return Color(hex: "#E85A3C")
         case .appearance: return Color(hex: "#8B5CF6")
         case .data: return Color(hex: "#10B981")
+        case .status: return Color(hex: "#0EA5E9")
         }
     }
 
@@ -34,19 +37,84 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
         case .timer: return "番茄时长、自动流转与每日目标"
         case .appearance: return "界面外观、菜单栏与提示音"
         case .data: return "本地数据存储与安全备份"
+        case .status: return "权限、系统与数据健康"
         }
+    }
+
+    /// Extra search keywords for the row titles inside the pane; keeps search useful
+    /// without building a full settings index.
+    var searchTerms: String {
+        switch self {
+        case .general:
+            return "登录 开机 自动打开 智能 今日 清单 快捷键 空格 暂停 常用操作 新手 引导 欢迎 帮助 教程 回顾 分类 标签 自定义 颜色 图标 管理"
+        case .timer:
+            return "正计时 专注时长 短休息 长休息 长休 自动休息 自动专注 严格自律 每日目标 暂停提醒 系统专注模式"
+        case .appearance:
+            return "外观 浅色 深色 跟随系统 强调色 菜单栏 图标 动态光晕 动效 界面密度 舒适 紧凑 提示音 声音 触觉 程序坞 Dock"
+        case .data:
+            return "数据 本地 离线 任务 专注历史 导出 备份 恢复 快照 自动保护 访达 Finder 文件夹 学习记录 CSV 周报 存储"
+        case .status:
+            return "状态 健康 权限 通知 登录项 系统专注 数据 文件 备份 版本 检查"
+        }
+    }
+
+    func matches(_ query: String) -> Bool {
+        let tokens = query.split(whereSeparator: \.isWhitespace)
+        guard !tokens.isEmpty else { return true }
+        let haystack = "\(rawValue) \(subtitle) \(searchTerms)"
+        return tokens.allSatisfy { haystack.localizedCaseInsensitiveContains(String($0)) }
     }
 }
 
 struct SettingsWindowView: View {
     @State private var selectedPanel: SettingsWindowPanel = .general
     @State private var pendingRestorePreview: DataBackupService.RestorePreview?
+    @State private var showCategoryManager = false
+    @ObservedObject private var search = SettingsSearchModel.shared
+    @FocusState private var focusedPanel: SettingsWindowPanel?
     @EnvironmentObject var settings: SettingsStore
     @EnvironmentObject var timerStore: TimerStore
     @EnvironmentObject var taskStore: TaskStore
     @Environment(\.colorScheme) private var colorScheme
 
     private let sidebarWidth: CGFloat = 200
+
+    private var visiblePanels: [SettingsWindowPanel] {
+        SettingsWindowPanel.allCases.filter { $0.matches(search.query) }
+    }
+
+    private var isSearching: Bool {
+        !search.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Keeps the detail pane and the sidebar on a pane that survived the filter.
+    private var activePanel: SettingsWindowPanel {
+        visiblePanels.contains(selectedPanel) ? selectedPanel : (visiblePanels.first ?? selectedPanel)
+    }
+
+    /// Plain on/off confirmations are visible from the switch itself; only surface
+    /// messages that need the user to do something (approval, failure, system removal).
+    private var loginItemFeedback: String? {
+        guard let feedback = settings.launchAtLoginFeedback else { return nil }
+        if feedback.hasPrefix("已开启") || feedback.hasPrefix("已关闭") { return nil }
+        return feedback
+    }
+
+    private var healthIssueCount: Int {
+        var count = 0
+        if taskStore.dataLoadErrorMessage != nil { count += 1 }
+        if timerStore.notificationStatus == "已拒绝" { count += 1 }
+        if LaunchAtLogin.status == .requiresApproval || LaunchAtLogin.status == .notFound { count += 1 }
+        if let feedback = settings.backupFeedback,
+           feedback.contains("失败") || feedback.contains("未完成") {
+            count += 1
+        }
+        return count
+    }
+
+    private var statusPanel: some View {
+        SettingsStatusPanel(onOpenData: { selectedPanel = .data })
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -55,36 +123,51 @@ struct SettingsWindowView: View {
 
             // Content pane
             VStack(alignment: .leading, spacing: 0) {
-                panelHeader
+                if visiblePanels.isEmpty {
+                    searchEmptyState
+                } else {
+                    panelHeader
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        switch selectedPanel {
-                        case .general: generalPanel
-                        case .timer: timerPanel
-                        case .appearance: appearancePanel
-                        case .data: dataPanel
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            switch activePanel {
+                            case .general: generalPanel
+                            case .timer: timerPanel
+                            case .appearance: appearancePanel
+                            case .data: dataPanel
+                            case .status: statusPanel
+                            }
                         }
+                        .padding(.horizontal, 28)
+                        .padding(.bottom, 32)
                     }
-                    .padding(.horizontal, 28)
-                    .padding(.bottom, 32)
+                    .softScroll()
                 }
-                .softScroll()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(AppTheme.contentBackground(for: colorScheme).ignoresSafeArea())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Same canvas as the main window behind the glass sidebar card; with a clear root the
-        // margin around the card and the gap before the content pane showed the desktop.
+        // Same canvas as the main window behind the sidebar material; with a clear root the
+        // margin around the sidebar and the gap before the content pane showed the desktop.
         .background(AppTheme.contentBackground(for: colorScheme).ignoresSafeArea())
-        // Like the main window: the sidebar card runs under the transparent titlebar so the
-        // traffic lights sit on it. Otherwise they float over the clear window background,
-        // look misplaced, and clicks on them can fall through the window.
+        // Like the main window: the sidebar runs full-bleed under the transparent titlebar
+        // so the traffic lights sit on it. Otherwise they float over the clear window
+        // background, look misplaced, and clicks on them can fall through the window.
         .ignoresSafeArea(.container, edges: .top)
+        // The app's accent is a preference, not the system accent, so controls must
+        // inherit it explicitly or prominent buttons fall back to system blue.
+        .tint(AppTheme.accent)
         .onAppear {
             timerStore.updateNotificationStatus()
             settings.refreshLaunchAtLoginFromSystem()
+            if let window = NSApplication.shared.windows.first(where: { $0.title == "设置" }) {
+                SettingsWindowToolbar.shared.install(on: window)
+            }
+            reconcileSelectionWithSearch()
+        }
+        .onChange(of: search.query) { _ in
+            reconcileSelectionWithSearch()
         }
         .onDisappear {
             settings.sanitizeUsername()
@@ -99,6 +182,10 @@ struct SettingsWindowView: View {
                 secondaryButton: .cancel(Text("取消"))
             )
         }
+        .sheet(isPresented: $showCategoryManager) {
+            CategoryManagementView()
+                .environmentObject(taskStore)
+        }
     }
 
     // MARK: - Sidebar
@@ -106,19 +193,18 @@ struct SettingsWindowView: View {
     private var settingsSidebar: some View {
         ZStack {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .center, spacing: 0) {
-                    Spacer(minLength: 0)
-                }
-                .frame(height: AppTheme.topHeaderHeight)
+                // Clear the 52pt titlebar band, then a little breathing room.
+                Color.clear
+                    .frame(height: AppTheme.detailTopInset + 4)
 
-                Text("偏好设置")
-                    .font(.system(size: 13, weight: .bold))
+                Text(isSearching ? "搜索结果" : "设置")
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                     .padding(.horizontal, 16)
                     .padding(.bottom, 12)
 
                 VStack(spacing: 3) {
-                    ForEach(SettingsWindowPanel.allCases) { panel in
+                    ForEach(visiblePanels) { panel in
                         settingsSidebarRow(panel)
                     }
                 }
@@ -128,10 +214,12 @@ struct SettingsWindowView: View {
 
                 // Footer version mark
                 VStack(alignment: .leading, spacing: 3) {
-                    Divider().opacity(0.3)
+                    Rectangle()
+                        .fill(AppTheme.separator(for: colorScheme).opacity(0.6))
+                        .frame(height: 0.5)
                     HStack {
                         Text("iFocus \(AppVersion.short) (\(AppVersion.build))")
-                            .font(.system(size: 11, design: .rounded))
+                            .font(.system(size: 11, design: .rounded).monospacedDigit())
                             .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.75))
                         Spacer()
                     }
@@ -141,14 +229,14 @@ struct SettingsWindowView: View {
                 }
             }
         }
-        .adaptiveGlass(cornerRadius: AppTheme.radiusXL, fallbackMaterial: .sidebar)
-        .padding(.leading, 8)
+        // Full-bleed, like the main window: the material runs under the titlebar so
+        // the window buttons sit on it, and the window's own shape clips the corners.
+        .adaptiveGlass(cornerRadius: 0, fallbackMaterial: .sidebar)
         .padding(.trailing, 4)
-        .padding(.vertical, 8)
     }
 
     private func settingsSidebarRow(_ panel: SettingsWindowPanel) -> some View {
-        let isSelected = selectedPanel == panel
+        let isSelected = activePanel == panel
         return Button {
             withAnimation(.easeOut(duration: 0.15)) {
                 selectedPanel = panel
@@ -156,59 +244,91 @@ struct SettingsWindowView: View {
         } label: {
             HStack(spacing: 10) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(panel.iconColor.opacity(isSelected ? 0.22 : 0.12))
+                    RoundedRectangle(cornerRadius: 6.5, style: .continuous)
+                        .fill(panel.iconColor.opacity(isSelected ? 0.18 : 0.12))
                         .frame(width: 26, height: 26)
                     Image(systemName: panel.icon)
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundColor(panel.iconColor)
+
+                    if panel == .status, healthIssueCount > 0 {
+                        Circle()
+                            .fill(AppTheme.warning)
+                            .frame(width: 6, height: 6)
+                            .overlay(
+                                Circle().stroke(AppTheme.cardBackground(for: colorScheme), lineWidth: 1.5)
+                            )
+                            .offset(x: 9, y: -9)
+                    }
                 }
 
                 Text(panel.rawValue)
-                    .font(.system(size: 13.5, weight: isSelected ? .semibold : .medium))
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                     .foregroundColor(isSelected
                                      ? AppTheme.primaryText(for: colorScheme)
-                                     : AppTheme.primaryText(for: colorScheme).opacity(0.85))
+                                     : AppTheme.primaryText(for: colorScheme).opacity(0.86))
 
                 Spacer()
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isSelected
-                          ? AppTheme.accent.opacity(colorScheme == .light ? 0.11 : 0.18)
-                          : Color.clear)
-            )
-            .overlay(alignment: .leading) {
-                if isSelected {
-                    Capsule()
-                        .fill(AppTheme.accent)
-                        .frame(width: 3, height: 16)
-                        .padding(.leading, 1)
-                }
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.vertical, 5)
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsSidebarRowButtonStyle(isSelected: isSelected))
+        .focused($focusedPanel, equals: panel)
+        .onMoveCommand { direction in
+            switch direction {
+            case .up: movePanelSelection(by: -1)
+            case .down: movePanelSelection(by: 1)
+            default: break
+            }
+        }
+        .overlay {
+            if focusedPanel == panel {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(AppTheme.accent.opacity(0.9), lineWidth: 2)
+            }
+        }
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func movePanelSelection(by offset: Int) {
+        let panels = visiblePanels
+        guard !panels.isEmpty else { return }
+        let currentIndex = panels.firstIndex(of: activePanel) ?? 0
+        let nextIndex = min(max(currentIndex + offset, 0), panels.count - 1)
+        guard nextIndex != currentIndex else { return }
+        withAnimation(.easeOut(duration: 0.15)) {
+            selectedPanel = panels[nextIndex]
+        }
+        focusedPanel = panels[nextIndex]
+    }
+
+    private func reconcileSelectionWithSearch() {
+        if !visiblePanels.contains(selectedPanel), let first = visiblePanels.first {
+            selectedPanel = first
+        }
+        if let focusedPanel, !visiblePanels.contains(focusedPanel) {
+            self.focusedPanel = visiblePanels.first
+        }
     }
 
     private var panelHeader: some View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(selectedPanel.iconColor.opacity(0.14))
+                    .fill(activePanel.iconColor.opacity(0.14))
                     .frame(width: 34, height: 34)
-                Image(systemName: selectedPanel.icon)
+                Image(systemName: activePanel.icon)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(selectedPanel.iconColor)
+                    .foregroundColor(activePanel.iconColor)
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(selectedPanel.rawValue)
+                Text(activePanel.rawValue)
                     .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                Text(selectedPanel.subtitle)
+                Text(activePanel.subtitle)
                     .font(.system(size: 12))
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
@@ -217,6 +337,24 @@ struct SettingsWindowView: View {
         .padding(.horizontal, 28)
         .padding(.top, AppTheme.detailTopInset)
         .padding(.bottom, 16)
+    }
+
+    private var searchEmptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 26, weight: .light))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.7))
+            Text("没有找到相关设置")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            Button("清除搜索") {
+                SettingsWindowToolbar.shared.clearSearchField()
+            }
+            .buttonStyle(.borderless)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(AppTheme.accent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Panels
@@ -238,6 +376,28 @@ struct SettingsWindowView: View {
                     ))
                     .toggleStyle(.switch)
                     .labelsHidden()
+                    .accessibilityLabel("登录时自动打开 iFocus")
+                }
+
+                if let feedback = loginItemFeedback {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(.orange)
+                        Text(feedback)
+                            .font(.system(size: 11.5))
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Button("打开系统设置…") {
+                            LaunchAtLogin.openLoginItemsSettings()
+                        }
+                        .buttonStyle(.borderless)
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundColor(AppTheme.accent)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 10)
                 }
 
                 SettingsDivider()
@@ -249,13 +409,14 @@ struct SettingsWindowView: View {
                     Toggle("", isOn: $settings.smartLaunchLanding)
                         .toggleStyle(.switch)
                         .labelsHidden()
+                        .accessibilityLabel("智能进入今日清单")
                 }
             }
 
             SettingsGroup(title: "快捷键与操作") {
                 SettingsRow(
-                    title: "开始 / 暂停全局快捷键",
-                    subtitle: "处于前台时随时起停计时"
+                    title: "开始 / 暂停快捷键",
+                    subtitle: "应用在前台时随时起停计时"
                 ) {
                     Picker("", selection: $settings.toggleShortcut) {
                         ForEach(ToggleShortcutPreset.allCases) { preset in
@@ -264,13 +425,15 @@ struct SettingsWindowView: View {
                     }
                     .labelsHidden()
                     .frame(width: 140)
+                    .accessibilityLabel("开始 / 暂停快捷键")
                 }
 
                 SettingsDivider()
 
                 SettingsRow(
                     title: "常用操作一览",
-                    subtitle: "提高日常使用效率"
+                    subtitle: "提高日常使用效率",
+                    alignment: .top
                 ) {
                     VStack(alignment: .trailing, spacing: 5) {
                         shortcutBadge("空格", "专注页快速起停")
@@ -279,6 +442,34 @@ struct SettingsWindowView: View {
                         shortcutBadge("⌘3", "今天清单")
                         shortcutBadge("⌘,", "打开设置")
                     }
+                }
+            }
+
+            SettingsGroup(title: "任务与分类") {
+                SettingsRow(
+                    title: "管理分类",
+                    subtitle: "名称、颜色与图标会同步到任务、筛选、统计和资料"
+                ) {
+                    Button("管理…") {
+                        showCategoryManager = true
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+
+            SettingsGroup(title: "引导与帮助") {
+                SettingsRow(
+                    title: "新手引导",
+                    subtitle: "重新了解专注、清单与提醒设置"
+                ) {
+                    Button("重新播放…") {
+                        UserDefaults.standard.set(true, forKey: AppNavigation.pendingOnboardingReplayKey)
+                        NotificationCenter.default.post(name: AppNavigation.showOnboarding, object: nil)
+                        WindowChromeController.shared.showMainWindow()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
             }
         }
@@ -316,6 +507,7 @@ struct SettingsWindowView: View {
                     Toggle("", isOn: $settings.countUpWork)
                         .toggleStyle(.switch)
                         .labelsHidden()
+                        .accessibilityLabel("专注用正计时")
                 }
                 .onChange(of: settings.countUpWork) { _ in
                     if timerStore.mode == .work { timerStore.syncDurationFromSettingsIfIdle() }
@@ -373,6 +565,7 @@ struct SettingsWindowView: View {
                         Stepper("", value: $settings.longBreakEvery, in: 2...8, step: 1)
                             .labelsHidden()
                             .controlSize(.small)
+                            .accessibilityLabel("长休触发间隔")
                     }
                 }
             }
@@ -385,6 +578,7 @@ struct SettingsWindowView: View {
                     Toggle("", isOn: $settings.autoStartBreaks)
                         .toggleStyle(.switch)
                         .labelsHidden()
+                        .accessibilityLabel("专注结束后自动休息")
                 }
 
                 SettingsDivider()
@@ -396,6 +590,7 @@ struct SettingsWindowView: View {
                     Toggle("", isOn: $settings.autoStartWork)
                         .toggleStyle(.switch)
                         .labelsHidden()
+                        .accessibilityLabel("休息结束后自动专注")
                 }
 
                 SettingsDivider()
@@ -407,6 +602,19 @@ struct SettingsWindowView: View {
                     Toggle("", isOn: $settings.strictMode)
                         .toggleStyle(.switch)
                         .labelsHidden()
+                        .accessibilityLabel("严格自律模式")
+                }
+
+                SettingsDivider()
+
+                SettingsRow(
+                    title: "开始专注时提示系统专注模式",
+                    subtitle: "开始前提醒开启系统专注模式，减少通知打扰"
+                ) {
+                    Toggle("", isOn: $settings.showFocusModeHintOnStart)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .accessibilityLabel("开始专注时提示系统专注模式")
                 }
             }
 
@@ -422,6 +630,7 @@ struct SettingsWindowView: View {
                         Stepper("", value: $settings.dailyGoal, in: 1...20, step: 1)
                             .labelsHidden()
                             .controlSize(.small)
+                            .accessibilityLabel("每日目标番茄数")
                     }
                 }
 
@@ -439,11 +648,13 @@ struct SettingsWindowView: View {
                                 Stepper("", value: $settings.pauseReminderMinutes, in: 1...60, step: 1)
                                     .labelsHidden()
                                     .controlSize(.small)
+                                    .accessibilityLabel("暂停提醒分钟数")
                             }
                         }
                         Toggle("", isOn: $settings.pauseReminderEnabled)
                             .toggleStyle(.switch)
                             .labelsHidden()
+                            .accessibilityLabel("暂停过久提醒")
                     }
                 }
             }
@@ -466,6 +677,24 @@ struct SettingsWindowView: View {
                     .labelsHidden()
                     .pickerStyle(.segmented)
                     .frame(width: 210)
+                    .accessibilityLabel("外观模式")
+                }
+
+                SettingsDivider()
+
+                SettingsRow(
+                    title: "界面密度",
+                    subtitle: "列表、卡片与专注页的间距"
+                ) {
+                    Picker("", selection: $settings.uiDensity) {
+                        ForEach(UIDensity.allCases) { density in
+                            Text(density.label).tag(density)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 140)
+                    .accessibilityLabel("界面密度")
                 }
 
                 SettingsDivider()
@@ -498,6 +727,8 @@ struct SettingsWindowView: View {
                             }
                             .buttonStyle(.plain)
                             .help(preset.label)
+                            .accessibilityLabel(preset.label)
+                            .accessibilityAddTraits(selected ? .isSelected : [])
                         }
                     }
                 }
@@ -515,6 +746,7 @@ struct SettingsWindowView: View {
                     }
                     .labelsHidden()
                     .frame(width: 130)
+                    .accessibilityLabel("菜单栏图标样式")
                 }
 
                 SettingsDivider()
@@ -526,10 +758,11 @@ struct SettingsWindowView: View {
                     Toggle("", isOn: $settings.decorativeMotionEnabled)
                         .toggleStyle(.switch)
                         .labelsHidden()
+                        .accessibilityLabel("动态光晕与微动效")
                 }
             }
 
-            SettingsGroup(title: "声音与通知") {
+            SettingsGroup(title: "声音与反馈") {
                 SettingsRow(
                     title: "结束提示音",
                     subtitle: "专注钟或休息倒计时完成时播放"
@@ -537,6 +770,7 @@ struct SettingsWindowView: View {
                     Toggle("", isOn: $settings.soundEnabled)
                         .toggleStyle(.switch)
                         .labelsHidden()
+                        .accessibilityLabel("结束提示音")
                 }
 
                 if settings.soundEnabled {
@@ -554,6 +788,7 @@ struct SettingsWindowView: View {
                             }
                             .labelsHidden()
                             .frame(width: 120)
+                            .accessibilityLabel("提示音效")
 
                             Button {
                                 NSSound(named: settings.soundName)?.play()
@@ -569,6 +804,7 @@ struct SettingsWindowView: View {
                             }
                             .buttonStyle(.plain)
                             .help("试听声音")
+                            .accessibilityLabel("试听提示音")
                         }
                     }
                 }
@@ -582,45 +818,19 @@ struct SettingsWindowView: View {
                     Toggle("", isOn: $settings.hapticsEnabled)
                         .toggleStyle(.switch)
                         .labelsHidden()
+                        .accessibilityLabel("触觉反馈")
                 }
 
                 SettingsDivider()
 
                 SettingsRow(
-                    title: "系统通知",
-                    subtitle: "倒计时结束时在屏幕右上角发送横幅"
-                ) {
-                    HStack(spacing: 8) {
-                        Text(timerStore.notificationStatus)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(timerStore.notificationStatus == "已拒绝" ? .red : AppTheme.secondaryText(for: colorScheme))
-
-                        if timerStore.notificationStatus == "已授权" {
-                            Button("发送测试通知") {
-                                timerStore.notificationFeedback = nil
-                                timerStore.sendTestNotification()
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                        } else {
-                            Button(timerStore.notificationActionTitle) {
-                                timerStore.handleNotificationPermissionAction()
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                        }
-                    }
-                }
-
-                SettingsDivider()
-
-                SettingsRow(
-                    title: "Dock 图标轻弹",
-                    subtitle: "计时结束时 Dock 图标轻弹一次"
+                    title: "程序坞图标轻弹",
+                    subtitle: "计时结束时程序坞图标轻弹一次"
                 ) {
                     Toggle("", isOn: $settings.dockBounceOnComplete)
                         .toggleStyle(.switch)
                         .labelsHidden()
+                        .accessibilityLabel("程序坞图标轻弹")
                 }
             }
         }
@@ -654,7 +864,7 @@ struct SettingsWindowView: View {
             SettingsGroup(title: "备份与恢复") {
                 SettingsRow(
                     title: "导出完整数据备份",
-                    subtitle: "包含所有清单任务、番茄记录与偏好设置"
+                    subtitle: "包含所有任务、专注记录与设置"
                 ) {
                     Button("导出备份…") {
                         switch DataBackupService.exportBackup(
@@ -697,10 +907,22 @@ struct SettingsWindowView: View {
             }
 
             if let feedback = settings.backupFeedback {
-                Text(feedback)
-                    .font(.caption)
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                    .padding(.horizontal, 6)
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(AppTheme.accent)
+                    Text(feedback)
+                        .font(.system(size: 12))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(AppTheme.elevatedBackground(for: colorScheme))
+                )
             }
 
             SettingsGroup(title: "数据安全与存储目录") {
@@ -708,15 +930,26 @@ struct SettingsWindowView: View {
                     title: "每日自动安全快照",
                     subtitle: "每次启动自动保留最近 5 天的数据快照，升级无忧"
                 ) {
-                    Text("自动保护中")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color(hex: "#10B981"))
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(Color(hex: "#10B981"))
+                            .frame(width: 6, height: 6)
+                        Text("自动保护中")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color(hex: "#10B981"))
+                    }
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color(hex: "#10B981").opacity(0.12))
+                    )
                 }
 
                 SettingsDivider()
 
                 SettingsRow(
-                    title: "在访达 (Finder) 中显示数据",
+                    title: "在访达中显示数据",
                     subtitle: "查看 tasks.json 与 focus_sessions.json 所在目录"
                 ) {
                     Button("打开数据文件夹") {
@@ -781,7 +1014,43 @@ struct SettingsWindowView: View {
 
 // MARK: - Reusable Settings Components
 
-private struct SettingsGroup<Content: View>: View {
+/// A source-list row: neutral selection, hover fill, no accent bar. The icon tile
+/// keeps its colour, which is the convention Settings panes use.
+private struct SettingsSidebarRowButtonStyle: ButtonStyle {
+    let isSelected: Bool
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(backgroundFill(isPressed: configuration.isPressed))
+            )
+            .scaleEffect(configuration.isPressed ? 0.99 : 1.0)
+            .animation(.easeOut(duration: 0.10), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.12), value: isHovering)
+            .animation(.easeOut(duration: 0.16), value: isSelected)
+            .onHover { isHovering = $0 }
+    }
+
+    private func backgroundFill(isPressed: Bool) -> Color {
+        if isSelected {
+            return colorScheme == .light
+                ? Color.black.opacity(isPressed ? 0.10 : 0.075)
+                : Color.white.opacity(isPressed ? 0.17 : 0.13)
+        }
+        if isPressed {
+            return colorScheme == .light ? Color.black.opacity(0.06) : Color.white.opacity(0.10)
+        }
+        if isHovering {
+            return colorScheme == .light ? Color.black.opacity(0.035) : Color.white.opacity(0.06)
+        }
+        return Color.clear
+    }
+}
+
+struct SettingsGroup<Content: View>: View {
     let title: String
     @ViewBuilder let content: () -> Content
     @Environment(\.colorScheme) private var colorScheme
@@ -797,25 +1066,26 @@ private struct SettingsGroup<Content: View>: View {
                 content()
             }
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
                     .fill(AppTheme.cardBackground(for: colorScheme))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
                     .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
             )
         }
     }
 }
 
-private struct SettingsRow<Content: View>: View {
+struct SettingsRow<Content: View>: View {
     let title: String
     var subtitle: String? = nil
+    var alignment: VerticalAlignment = .center
     @ViewBuilder let content: () -> Content
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
+        HStack(alignment: alignment, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 13.5, weight: .medium))
@@ -835,7 +1105,7 @@ private struct SettingsRow<Content: View>: View {
     }
 }
 
-private struct SettingsDivider: View {
+struct SettingsDivider: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -887,6 +1157,8 @@ private struct DurationSettingRow: View {
                             )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("\(title)：\(pill) 分钟")
+                    .accessibilityAddTraits(minutes == pill ? .isSelected : [])
                 }
             }
 
@@ -902,44 +1174,10 @@ private struct DurationSettingRow: View {
                     .labelsHidden()
                     .controlSize(.small)
                     .onChange(of: minutes) { _ in onCommit() }
+                    .accessibilityLabel("\(title)：\(minutes) 分钟")
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
-    }
-}
-
-enum AppWindowMetrics {
-    static let minimum = WindowLayoutMetrics.minimum
-    static let defaultSize = WindowLayoutMetrics.defaultSize
-}
-
-enum AppVersion {
-    static var short: String {
-        if let fromBundle = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
-           !fromBundle.isEmpty, fromBundle != "1.0" {
-            return fromBundle
-        }
-        return versionFileLines()?.first ?? "dev"
-    }
-    static var build: String {
-        if let fromBundle = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
-           !fromBundle.isEmpty {
-            return fromBundle
-        }
-        return versionFileLines()?.dropFirst().first ?? "0"
-    }
-
-    private static func versionFileLines() -> [String]? {
-        var dir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        for _ in 0..<6 {
-            let candidate = dir.appendingPathComponent("VERSION")
-            if let text = try? String(contentsOf: candidate, encoding: .utf8) {
-                let lines = text.split(whereSeparator: \.isNewline).map(String.init)
-                if lines.count >= 2 { return lines }
-            }
-            dir.deleteLastPathComponent()
-        }
-        return nil
     }
 }

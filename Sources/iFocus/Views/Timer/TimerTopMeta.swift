@@ -14,53 +14,55 @@ struct TimerTopMeta: View {
 
     private var untilLong: Int { timerStore.workSessionsUntilLongBreak }
 
-    private var goalSubtitle: String {
-        let base = "\(timerStore.completedPomodoros)/\(settings.dailyGoal)"
-        if timerStore.mode == .longBreak {
-            return "\(base) · 长休息"
-        }
-        if untilLong == 1 {
-            return "\(base) · 再 1 个长休"
-        }
-        return "\(base) · 再 \(untilLong) 个长休"
+    private var focusMinutesToday: Int {
+        timerStore.totalSecondsToday / 60
+    }
+
+    private var longBreakContext: String {
+        if timerStore.mode == .longBreak { return "长休息" }
+        if untilLong == 1 { return "再 1 个长休" }
+        return "再 \(untilLong) 个长休"
     }
 
     var body: some View {
         VStack(spacing: TimerLayoutMath.lerp(10, 14, layout.eased)) {
-            if timerStore.mode == .work {
-                let mins = timerStore.totalSecondsToday / 60
-                Text("今日 \(mins) 分")
-                    .font(.system(size: 12, weight: .medium, design: .rounded).monospacedDigit())
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-            }
-
-            // Goal — progress only, secondary line carries long-break context
+            // Goal — progress and today's focus read as one quiet unit.
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
+                HStack(alignment: .firstTextBaseline) {
                     Text(goalProgress >= 1 ? "今日目标已达成" : "今日目标")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(
                             goalProgress >= 1
-                            ? modeColor
+                            ? AppTheme.success
                             : AppTheme.secondaryText(for: colorScheme)
                         )
                     Spacer()
-                    Text(goalSubtitle)
-                        .font(.caption.weight(.medium).monospacedDigit())
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    Text("\(timerStore.completedPomodoros) / \(settings.dailyGoal)")
+                        .font(TypeScale.caption.weight(.semibold).monospacedDigit())
+                        .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.82))
                 }
 
                 GeometryReader { g in
                     ZStack(alignment: .leading) {
                         Capsule()
                             .fill(AppTheme.separatorLow(for: colorScheme))
-                        Capsule()
-                            .fill(goalProgress >= 1 ? Color(hex: "#10B981") : modeColor)
-                            .frame(width: max(goalProgress > 0 ? 6 : 0, g.size.width * goalProgress))
-                            .animation(.easeInOut(duration: 0.35), value: goalProgress)
+                        if goalProgress > 0 {
+                            Capsule()
+                                .fill(goalProgress >= 1 ? AppTheme.success : modeColor)
+                                .frame(width: max(6, g.size.width * goalProgress))
+                                .animation(.easeInOut(duration: 0.35), value: goalProgress)
+                        }
                     }
                 }
                 .frame(height: 4)
+
+                HStack(alignment: .firstTextBaseline) {
+                    Text("已专注 \(focusMinutesToday) 分")
+                    Spacer()
+                    Text(longBreakContext)
+                }
+                .font(TypeScale.meta)
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, layout.goalCardPaddingV)
@@ -80,7 +82,7 @@ struct TimerTopMeta: View {
                 } label: {
                     Text("已暂停 \(timerStore.pauseIdleMinutes) 分钟 · 继续")
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(Color(hex: "#D97706"))
+                        .foregroundColor(AppTheme.paused)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                 }

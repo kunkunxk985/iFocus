@@ -2,39 +2,6 @@ import Foundation
 import SwiftUI
 import iFocusCore
 
-enum TaskCategory: String, CaseIterable, Identifiable, Codable {
-    case work = "工作"
-    case study = "学习"
-    case life = "生活"
-    case important = "重要"
-    case home = "家"
-    case other = "其他"
-    
-    var id: String { rawValue }
-    
-    var color: Color {
-        switch self {
-        case .work: return Color(hex: "#E65C40")
-        case .study: return Color(hex: "#3B82F6")
-        case .life: return Color(hex: "#10B981")
-        case .important: return Color(hex: "#8B5CF6")
-        case .home: return Color(hex: "#F59E0B")
-        case .other: return Color(hex: "#6B7280")
-        }
-    }
-    
-    var icon: String {
-        switch self {
-        case .work: return "briefcase.fill"
-        case .study: return "book.fill"
-        case .life: return "heart.fill"
-        case .important: return "flag.fill"
-        case .home: return "house.fill"
-        case .other: return "questionmark.circle.fill"
-        }
-    }
-}
-
 /// How a task repeats after completion (or rolls forward when overdue).
 enum TaskRecurrence: String, CaseIterable, Identifiable, Codable {
     case none = "不重复"
@@ -241,6 +208,7 @@ struct FocusSession: Identifiable, Codable, Equatable {
 class TaskStore: ObservableObject {
     private struct PersistedState: Codable {
         var activeTaskId: UUID?
+        var customCategories: [TaskCategory]? = nil
     }
 
     private var isLoadingFromDisk = false
@@ -276,6 +244,15 @@ class TaskStore: ObservableObject {
     /// One-time notice after an upgrade launch that skipped unreadable items.
     @Published var upgradeNotice: String?
     
+    /// User-defined categories. Built-ins are fixed and stay in `TaskCategory.builtIn`.
+    /// Definitions live in app_state.json, so existing backups carry them unchanged.
+    @Published private(set) var customCategories: [TaskCategory] = [] {
+        didSet {
+            guard !isLoadingFromDisk else { return }
+            scheduleSaveState()
+        }
+    }
+
     @Published var newTaskTitle: String = ""
     @Published var newTaskCategory: TaskCategory = .study
     @Published var newTaskPriority: Int = 2
@@ -392,9 +369,29 @@ class TaskStore: ObservableObject {
         tasks.reduce(0) { $0 + $1.timeSpentMinutes }
     }
     
+    /// Built-ins followed by user-defined categories, including any category that
+    /// only survives inside existing tasks or history (recovery-safe display order).
+    var allCategories: [TaskCategory] {
+        TaskCategory.builtIn + customCategories
+    }
+
+    var categoriesInUse: [TaskCategory] {
+        var result = allCategories
+        var seenIDs = Set(result.map(\.id))
+        for task in tasks where seenIDs.insert(task.category.id).inserted {
+            result.append(task.category)
+        }
+        for session in focusSessions {
+            guard let category = session.taskCategory,
+                  seenIDs.insert(category.id).inserted else { continue }
+            result.append(category)
+        }
+        return result
+    }
+
     var tasksByCategory: [(category: TaskCategory, tasks: [FocusTask])] {
         let grouped = Dictionary(grouping: incompleteTasks) { $0.category }
-        return TaskCategory.allCases.compactMap { cat in
+        return allCategories.compactMap { cat in
             let group = grouped[cat] ?? []
             return group.isEmpty ? nil : (cat, group)
         }
@@ -452,6 +449,23 @@ class TaskStore: ObservableObject {
         newTaskCategory = .study
         saveTasksImmediately()
         return task.id
+    }
+
+    /// First-run helper: adds one editable task without going through the quick-add fields.
+    func addOnboardingSampleTask(title: String = "读完一节书") {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let nextIndex = (tasks.map(\.sortIndex).max() ?? -1) + 1
+        let task = FocusTask(
+            title: trimmed,
+            category: .study,
+            priority: 1,
+            estimatedPomodoros: 1,
+            dueDate: Calendar.current.startOfDay(for: Date()),
+            sortIndex: nextIndex
+        )
+        tasks.append(task)
+        saveTasksImmediately()
     }
 
     /// Import the built-in route once per stable plan key; never overwrite user progress.
@@ -827,6 +841,7 @@ class TaskStore: ObservableObject {
         }
         
         loadState()
+        reconcileCategoriesAfterLoad()
         isLoadingFromDisk = false
         
         if tasksOK && sessionsOK {
@@ -924,7 +939,10 @@ class TaskStore: ObservableObject {
 
     private func saveState() {
         do {
-            let state = PersistedState(activeTaskId: activeTaskId)
+            let state = PersistedState(
+                activeTaskId: activeTaskId,
+                customCategories: customCategories.isEmpty ? nil : customCategories
+            )
             let data = try Self.makeEncoder().encode(state)
             try data.write(to: stateFileURL, options: .atomic)
         } catch {
@@ -936,11 +954,13 @@ class TaskStore: ObservableObject {
         let fileURL = stateFileURL
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             activeTaskId = nil
+            customCategories = []
             return
         }
         do {
             let data = try Data(contentsOf: fileURL)
             let state = try Self.decodeList(PersistedState.self, from: data)
+            customCategories = Self.sanitizedCategories(state.customCategories ?? [])
             if let id = state.activeTaskId,
                tasks.contains(where: { $0.id == id && !$0.isCompleted }) {
                 activeTaskId = id
@@ -951,7 +971,86 @@ class TaskStore: ObservableObject {
             AppLog.tasks.error("loadState failed: \(error.localizedDescription, privacy: .public)")
             backupCorruptFile(at: fileURL)
             activeTaskId = nil
+            customCategories = []
         }
+    }
+
+    private static func sanitizedCategories(_ raw: [TaskCategory]) -> [TaskCategory] {
+        var result: [TaskCategory] = []
+        var ids = Set<String>()
+        var names = Set<String>()
+        for category in raw {
+            let trimmed = category.name
+                .split(whereSeparator: \.isWhitespace)
+                .joined(separator: " ")
+            guard !trimmed.isEmpty else { continue }
+            guard !TaskCategory.builtIn.contains(where: { $0.id == category.id || $0.name == trimmed }) else {
+                continue
+            }
+            let nameKey = trimmed.folding(
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: .current
+            )
+            guard ids.insert(category.id).inserted, names.insert(nameKey).inserted else { continue }
+            result.append(TaskCategory(
+                id: category.id,
+                name: trimmed,
+                colorHex: category.colorHex.isEmpty ? TaskCategory.fallbackColorHex : category.colorHex,
+                icon: category.icon.isEmpty ? "tag.fill" : category.icon
+            ))
+        }
+        return result
+    }
+
+    /// Applies the loaded catalog to existing tasks/history and recovers a custom
+    /// definition that only survived inside old records.
+    private func reconcileCategoriesAfterLoad() {
+        var categories = allCategories
+        var byID: [String: TaskCategory] = [:]
+        var byName: [String: TaskCategory] = [:]
+        for category in categories {
+            if byID[category.id] == nil { byID[category.id] = category }
+            if byName[category.name] == nil { byName[category.name] = category }
+        }
+        var recovered: [TaskCategory] = []
+
+        func resolved(_ category: TaskCategory) -> TaskCategory {
+            if let match = byID[category.id] ?? byName[category.name] {
+                return match
+            }
+            guard !category.isBuiltIn else { return category }
+            recovered.append(category)
+            categories.append(category)
+            byID[category.id] = category
+            byName[category.name] = category
+            return category
+        }
+
+        var tasksChanged = false
+        for index in tasks.indices {
+            let category = resolved(tasks[index].category)
+            if tasks[index].category != category {
+                tasks[index].category = category
+                tasksChanged = true
+            }
+        }
+
+        var sessionsChanged = false
+        for index in focusSessions.indices {
+            guard let stored = focusSessions[index].taskCategory else { continue }
+            let category = resolved(stored)
+            if focusSessions[index].taskCategory != category {
+                focusSessions[index].taskCategory = category
+                sessionsChanged = true
+            }
+        }
+
+        if !recovered.isEmpty {
+            customCategories.append(contentsOf: recovered)
+            saveStateImmediately()
+        }
+        if tasksChanged { saveTasksImmediately() }
+        if sessionsChanged { saveSessionsImmediately() }
     }
     
     /// - Parameters:
@@ -970,6 +1069,7 @@ class TaskStore: ObservableObject {
         loadTasks()
         loadSessions()
         loadState()
+        reconcileCategoriesAfterLoad()
         isLoadingFromDisk = false
         // Roll incomplete recurring tasks whose due date is already past.
         rollForwardOverdueRecurringTasks()
@@ -1034,6 +1134,152 @@ class TaskStore: ObservableObject {
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
             tasks[index].category = category
         }
+    }
+
+    // MARK: - Custom categories
+
+    func category(withID id: String) -> TaskCategory? {
+        allCategories.first { $0.id == id }
+    }
+
+    func category(named raw: String) -> TaskCategory? {
+        allCategories.first { $0.name == raw || $0.id == raw }
+            ?? TaskCategory.resolveBuiltIn(raw)
+    }
+
+    @discardableResult
+    func addCustomCategory(
+        name: String,
+        colorHex: String,
+        icon: String
+    ) -> Result<TaskCategory, CategoryValidationError> {
+        do {
+            let trimmed = try normalizedCategoryName(name)
+            guard customCategories.count < TaskCategory.maxCustomCount else {
+                return .failure(.limitReached)
+            }
+            let category = TaskCategory(
+                id: "custom-\(UUID().uuidString)",
+                name: trimmed,
+                colorHex: normalizedColorHex(colorHex),
+                icon: normalizedIcon(icon)
+            )
+            customCategories.append(category)
+            saveStateImmediately()
+            return .success(category)
+        } catch let error as CategoryValidationError {
+            return .failure(error)
+        } catch {
+            return .failure(.emptyName)
+        }
+    }
+
+    @discardableResult
+    func updateCustomCategory(
+        id: String,
+        name: String,
+        colorHex: String,
+        icon: String
+    ) -> Result<TaskCategory, CategoryValidationError> {
+        guard let index = customCategories.firstIndex(where: { $0.id == id }) else {
+            return .failure(.notFound)
+        }
+        do {
+            let trimmed = try normalizedCategoryName(name, excluding: id)
+            let updated = TaskCategory(
+                id: id,
+                name: trimmed,
+                colorHex: normalizedColorHex(colorHex),
+                icon: normalizedIcon(icon)
+            )
+            customCategories[index] = updated
+            applyCategoryDefinition(updated)
+            return .success(updated)
+        } catch let error as CategoryValidationError {
+            return .failure(error)
+        } catch {
+            return .failure(.emptyName)
+        }
+    }
+
+    /// Deletes a custom category and moves its tasks and history to 其他.
+    @discardableResult
+    func deleteCustomCategory(id: String) -> Bool {
+        guard customCategories.contains(where: { $0.id == id }) else { return false }
+        customCategories.removeAll { $0.id == id }
+
+        let fallback = TaskCategory.other
+        var tasksChanged = false
+        for index in tasks.indices where tasks[index].category.id == id {
+            tasks[index].category = fallback
+            tasksChanged = true
+        }
+        if tasksChanged { saveTasksImmediately() }
+
+        var sessionsChanged = false
+        for index in focusSessions.indices where focusSessions[index].taskCategory?.id == id {
+            focusSessions[index].taskCategory = fallback
+            sessionsChanged = true
+        }
+        if sessionsChanged { saveSessionsImmediately() }
+
+        if newTaskCategory.id == id { newTaskCategory = .study }
+        saveStateImmediately()
+        return true
+    }
+
+    private func applyCategoryDefinition(_ category: TaskCategory) {
+        var tasksChanged = false
+        for index in tasks.indices where tasks[index].category.id == category.id {
+            tasks[index].category = category
+            tasksChanged = true
+        }
+        if tasksChanged { saveTasksImmediately() }
+
+        var sessionsChanged = false
+        for index in focusSessions.indices where focusSessions[index].taskCategory?.id == category.id {
+            focusSessions[index].taskCategory = category
+            sessionsChanged = true
+        }
+        if sessionsChanged { saveSessionsImmediately() }
+
+        if newTaskCategory.id == category.id { newTaskCategory = category }
+        saveStateImmediately()
+    }
+
+    private func normalizedCategoryName(
+        _ raw: String,
+        excluding id: String? = nil
+    ) throws -> String {
+        let trimmed = raw
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        guard !trimmed.isEmpty else { throw CategoryValidationError.emptyName }
+        guard trimmed.count <= TaskCategory.maxNameLength else {
+            throw CategoryValidationError.nameTooLong
+        }
+        let isDuplicate: (TaskCategory) -> Bool = { category in
+            guard category.id != id else { return false }
+            return category.name.compare(
+                trimmed,
+                options: [.caseInsensitive, .diacriticInsensitive]
+            ) == .orderedSame
+        }
+        if TaskCategory.builtIn.contains(where: isDuplicate)
+            || customCategories.contains(where: isDuplicate) {
+            throw CategoryValidationError.duplicateName
+        }
+        return trimmed
+    }
+
+    private func normalizedColorHex(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? TaskCategory.fallbackColorHex : trimmed
+    }
+
+    private func normalizedIcon(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "tag.fill" : trimmed
     }
     
     func updateDueDate(for task: FocusTask, to date: Date?) {
@@ -1171,6 +1417,34 @@ class TaskStore: ObservableObject {
     func moveToInbox(ids: Set<UUID>) {
         setDueDate(ids: ids, to: nil)
     }
+
+    /// Cross-list move used by quick actions and sidebar drops. Plan tasks carry a
+    /// start date in addition to a due date, so clear it when they leave their plan slot.
+    func moveTask(id: UUID, to filter: TaskFilter) {
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        switch filter {
+        case .todayTask:
+            tasks[index].dueDate = today
+        case .tomorrowTask:
+            tasks[index].dueDate = calendar.date(byAdding: .day, value: 1, to: today)
+        case .inboxTask:
+            tasks[index].dueDate = nil
+        case .completedTask:
+            let task = tasks[index]
+            if !task.isCompleted { toggleCompletion(for: task) }
+            return
+        default:
+            return
+        }
+        tasks[index].startDate = nil
+        // Dragging a completed task back into an active list is an explicit reopen.
+        tasks[index].isCompleted = false
+        tasks[index].completedAt = nil
+        saveTasksImmediately()
+    }
+
     
     func deleteTasks(ids: Set<UUID>) {
         let removed = tasks.filter { ids.contains($0.id) }

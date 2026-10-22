@@ -71,6 +71,15 @@ enum PendingSessionDiscard: Equatable {
     }
 }
 
+/// A completed work session surfaced as a lightweight post-session card.
+struct SessionSummary: Identifiable, Equatable {
+    let id: UUID
+    let minutes: Int
+    let taskTitle: String
+    let category: TaskCategory?
+    let endedAt: Date
+}
+
 class TimerStore: ObservableObject {
     /// Longest count-up work segment; it then completes and logs on its own,
     /// so a timer left running cannot record an unlimited amount of study.
@@ -108,6 +117,8 @@ class TimerStore: ObservableObject {
     @Published var notificationFeedback: String?
     /// Brief toast after a segment completes (UI clears it).
     @Published var celebrationMessage: String?
+    /// Non-nil briefly after a work session is recorded; drives the in-app summary card.
+    @Published var sessionSummary: SessionSummary?
     /// Full-screen overlay when daily pomodoro goal is first crossed today.
     @Published var showDailyGoalCelebration: Bool = false
     /// Unclean-exit snapshot waiting for user to resume or discard (set at launch).
@@ -592,10 +603,6 @@ class TimerStore: ObservableObject {
     }
     
     /// Free focus entry (menu / deep link) with mid-session guard.
-    func requestFreeFocus(force: Bool = false) {
-        requestStartWorkFocus(taskId: nil, force: force)
-    }
-    
     /// Unified “start work focus” for task rows, deep links, menu bar.
     /// Handles running break → switch to work, mid-session discard confirm, then start.
     func requestStartWorkFocus(taskId: UUID?, force: Bool = false) {
@@ -754,10 +761,6 @@ class TimerStore: ObservableObject {
     }
 
     /// Hides the restart offer without starting anything.
-    func dismissCapRestart() {
-        capRestart = nil
-    }
-
     /// Explicit one-tap start of the prepared next segment (when auto-start is off).
     func startPreparedSegment() {
         guard !isRunning, !isCompleting else { return }
@@ -804,7 +807,7 @@ class TimerStore: ObservableObject {
         let context = WorkSessionContext(
             taskId: snap.activeTaskId,
             taskTitle: snap.workTaskTitle ?? "自由专注",
-            taskCategory: snap.workTaskCategory.flatMap { raw in TaskCategory.allCases.first { $0.rawValue == raw } }
+            taskCategory: snap.workTaskCategory.flatMap { category(forPersisted: $0) }
         )
         commitSession(
             elapsedSeconds: planned,
@@ -843,13 +846,19 @@ class TimerStore: ObservableObject {
             sessionPlannedDuration: sessionPlannedDuration,
             activeTaskId: taskStore?.activeTaskId ?? workSessionContext?.taskId,
             workTaskTitle: workSessionContext?.taskTitle ?? taskStore?.activeTask?.title,
-            workTaskCategory: (workSessionContext?.taskCategory ?? taskStore?.activeTask?.category)?.rawValue,
+            workTaskCategory: (workSessionContext?.taskCategory ?? taskStore?.activeTask?.category)?.id,
             cleanExit: cleanExit,
             savedAt: Date(),
             countUp: sessionCountsUp
         )
     }
     
+    private func category(forPersisted raw: String) -> TaskCategory? {
+        taskStore?.category(withID: raw)
+            ?? taskStore?.category(named: raw)
+            ?? TaskCategory.resolveBuiltIn(raw)
+    }
+
     private func persistDirtySnapshot(force: Bool = false) {
         guard isSessionInProgress else {
             // No mid-session — avoid leaving a stale dirty file.
@@ -915,9 +924,7 @@ class TimerStore: ObservableObject {
         }
         
         if restoredMode == .work {
-            let category = snap.workTaskCategory.flatMap { raw in
-                TaskCategory.allCases.first { $0.rawValue == raw }
-            }
+            let category = snap.workTaskCategory.flatMap { category(forPersisted: $0) }
             workSessionContext = WorkSessionContext(
                 taskId: restoredTaskId,
                 taskTitle: snap.workTaskTitle ?? "自由专注",
@@ -947,6 +954,10 @@ class TimerStore: ObservableObject {
     
     func dismissDailyGoalCelebration() {
         showDailyGoalCelebration = false
+    }
+
+    func dismissSessionSummary() {
+        sessionSummary = nil
     }
     
     /// YYYY-MM-dd key for once-per-day goal celebration.
@@ -1144,10 +1155,12 @@ class TimerStore: ObservableObject {
         let session: FocusSession?
         if let taskId = context?.taskId {
             taskStore?.addFocusTime(to: taskId, minutes: minutes)
+            // Read the category at commit time so a rename/delete during the session is respected.
+            let currentCategory = taskStore?.tasks.first(where: { $0.id == taskId })?.category
             session = taskStore?.logFocusSession(
                 taskId: taskId,
                 taskTitle: context?.taskTitle ?? "已删除任务",
-                taskCategory: context?.taskCategory,
+                taskCategory: currentCategory ?? context?.taskCategory,
                 minutes: minutes,
                 endedAt: endedAt
             )
@@ -1163,6 +1176,15 @@ class TimerStore: ObservableObject {
             )
         }
         lastCommittedSessionID = session?.id
+        if let session {
+            sessionSummary = SessionSummary(
+                id: session.id,
+                minutes: session.durationMinutes,
+                taskTitle: session.taskTitle,
+                category: session.taskCategory,
+                endedAt: session.timestamp
+            )
+        }
         if let store = taskStore {
             updateStatsFromHistory(taskStore: store)
         }
@@ -1323,16 +1345,7 @@ class TimerStore: ObservableObject {
     }
 
     private func openSystemNotificationSettings() {
-        let urls = [
-            "x-apple.systempreferences:com.apple.Notifications-Settings.extension",
-            "x-apple.systempreferences:com.apple.preference.notifications"
-        ]
-        for value in urls {
-            if let url = URL(string: value), NSWorkspace.shared.open(url) {
-                return
-            }
-        }
-        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
+        SystemSettingsLinks.openNotifications()
     }
     
     private func sendCapNotification(taskTitle: String?) {

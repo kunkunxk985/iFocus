@@ -2,12 +2,14 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var viewState = ContentViewState()
+    @StateObject private var focusMode = FocusModeController.shared
     @State private var isAccountMenuPresented = false
     @State private var showResetConfirm = false
     @State private var showResumeSessionAlert = false
     @State private var didApplySmartLanding = false
 
     @State private var isFullScreen = false
+    @State private var isOnboardingReplayPresented = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
     @Environment(\.openWindow) private var openWindow
@@ -17,9 +19,7 @@ struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private func expandedSidebarWidth(for availableWidth: CGFloat) -> CGFloat {
-        let fluid = min(1, max(0, (availableWidth - WindowLayoutMetrics.minimum.width)
-                               / max(1, WindowLayoutMetrics.reference.width - WindowLayoutMetrics.minimum.width)))
-        return 208 + fluid * 44
+        SidebarChrome.expandedWidth(for: availableWidth)
     }
 
     private func sidebarWidth(for availableWidth: CGFloat) -> CGFloat {
@@ -46,32 +46,28 @@ struct ContentView: View {
                     .ignoresSafeArea()
 
                 HStack(spacing: 0) {
-                    AppSidebar(
-                        sidebarCollapsed: $sidebarCollapsed,
-                        isAccountMenuPresented: $isAccountMenuPresented,
-                        isFullScreen: isFullScreen,
-                        onPresentAccountMenu: presentAccountMenu,
-                        onDismissAccountMenu: dismissAccountMenu
-                    )
-                    .frame(width: targetSidebarWidth, alignment: .leading)
-                    .frame(width: currentSidebarWidth, alignment: .leading)
-                    .clipped()
-                    .allowsHitTesting(!sidebarCollapsed)
-                    .accessibilityHidden(sidebarCollapsed)
+                    if !focusMode.isActive {
+                        AppSidebar(
+                            sidebarCollapsed: $sidebarCollapsed,
+                            isAccountMenuPresented: $isAccountMenuPresented,
+                            isFullScreen: isFullScreen,
+                            onPresentAccountMenu: presentAccountMenu,
+                            onDismissAccountMenu: dismissAccountMenu
+                        )
+                        .frame(width: targetSidebarWidth, alignment: .leading)
+                        .frame(width: currentSidebarWidth, alignment: .leading)
+                        .clipped()
+                        .allowsHitTesting(!sidebarCollapsed)
+                        .accessibilityHidden(sidebarCollapsed)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                    }
 
                     detailPane
                         .environment(\.windowLayout, layout)
-                        // A real toolbar item: the system places it inside the titlebar,
-                        // level with the window buttons, and gives it the toolbar's own
-                        // plate. SwiftUI content cannot draw in that band otherwise.
-                        .toolbar {
-                            ToolbarItem(placement: .navigation) {
-                                SidebarToggleButton(sidebarCollapsed: $sidebarCollapsed)
-                            }
-                        }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .animation(AppTheme.springGentle, value: sidebarCollapsed)
+                .animation(.easeInOut(duration: 0.24), value: focusMode.isActive)
                 .animation(.easeInOut(duration: 0.16), value: layout.scale)
 
                 if isAccountMenuPresented {
@@ -100,18 +96,10 @@ struct ContentView: View {
                         .zIndex(30)
                 }
 
-                if !hasCompletedOnboarding {
-                    OnboardingOverlay {
-                        withAnimation(.easeOut(duration: 0.25)) {
-                            hasCompletedOnboarding = true
-                            applySmartLaunchLandingIfNeeded(force: true)
-                            if timerStore.pendingResumeSnapshot != nil {
-                                showResumeSessionAlert = true
-                            }
-                        }
-                    }
-                    .transition(.opacity)
-                    .zIndex(40)
+                if !hasCompletedOnboarding || isOnboardingReplayPresented {
+                    OnboardingOverlay(isReplay: hasCompletedOnboarding, onFinish: completeOnboarding)
+                        .transition(.opacity)
+                        .zIndex(40)
                 }
 
                 if timerStore.showDailyGoalCelebration {
@@ -131,10 +119,21 @@ struct ContentView: View {
         }
         .background(AppTheme.contentBackground(for: colorScheme).ignoresSafeArea())
         .ignoresSafeArea(.container, edges: .top)
+        // The app accent is a preference, not the system accent; without this, stock
+        // controls (prominent buttons, switches, focus rings) fall back to system blue.
+        .tint(AppTheme.accent)
         .environmentObject(viewState)
         .animation(accountMenuAnimation, value: isAccountMenuPresented)
         .animation(.easeOut(duration: 0.25), value: hasCompletedOnboarding)
         .animation(.spring(response: 0.4, dampingFraction: 0.86), value: timerStore.showDailyGoalCelebration)
+        .onExitCommand {
+            if focusMode.isActive {
+                FocusModeController.shared.exit()
+            }
+        }
+        .onChange(of: focusMode.isActive) { active in
+            if active { dismissAccountMenu() }
+        }
         .onAppear {
             let fs = NSApplication.shared.windows.first(where: { $0.title == "iFocus" })?.styleMask.contains(.fullScreen) ?? false
             isFullScreen = fs
@@ -144,6 +143,12 @@ struct ContentView: View {
             WindowChrome.layoutMainWindowTrafficLights()
             ViewMenuSanitizer.attachToViewMenu()
             applySmartLaunchLandingIfNeeded()
+            DispatchQueue.main.async {
+                installSidebarToolbar()
+            }
+            if UserDefaults.standard.bool(forKey: AppNavigation.pendingOnboardingReplayKey) {
+                presentOnboardingReplay()
+            }
             if hasCompletedOnboarding, timerStore.pendingResumeSnapshot != nil {
                 showResumeSessionAlert = true
             }
@@ -170,6 +175,10 @@ struct ContentView: View {
             if (note.object as? NSWindow)?.title != "设置" {
                 isFullScreen = false
                 WindowStateModel.shared.isFullScreen = false
+                // Rebuilding the titlebar on the way out can drop the toolbar.
+                DispatchQueue.main.async {
+                    installSidebarToolbar()
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: AppNavigation.toggleSidebar)) { _ in
@@ -186,6 +195,7 @@ struct ContentView: View {
                 dismissAccountMenu()
             }
             WindowChrome.layoutMainWindowTrafficLights()
+            installSidebarToolbar()
         }
         .onChange(of: viewState.selectedScreen) { _ in
             if isAccountMenuPresented {
@@ -199,6 +209,9 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: AppNavigation.openSettings)) { _ in
             openWindow(id: "settings")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppNavigation.showOnboarding)) { _ in
+            presentOnboardingReplay()
         }
         .onReceive(NotificationCenter.default.publisher(for: AppNavigation.toggleTimer)) { _ in
             AppHaptics.buttonClick()
@@ -243,6 +256,17 @@ struct ContentView: View {
                 viewState.selectedScreen = .todayTask
             }
             viewState.shouldFocusSearch = true
+        }
+        .sheet(isPresented: Binding(
+            get: { timerStore.sessionSummary != nil },
+            set: { if !$0 { timerStore.dismissSessionSummary() } }
+        )) {
+            if let summary = timerStore.sessionSummary {
+                SessionSummaryCard(summary: summary)
+                    .padding(20)
+                    .frame(width: 400)
+                    .background(AppTheme.contentBackground(for: colorScheme).ignoresSafeArea())
+            }
         }
         .timerResetConfirmation(isPresented: $showResetConfirm, timerStore: timerStore)
         .alert(
@@ -321,6 +345,31 @@ struct ContentView: View {
         // and freezes macOS DatePicker / controls. Clock UI lives in leaf views only.
     }
     
+    /// Finishes first-run onboarding in place; replay only closes the overlay.
+    private func completeOnboarding() {
+        let wasFirstRun = !hasCompletedOnboarding
+        dismissAccountMenu()
+        withAnimation(.easeOut(duration: 0.25)) {
+            isOnboardingReplayPresented = false
+            if wasFirstRun {
+                hasCompletedOnboarding = true
+            }
+        }
+        guard wasFirstRun else { return }
+        applySmartLaunchLandingIfNeeded(force: true)
+        if timerStore.pendingResumeSnapshot != nil {
+            showResumeSessionAlert = true
+        }
+    }
+
+    private func presentOnboardingReplay() {
+        UserDefaults.standard.removeObject(forKey: AppNavigation.pendingOnboardingReplayKey)
+        dismissAccountMenu()
+        withAnimation(.easeOut(duration: 0.25)) {
+            isOnboardingReplayPresented = true
+        }
+    }
+
     /// Quiet-tool launch: open 今天 when there is work waiting; otherwise 专注钟.
     private func applySmartLaunchLandingIfNeeded(force: Bool = false) {
         guard settings.smartLaunchLanding else { return }
@@ -463,5 +512,14 @@ struct ContentView: View {
         withAnimation(accountMenuAnimation) {
             isAccountMenuPresented = false
         }
+    }
+
+    /// The toggle is part of the window's AppKit toolbar, so it is drawn and laid
+    /// out by the system rather than by SwiftUI.
+    private func installSidebarToolbar() {
+        guard let window = NSApplication.shared.windows.first(where: { $0.title == "iFocus" && $0.canBecomeKey })
+                ?? NSApplication.shared.windows.first(where: { $0.title == "iFocus" })
+        else { return }
+        SidebarToolbar.shared.install(on: window)
     }
 }
