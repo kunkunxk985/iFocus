@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Status + goal — one quiet card (no second “rhythm” strip).
+/// One quiet line under the ring, plus pause and celebration follow-ups.
 struct TimerTopMeta: View {
     let layout: WindowLayoutMetrics
     let modeColor: Color
@@ -12,69 +12,29 @@ struct TimerTopMeta: View {
     @EnvironmentObject var settings: SettingsStore
     @Environment(\.colorScheme) private var colorScheme
 
-    private var untilLong: Int { timerStore.workSessionsUntilLongBreak }
-
     private var focusMinutesToday: Int {
         timerStore.totalSecondsToday / 60
     }
 
-    private var longBreakContext: String {
-        if timerStore.mode == .longBreak { return "长休息" }
-        if untilLong == 1 { return "再 1 个长休" }
-        return "再 \(untilLong) 个长休"
+    private var todaySummary: String {
+        let minutes = focusMinutesToday
+        guard settings.dailyGoal > 0 else { return "已专注 \(minutes) 分" }
+        if goalProgress >= 1 {
+            return "今日目标已达成 · 已专注 \(minutes) 分"
+        }
+        return "今天 \(timerStore.completedPomodoros)/\(settings.dailyGoal) · 已专注 \(minutes) 分"
     }
 
     var body: some View {
-        VStack(spacing: TimerLayoutMath.lerp(10, 14, layout.eased)) {
-            // Goal — progress and today's focus read as one quiet unit.
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(goalProgress >= 1 ? "今日目标已达成" : "今日目标")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(
-                            goalProgress >= 1
-                            ? AppTheme.success
-                            : AppTheme.secondaryText(for: colorScheme)
-                        )
-                    Spacer()
-                    Text("\(timerStore.completedPomodoros) / \(settings.dailyGoal)")
-                        .font(TypeScale.caption.weight(.semibold).monospacedDigit())
-                        .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.82))
-                }
-
-                GeometryReader { g in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(AppTheme.separatorLow(for: colorScheme))
-                        if goalProgress > 0 {
-                            Capsule()
-                                .fill(goalProgress >= 1 ? AppTheme.success : modeColor)
-                                .frame(width: max(6, g.size.width * goalProgress))
-                                .animation(.easeInOut(duration: 0.35), value: goalProgress)
-                        }
-                    }
-                }
-                .frame(height: 4)
-
-                HStack(alignment: .firstTextBaseline) {
-                    Text("已专注 \(focusMinutesToday) 分")
-                    Spacer()
-                    Text(longBreakContext)
-                }
-                .font(TypeScale.meta)
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, layout.goalCardPaddingV)
-            .frame(maxWidth: layout.goalCardMaxWidth)
-            .background(
-                RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
-                    .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.65 : 0.4))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.cornerRadiusControl, style: .continuous)
-                            .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                    )
-            )
+        VStack(spacing: 8) {
+            Text(todaySummary)
+                .font(.system(size: 13, weight: .medium))
+                .monospacedDigit()
+                .foregroundColor(
+                    goalProgress >= 1 && settings.dailyGoal > 0
+                    ? AppTheme.success
+                    : AppTheme.secondaryText(for: colorScheme)
+                )
 
             if timerStore.isPauseIdleTooLong {
                 Button {

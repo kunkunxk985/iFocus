@@ -316,12 +316,11 @@ private struct SidebarRowLabel: View {
             ZStack {
                 Image(systemName: icon)
                     .font(.system(size: 13.5, weight: isSelected ? .semibold : .regular))
-                    // Source lists keep their icon colour whether the row is selected
-                    // or not — the fill behind the row is what moves.
+                    // Grey until selected, so the rail does not compete with the stage.
                     .foregroundColor(
                         isSelected
                         ? accentColor
-                        : accentColor.opacity(colorScheme == .light ? 0.78 : 0.85)
+                        : AppTheme.secondaryText(for: colorScheme)
                     )
 
                 if emphasizeRunning {

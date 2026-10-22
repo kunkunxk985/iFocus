@@ -66,13 +66,13 @@ The Settings UI also exposes 界面密度 (`uiDensity`, which the main window al
 
 ### Sidebar rows follow the source-list convention
 
-Selection is a neutral fill (`black 7.5%` in light, `white 13%` in dark), with no accent tint and no border; icons keep the accent colour in both states; counts are plain secondary text with monospaced digits, not pills. An accent fill plus a hairline accent border reads as a custom control, which is what made the sidebar look unlike Mail. Row radius is 7pt, rows are 30pt tall, section headers are 11pt semibold at 70% secondary.
+Selection is a neutral fill (`black 7.5%` in light, `white 13%` in dark), with no accent tint and no border. Unselected icons use secondary text; the selected row's icon uses the accent. Counts are plain secondary text with monospaced digits, not pills. An accent fill plus a hairline accent border reads as a custom control, which is what made the sidebar look unlike Mail. Row radius is 7pt, rows are 30pt tall, section headers are 11pt semibold at 70% secondary.
 
 ### Task rows, timer states and shared tokens
 
-Task rows now share `AppTheme.success / warning / danger / paused / violet`, `TypeScale.meta` (10pt), `TypeScale.tag` (9.5pt bold), and `AppTheme.iconBadge / iconMeta / iconAction`. Resting rows use a barely-there card surface without a shadow; hover, active and batch-selected rows add tint and elevation. Overdue tasks rely on the red priority rail and chip rather than a red card border. The list's filter chips wrap through `ChipFlowLayout` instead of clipping their tail behind a horizontal scroller, and empty states offer a primary plus a secondary action.
+Task rows now share `AppTheme.success / warning / danger / paused / violet`, `TypeScale.meta` (10pt), `TypeScale.tag` (9.5pt bold), and `AppTheme.iconBadge / iconMeta / iconAction`. Resting rows use a barely-there card surface without a shadow; hover, active and batch-selected rows add tint and elevation. Priority is a thin rail only — the old 「3 级」chip repeated it. Overdue is the word 逾期 beside the title, not a second capsule. Category colour is a 6pt dot; the name and the other metadata are secondary text. The list's filter chips wrap through `ChipFlowLayout` instead of clipping their tail behind a horizontal scroller, and empty states offer a primary plus a secondary action.
 
-On the timer stage, the day's focused minutes are folded into the goal card instead of floating above it. The ring, mode switcher and controls form one vertical group so the primary action stays near the clock. A paused session changes the ring badge to an amber「mode · 已暂停」with a pause glyph; the play control's help and accessibility label say「继续」. The current-task picker uses a stronger surface and a larger category tile so it reads as a control without competing with the ring.
+On the timer stage, today's progress is one line under the ring (`今天 2/4 · 已专注 50 分`), not a card above it. The corner control is 「进入专注」; mini timer and immersive mode live in its menu. Mode chips are a flat fill with no glow or stacked strokes, and the side controls are flat circles. The play button stays a flat accent circle, which is the one loud control. A paused session changes the ring badge to an amber「mode · 已暂停」with a pause glyph; the play control's help and accessibility label say「继续」. The current-task picker uses a stronger surface and a larger category tile so it reads as a control without competing with the ring.
 
 ### Session summary and the Settings status center
 
@@ -84,7 +84,7 @@ Settings gains a fifth「状态中心」pane. It aggregates notification permiss
 
 The status item's left click now opens a SwiftUI popover instead of toggling the timer; right-click and Control/Option-click still open the full NSMenu. The panel carries time/task, play/pause/skip, task selection, and shortcuts to the main timer, settings, mini timer and focus mode. A transient popover is used, with a short reopen guard so the click that dismisses it does not immediately reopen it.
 
-The mini timer is a borderless, non-activating `NSPanel` at `.floating` level that joins all Spaces and full-screen spaces. Its frame is remembered in UserDefaults; the progress ring doubles as the drag handle because a borderless card has no titlebar. It is toggled by ⌥⌘M, the `pip` button in the timer stage, or the menu-bar panel.
+The mini timer is a borderless, non-activating `NSPanel` at `.floating` level that joins all Spaces and full-screen spaces. Its frame is remembered in UserDefaults; the progress ring doubles as the drag handle because a borderless card has no titlebar. It is toggled by ⌥⌘M, the timer stage's 「进入专注」 menu, or the menu-bar panel.
 
 Full-screen focus uses native full screen, hides the sidebar, forces the timer's immersive stage, dims the background, and hides the cursor until the mouse moves. It is entered with ⌥⌘F or the timer's focus button and exited with the visible「退出专注」pill, Esc, or leaving native full screen. The controller remembers whether it entered full screen itself and restores the previous immersive/sidebar state without forcing a window that was already full screen to exit.
 

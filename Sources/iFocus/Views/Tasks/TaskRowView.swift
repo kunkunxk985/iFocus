@@ -18,24 +18,6 @@ private let dueFormatterWithYear: DateFormatter = {
     return f
 }()
 
-private func priorityIcon(_ n: Int) -> String {
-    switch n {
-    case 1: return "exclamationmark.circle"
-    case 2: return "exclamationmark.circle.fill"
-    case 3: return "exclamationmark.triangle"
-    default: return "exclamationmark.triangle.fill"
-    }
-}
-
-private func priorityColor(_ n: Int) -> Color {
-    switch n {
-    case 1: return .secondary
-    case 2: return AppTheme.warning
-    case 3: return AppTheme.danger
-    default: return AppTheme.violet
-    }
-}
-
 /// Crisp Apple-style checkmark path for animated completion drawing
 private struct CheckmarkShape: Shape {
     func path(in rect: CGRect) -> Path {
@@ -206,7 +188,6 @@ struct TaskRowView: View {
                 Capsule()
                     .fill(priorityRailColor)
                     .frame(width: 2.5, height: density == .compact ? 16 : 20)
-                    .shadow(color: priorityRailColor.opacity(0.45), radius: 2.5, x: 0, y: 0)
                     .padding(.trailing, 6)
                     .help("优先级 \(task.priority)")
             } else {
@@ -259,8 +240,8 @@ struct TaskRowView: View {
                     HStack(spacing: 6) {
                         if task.isPinned {
                             Image(systemName: "pin.fill")
-                                .font(.system(size: AppTheme.iconMeta, weight: .semibold))
-                                .foregroundColor(AppTheme.accent.opacity(0.85))
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                                 .help("已置顶")
                         }
                         
@@ -275,49 +256,16 @@ struct TaskRowView: View {
                             .lineLimit(2)
                             .animation(AppTheme.springInteractive, value: completedFade)
 
-                        // Refined priority micro-tag
-                        if task.priority >= 2 && !completedFade {
-                            HStack(spacing: 3) {
-                                Image(systemName: priorityIcon(task.priority))
-                                    .font(.system(size: AppTheme.iconBadge, weight: .bold))
-                                Text("\(task.priority) 级")
-                                    .font(TypeScale.tag)
-                            }
-                            .foregroundColor(priorityColor(task.priority))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule()
-                                    .fill(priorityColor(task.priority).opacity(colorScheme == .light ? 0.10 : 0.18))
-                            )
-                            .overlay(
-                                Capsule()
-                                    .strokeBorder(priorityColor(task.priority).opacity(colorScheme == .light ? 0.20 : 0.30), lineWidth: 0.75)
-                            )
-                        }
-                        
                         if isActive && !completedFade {
                             Text(isRunning ? "专注中" : "当前")
-                                .font(TypeScale.tag)
-                                .foregroundColor(AppTheme.accent)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(AppTheme.accent.opacity(colorScheme == .light ? 0.12 : 0.20)))
-                                .overlay(
-                                    Capsule().strokeBorder(AppTheme.accent.opacity(0.25), lineWidth: 0.75)
-                                )
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(isRunning ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme))
                         }
-                        
+
                         if task.isOverdue && !completedFade {
                             Text("逾期")
-                                .font(TypeScale.tag)
+                                .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(AppTheme.danger)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(AppTheme.danger.opacity(colorScheme == .light ? 0.10 : 0.18)))
-                                .overlay(
-                                    Capsule().strokeBorder(AppTheme.danger.opacity(0.25), lineWidth: 0.75)
-                                )
                         }
                         
                         Spacer(minLength: 0)
@@ -327,22 +275,23 @@ struct TaskRowView: View {
                     HStack(spacing: 8) {
                         pomodoroProgress
                         
-                        HStack(spacing: 3) {
-                            Image(systemName: task.category.icon)
-                                .font(.system(size: AppTheme.iconMeta, weight: .semibold))
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(task.category.color)
+                                .frame(width: 6, height: 6)
                             Text(task.category.name)
-                                .font(TypeScale.meta)
                         }
-                        .foregroundColor(task.category.color.opacity(0.85))
-                        
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+
                         if task.recurrence != .none {
                             HStack(spacing: 3) {
                                 Image(systemName: "repeat")
-                                    .font(.system(size: AppTheme.iconMeta, weight: .semibold))
+                                    .font(.system(size: 11, weight: .semibold))
                                 Text(task.recurrence.rawValue)
-                                    .font(TypeScale.meta)
                             }
-                            .foregroundColor(AppTheme.violet.opacity(0.85))
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                         }
                         
                         if hasNotes {
@@ -356,7 +305,7 @@ struct TaskRowView: View {
                             Button(action: openTaskLink) {
                                 Image(systemName: "link")
                                     .font(.system(size: AppTheme.iconMeta, weight: .medium))
-                                    .foregroundColor(AppTheme.accent.opacity(0.80))
+                                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.8))
                             }
                             .buttonStyle(.plain)
                             .help(task.linkURL)
@@ -392,7 +341,7 @@ struct TaskRowView: View {
                                         .rotationEffect(.degrees(isChecklistExpanded ? -180 : 0))
                                         .animation(.easeOut(duration: 0.16), value: isChecklistExpanded)
                                 }
-                                .foregroundColor(AppTheme.accent.opacity(0.9))
+                                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                             }
                             .buttonStyle(.plain)
                             .help(isChecklistExpanded ? "收起学习清单" : "展开学习清单")
@@ -400,7 +349,7 @@ struct TaskRowView: View {
                         } else if task.planKey != nil {
                             Label("路线", systemImage: "map")
                                 .font(TypeScale.meta)
-                                .foregroundColor(AppTheme.accent.opacity(0.85))
+                                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                         }
 
                         Spacer(minLength: 0)

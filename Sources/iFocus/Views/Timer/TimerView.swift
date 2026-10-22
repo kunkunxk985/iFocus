@@ -16,7 +16,6 @@ struct TimerView: View {
     @State private var showFocusModeHint = false
     @State private var celebratePulse = false
     @State private var ringBreath = false
-    @State private var playInvite = false
     @StateObject private var focusMode = FocusModeController.shared
     @AppStorage("timerImmersiveMode") private var immersiveMode = false
 
@@ -52,22 +51,54 @@ struct TimerView: View {
         return timerStore.isRunning ? "\(base)中" : base
     }
 
-    private func stageControlButton(
-        systemName: String,
-        help: String,
-        accessibilityLabel: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.75))
-                .frame(width: 28, height: 28)
-                .contentShape(Rectangle())
+    /// One control: the label enters full-screen focus; the chevron holds the
+    /// quieter alternatives so the stage corner is not three similar icons.
+    private var focusEntry: some View {
+        HStack(spacing: 0) {
+            Button {
+                NotificationCenter.default.post(name: AppNavigation.toggleFocusMode, object: nil)
+            } label: {
+                Text("进入专注")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                    .padding(.leading, 12)
+                    .padding(.trailing, 6)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+            .help("全屏专注模式 (⌥⌘F)")
+            .accessibilityLabel("进入专注")
+
+            Menu {
+                Button("迷你计时窗") {
+                    NotificationCenter.default.post(name: AppNavigation.toggleMiniTimer, object: nil)
+                }
+                Button(immersiveMode ? "退出沉浸" : "沉浸模式") {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        immersiveMode.toggle()
+                    }
+                }
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    .frame(width: 22, height: 26)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("迷你计时窗或沉浸模式")
+            .accessibilityLabel("更多专注方式")
         }
-        .buttonStyle(SoftScaleButtonStyle())
-        .help(help)
-        .accessibilityLabel(accessibilityLabel)
+        .background(
+            Capsule()
+                .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.9))
+        )
+        .overlay(
+            Capsule()
+                .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+        )
     }
 
     /// Shown after a count-up stopped at the cap: the time is logged, one click continues.
@@ -119,67 +150,36 @@ struct TimerView: View {
                 ambientBackground
 
                 VStack(spacing: layout.sectionSpacing) {
-                    HStack(spacing: 4) {
+                    HStack {
                         Spacer()
-
                         if focusMode.isActive {
                             Button {
                                 FocusModeController.shared.exit()
                             } label: {
-                                Label("退出专注", systemImage: "arrow.down.right.and.arrow.up.left")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
+                                Text("退出专注")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
                                     .background(
                                         Capsule()
-                                            .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.82))
+                                            .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.9))
                                     )
                                     .overlay(
                                         Capsule()
                                             .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
                                     )
                             }
-                            .buttonStyle(SoftScaleButtonStyle())
+                            .buttonStyle(.plain)
                             .help("退出专注模式 (Esc)")
                             .accessibilityLabel("退出专注模式")
                         } else {
-                            stageControlButton(
-                                systemName: "pip",
-                                help: "迷你计时窗",
-                                accessibilityLabel: "显示迷你计时窗"
-                            ) {
-                                NotificationCenter.default.post(name: AppNavigation.toggleMiniTimer, object: nil)
-                            }
-                            stageControlButton(
-                                systemName: "arrow.up.left.and.arrow.down.right",
-                                help: "全屏专注模式",
-                                accessibilityLabel: "进入全屏专注模式"
-                            ) {
-                                NotificationCenter.default.post(name: AppNavigation.toggleFocusMode, object: nil)
-                            }
-                            stageControlButton(
-                                systemName: immersiveMode ? "rectangle.expand.vertical" : "rectangle.compress.vertical",
-                                help: immersiveMode ? "退出沉浸" : "沉浸模式：只保留环与控制",
-                                accessibilityLabel: immersiveMode ? "退出沉浸模式" : "进入沉浸模式"
-                            ) {
-                                withAnimation(.easeInOut(duration: 0.22)) {
-                                    immersiveMode.toggle()
-                                }
-                            }
+                            focusEntry
                         }
                     }
                     .padding(.top, layout.stageTopChrome)
 
                     if !stageImmersive {
-                        TimerTopMeta(
-                            layout: layout,
-                            modeColor: modeColor,
-                            goalProgress: goalProgress,
-                            celebratePulse: $celebratePulse,
-                            onDecorativeMotionChange: syncAmbientMotion
-                        )
-
                         TimerTaskFocusBlock(layout: layout, modeColor: modeColor)
                             .frame(maxWidth: min(layout.taskBlockMaxWidth, layout.width - layout.horizontalPadding * 2))
                             .transition(.opacity.combined(with: .move(edge: .top)))
@@ -220,6 +220,18 @@ struct TimerView: View {
                         value: ringBreath
                     )
 
+                    if !stageImmersive {
+                        TimerTopMeta(
+                            layout: layout,
+                            modeColor: modeColor,
+                            goalProgress: goalProgress,
+                            celebratePulse: $celebratePulse,
+                            onDecorativeMotionChange: syncAmbientMotion
+                        )
+                        .padding(.top, 6)
+                        .transition(.opacity)
+                    }
+
                     if let cap = timerStore.capRestart, !timerStore.isRunning, !timerStore.isSessionInProgress {
                         capRestartButton(cap)
                             .padding(.top, 10)
@@ -236,7 +248,6 @@ struct TimerView: View {
                     TimerControlsBar(
                         layout: layout,
                         modeColor: modeColor,
-                        playInvite: playInvite,
                         showResetConfirm: $showResetConfirm,
                         onPlayToggle: requestStartOrToggle
                     )
@@ -331,27 +342,15 @@ struct TimerView: View {
     private func syncAmbientMotion() {
         guard settings.decorativeMotionEnabled else {
             ringBreath = false
-            playInvite = false
             return
         }
-        if timerStore.isRunning {
+        if timerStore.isRunning, timerStore.mode == .work {
             ringBreath = false
-            playInvite = false
-            if timerStore.mode == .work {
-                DispatchQueue.main.async {
-                    ringBreath = true
-                }
+            DispatchQueue.main.async {
+                ringBreath = true
             }
         } else {
             ringBreath = false
-            playInvite = false
-            if !timerStore.isSessionInProgress {
-                DispatchQueue.main.async {
-                    withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
-                        playInvite = true
-                    }
-                }
-            }
         }
     }
 
