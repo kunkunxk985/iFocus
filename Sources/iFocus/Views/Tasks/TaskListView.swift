@@ -708,9 +708,8 @@ struct TaskListView: View {
     private var taskOptionsMenu: some View {
         Menu {
             Section("任务属性") {
-                newTaskCategoryButton(.study)
-                Menu("更多分类") {
-                    ForEach(taskStore.allCategories.filter { $0.id != TaskCategory.study.id }) { category in
+                Menu("分类") {
+                    ForEach(taskStore.allCategories) { category in
                         newTaskCategoryButton(category)
                     }
                     Divider()
@@ -722,7 +721,7 @@ struct TaskListView: View {
                 }
                 Picker("优先级", selection: $taskStore.newTaskPriority) {
                     ForEach(1...4, id: \.self) { priority in
-                        Text("\(priority) 级").tag(priority)
+                        Text(FocusTask.priorityLabel(for: priority)).tag(priority)
                     }
                 }
             }

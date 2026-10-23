@@ -188,7 +188,7 @@ struct TaskRowView: View {
                     .fill(priorityRailColor)
                     .frame(width: 2.5, height: density == .compact ? 16 : 20)
                     .padding(.trailing, 6)
-                    .help("优先级 \(task.priority)")
+                    .help("优先级：\(FocusTask.priorityLabel(for: task.priority))")
             } else {
                 Color.clear.frame(width: 2.5).padding(.trailing, 6)
             }
@@ -435,6 +435,7 @@ struct TaskRowView: View {
                 Section("移到") {
                     Button("今天") { taskStore.moveTask(id: task.id, to: .todayTask) }
                     Button("明天") { taskStore.moveTask(id: task.id, to: .tomorrowTask) }
+                    Button("稍后") { taskStore.moveTask(id: task.id, to: .plannedTask) }
                     Button("收集箱") { taskStore.moveTask(id: task.id, to: .inboxTask) }
                 }
                 Menu("优先级") {
@@ -442,7 +443,7 @@ struct TaskRowView: View {
                         Button {
                             taskStore.updatePriority(for: task, to: priority)
                         } label: {
-                            Text("\(priority) 级")
+                            Text(FocusTask.priorityLabel(for: priority))
                             if task.priority == priority { Image(systemName: "checkmark") }
                         }
                     }
@@ -590,7 +591,7 @@ struct TaskRowView: View {
                     taskStore.updatePriority(for: task, to: priority)
                 } label: {
                     HStack {
-                        Text("\(priority) 级")
+                        Text(FocusTask.priorityLabel(for: priority))
                         if task.priority == priority { Image(systemName: "checkmark") }
                     }
                 }
@@ -610,16 +611,18 @@ struct TaskRowView: View {
             }
         }
         
-        Menu("移动到日期") {
+        Menu("移到") {
             Button("今天") {
-                taskStore.updateDueDate(for: task, to: Calendar.current.startOfDay(for: Date()))
+                taskStore.moveTask(id: task.id, to: .todayTask)
             }
             Button("明天") {
-                let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: Date()))
-                taskStore.updateDueDate(for: task, to: tomorrow)
+                taskStore.moveTask(id: task.id, to: .tomorrowTask)
             }
-            Button("清除日期") {
-                taskStore.updateDueDate(for: task, to: nil)
+            Button("稍后") {
+                taskStore.moveTask(id: task.id, to: .plannedTask)
+            }
+            Button("收集箱") {
+                taskStore.moveTask(id: task.id, to: .inboxTask)
             }
         }
         
@@ -654,5 +657,16 @@ struct TaskRowView: View {
         // Always work-intent via parent startFocus path.
         onStartFocus()
         viewState.selectedScreen = .timer
+    }
+}
+
+extension FocusTask {
+    static func priorityLabel(for priority: Int) -> String {
+        switch priority {
+        case 1: return "普通"
+        case 2: return "中"
+        case 3: return "高"
+        default: return "紧急"
+        }
     }
 }

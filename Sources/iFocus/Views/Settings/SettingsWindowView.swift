@@ -7,7 +7,6 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
     case timer = "专注与计时"
     case appearance = "外观与声音"
     case data = "数据与备份"
-    case status = "状态中心"
 
     var id: String { rawValue }
 
@@ -17,7 +16,6 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
         case .timer: return "timer"
         case .appearance: return "paintpalette"
         case .data: return "externaldrive"
-        case .status: return "checkmark.shield"
         }
     }
 
@@ -25,9 +23,8 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
         switch self {
         case .general: return "开机启动与快捷键操作"
         case .timer: return "番茄时长、自动流转与每日目标"
-        case .appearance: return "界面外观、菜单栏与提示音"
+        case .appearance: return "界面外观、菜单栏、通知与提示音"
         case .data: return "本地数据存储与安全备份"
-        case .status: return "权限、系统与数据健康"
         }
     }
 
@@ -36,15 +33,13 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
     var searchTerms: String {
         switch self {
         case .general:
-            return "登录 开机 自动打开 智能 今日 清单 快捷键 空格 暂停 新手 引导 欢迎 帮助 教程 分类 标签 自定义 颜色 图标 管理"
+            return "登录 开机 自动打开 启动 默认 专注钟 今天 清单 快捷键 空格 暂停 新手 引导 欢迎 帮助 教程 分类 标签 自定义 颜色 图标 管理"
         case .timer:
-            return "正计时 专注时长 短休息 长休息 长休 自动休息 自动专注 严格自律 每日目标 暂停提醒 系统专注模式"
+            return "正计时 专注时长 短休息 长休息 长休 自动休息 自动专注 严格自律 跳过 每日目标 暂停提醒"
         case .appearance:
-            return "外观 浅色 深色 跟随系统 强调色 菜单栏 图标 动态光晕 动效 界面密度 舒适 紧凑 提示音 声音 触觉 程序坞 Dock"
+            return "外观 浅色 深色 跟随系统 强调色 菜单栏 图标 通知 权限 提示音 声音 音效 试听 程序坞 Dock"
         case .data:
             return "数据 本地 离线 任务 专注历史 导出 备份 恢复 快照 自动保护 访达 Finder 文件夹 存储"
-        case .status:
-            return "状态 健康 权限 通知 登录项 系统专注 数据 文件 备份 版本 检查"
         }
     }
 
@@ -90,20 +85,12 @@ struct SettingsWindowView: View {
         return feedback
     }
 
-    private var healthIssueCount: Int {
-        var count = 0
-        if taskStore.dataLoadErrorMessage != nil { count += 1 }
-        if timerStore.notificationStatus == "已拒绝" { count += 1 }
-        if LaunchAtLogin.needsAttention(userWantsEnabled: settings.launchAtLogin) { count += 1 }
-        if let feedback = settings.backupFeedback,
-           feedback.contains("失败") || feedback.contains("未完成") {
-            count += 1
+    private var notificationStatusColor: Color {
+        switch timerStore.notificationStatus {
+        case "已授权": return AppTheme.success
+        case "已拒绝": return AppTheme.danger
+        default: return AppTheme.secondaryText(for: colorScheme)
         }
-        return count
-    }
-
-    private var statusPanel: some View {
-        SettingsStatusPanel(onOpenData: { selectedPanel = .data })
     }
 
     var body: some View {
@@ -125,7 +112,6 @@ struct SettingsWindowView: View {
                             case .timer: timerPanel
                             case .appearance: appearancePanel
                             case .data: dataPanel
-                            case .status: statusPanel
                             }
                         }
                         .padding(.horizontal, 28)
@@ -237,13 +223,6 @@ struct SettingsWindowView: View {
                     .font(.system(size: 13.5, weight: isSelected ? .semibold : .regular))
                     .foregroundColor(isSelected ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme))
                     .frame(width: 20, height: 20)
-                    .overlay(alignment: .topTrailing) {
-                        if panel == .status, healthIssueCount > 0 {
-                            Circle()
-                                .fill(AppTheme.warning)
-                                .frame(width: 6, height: 6)
-                        }
-                    }
 
                 Text(panel.rawValue)
                     .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
@@ -381,13 +360,17 @@ struct SettingsWindowView: View {
                 SettingsDivider()
 
                 SettingsRow(
-                    title: "有今天的任务时，先打开今天",
-                    keywords: "智能 今日 清单 启动"
+                    title: "启动时默认打开",
+                    keywords: "默认打开 启动 专注钟 今天 清单"
                 ) {
-                    Toggle("", isOn: $settings.smartLaunchLanding)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                        .accessibilityLabel("智能进入今日清单")
+                    Picker("", selection: $settings.smartLaunchLanding) {
+                        Text("专注钟").tag(false)
+                        Text("今天").tag(true)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 140)
+                    .accessibilityLabel("启动时默认打开页面")
                 }
             }
 
@@ -512,7 +495,7 @@ struct SettingsWindowView: View {
                 }
             }
 
-            SettingsGroup(title: "自动开始") {
+            SettingsGroup(title: "流转与自律") {
                 SettingsRow(
                     title: "专注结束后自动休息",
                     keywords: "自动休息 自动流转"
@@ -546,19 +529,6 @@ struct SettingsWindowView: View {
                         .toggleStyle(.switch)
                         .labelsHidden()
                         .accessibilityLabel("严格自律模式")
-                }
-
-                SettingsDivider()
-
-                SettingsRow(
-                    title: "开始前提示系统专注",
-                    subtitle: "提醒去系统设置里减少通知",
-                    keywords: "系统专注模式 勿扰"
-                ) {
-                    Toggle("", isOn: $settings.showFocusModeHintOnStart)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                        .accessibilityLabel("开始专注时提示系统专注模式")
                 }
             }
 
@@ -628,23 +598,6 @@ struct SettingsWindowView: View {
                 SettingsDivider()
 
                 SettingsRow(
-                    title: "间距",
-                    keywords: "界面密度 舒适 紧凑"
-                ) {
-                    Picker("", selection: $settings.uiDensity) {
-                        ForEach(UIDensity.allCases) { density in
-                            Text(density.label).tag(density)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
-                    .frame(width: 140)
-                    .accessibilityLabel("界面密度")
-                }
-
-                SettingsDivider()
-
-                SettingsRow(
                     title: "强调色",
                     keywords: "颜色 主题色"
                 ) {
@@ -693,22 +646,53 @@ struct SettingsWindowView: View {
                     .frame(width: 130)
                     .accessibilityLabel("菜单栏图标样式")
                 }
+            }
+
+            SettingsGroup(title: "声音与通知") {
+                SettingsRow(
+                    title: "系统通知",
+                    subtitle: "专注或休息结束时发送系统横幅提醒",
+                    keywords: "通知 权限 横幅 提醒"
+                ) {
+                    HStack(spacing: 8) {
+                        Text(timerStore.notificationStatus)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(notificationStatusColor)
+
+                        if timerStore.notificationStatus == "已授权" {
+                            Button("发送测试") {
+                                timerStore.notificationFeedback = nil
+                                timerStore.sendTestNotification()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        } else {
+                            Button(timerStore.notificationActionTitle) {
+                                timerStore.handleNotificationPermissionAction()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                    }
+                }
+
+                if let feedback = timerStore.notificationFeedback {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: feedback.contains("失败") || feedback.contains("请先") ? "exclamationmark.triangle.fill" : "info.circle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(feedback.contains("失败") || feedback.contains("请先") ? AppTheme.warning : AppTheme.accent)
+                        Text(feedback)
+                            .font(TypeScale.meta)
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 10)
+                }
 
                 SettingsDivider()
 
-                SettingsRow(
-                    title: "圆环呼吸",
-                    subtitle: "专注时圆环轻轻缩放",
-                    keywords: "动态光晕 动效 动画"
-                ) {
-                    Toggle("", isOn: $settings.decorativeMotionEnabled)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                        .accessibilityLabel("动态光晕与微动效")
-                }
-            }
-
-            SettingsGroup(title: "声音与反馈") {
                 SettingsRow(
                     title: "结束时播放提示音",
                     keywords: "提示音 声音"
@@ -753,18 +737,6 @@ struct SettingsWindowView: View {
                             .accessibilityLabel("试听提示音")
                         }
                     }
-                }
-
-                SettingsDivider()
-
-                SettingsRow(
-                    title: "按键触感",
-                    keywords: "触觉 震动 反馈"
-                ) {
-                    Toggle("", isOn: $settings.hapticsEnabled)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                        .accessibilityLabel("触觉反馈")
                 }
 
                 SettingsDivider()
@@ -862,6 +834,26 @@ struct SettingsWindowView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
+                }
+
+                if let error = taskStore.dataLoadErrorMessage {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(AppTheme.danger)
+                        Text(error)
+                            .font(TypeScale.meta)
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Button("重新加载") {
+                            _ = taskStore.reloadFromDisk()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 10)
                 }
             }
         }

@@ -370,9 +370,8 @@ struct ContentView: View {
         }
     }
 
-    /// Quiet-tool launch: open 今天 when there is work waiting; otherwise 专注钟.
+    /// Deterministic launch landing: open 今天 when `smartLaunchLanding` is true; otherwise 专注钟.
     private func applySmartLaunchLandingIfNeeded(force: Bool = false) {
-        guard settings.smartLaunchLanding else { return }
         guard force || !didApplySmartLanding else { return }
         didApplySmartLanding = true
         // Don't yank user if a deep link already navigated, or session resume is pending.
@@ -380,12 +379,7 @@ struct ContentView: View {
             viewState.selectedScreen = .timer
             return
         }
-        let counts = taskStore.sidebarBadgeCounts()
-        if counts.today > 0 || counts.overdue > 0 {
-            viewState.selectedScreen = .todayTask
-        } else {
-            viewState.selectedScreen = .timer
-        }
+        viewState.selectedScreen = settings.smartLaunchLanding ? .todayTask : .timer
     }
     
     private var resumeAlertMessage: String {

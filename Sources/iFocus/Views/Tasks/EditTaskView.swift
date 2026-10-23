@@ -131,7 +131,7 @@ struct EditTaskView: View {
                     fieldRow("优先级") {
                         Picker("", selection: $priority) {
                             ForEach(1...4, id: \.self) { p in
-                                Text("\(p) 级").tag(p)
+                                Text(FocusTask.priorityLabel(for: p)).tag(p)
                             }
                         }
                         .labelsHidden()

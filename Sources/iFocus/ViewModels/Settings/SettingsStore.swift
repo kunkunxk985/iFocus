@@ -643,7 +643,7 @@ class SettingsStore: ObservableObject {
         let shortcutRaw = defaults.string(forKey: Key.toggleShortcut) ?? ToggleShortcutPreset.defaultPreset.rawValue
         self.toggleShortcut = ToggleShortcutPreset(rawValue: shortcutRaw) ?? .defaultPreset
         // Quiet-tool defaults: no Focus hint spam, no Dock bounce, no decorative motion.
-        self.showFocusModeHintOnStart = defaults.object(forKey: Key.showFocusModeHint) as? Bool ?? true
+        self.showFocusModeHintOnStart = defaults.object(forKey: Key.showFocusModeHint) as? Bool ?? false
         self.pauseReminderEnabled = defaults.object(forKey: Key.pauseReminderEnabled) as? Bool ?? true
         self.pauseReminderMinutes = Self.intValue(for: Key.pauseReminderMinutes, in: defaults, defaultValue: 5)
         let accentRaw = defaults.string(forKey: Key.accentPreset) ?? AccentPreset.tomato.rawValue

@@ -67,20 +67,30 @@ struct TimerTaskFocusBlock: View {
     private var menuContent: some View {
         let items = taskStore.incompleteTasks
         Button {
-            timerStore.requestStartWorkFocus(taskId: nil)
+            timerStore.selectTask(nil)
         } label: {
-            Label("自由专注（不关联任务）", systemImage: "sparkles")
+            HStack {
+                Label("自由专注（不关联任务）", systemImage: "sparkles")
+                if taskStore.activeTaskId == nil {
+                    Image(systemName: "checkmark")
+                }
+            }
         }
         if !items.isEmpty {
             Divider()
             ForEach(items) { task in
                 Button {
-                    timerStore.requestStartWorkFocus(taskId: task.id)
+                    timerStore.selectTask(task.id)
                 } label: {
-                    Label {
-                        Text("\(task.title)  ·  \(task.completedPomodoros)/\(task.estimatedPomodoros)")
-                    } icon: {
-                        Image(systemName: task.category.icon)
+                    HStack {
+                        Label {
+                            Text("\(task.title)  ·  \(task.completedPomodoros)/\(task.estimatedPomodoros)")
+                        } icon: {
+                            Image(systemName: task.category.icon)
+                        }
+                        if taskStore.activeTaskId == task.id {
+                            Image(systemName: "checkmark")
+                        }
                     }
                 }
             }

@@ -13,7 +13,6 @@ struct TimerView: View {
 
     @State private var clockVersion: UInt = 0
     @State private var showResetConfirm = false
-    @State private var showFocusModeHint = false
     @State private var celebratePulse = false
     @State private var ringBreath = false
     @StateObject private var focusMode = FocusModeController.shared
@@ -58,7 +57,7 @@ struct TimerView: View {
             Button {
                 NotificationCenter.default.post(name: AppNavigation.toggleFocusMode, object: nil)
             } label: {
-                Text("进入专注")
+                Text("全屏沉浸")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
                     .padding(.leading, 12)
@@ -66,14 +65,14 @@ struct TimerView: View {
                     .padding(.vertical, 6)
             }
             .buttonStyle(.plain)
-            .help("全屏专注模式 (⌥⌘F)")
-            .accessibilityLabel("进入专注")
+            .help("全屏沉浸模式 (⌥⌘F)")
+            .accessibilityLabel("全屏沉浸")
 
             Menu {
-                Button("迷你计时窗") {
+                Button("迷你小窗") {
                     NotificationCenter.default.post(name: AppNavigation.toggleMiniTimer, object: nil)
                 }
-                Button(immersiveMode ? "退出沉浸" : "沉浸模式") {
+                Button(immersiveMode ? "恢复完整视图" : "精简视图") {
                     withAnimation(.easeInOut(duration: 0.22)) {
                         immersiveMode.toggle()
                     }
@@ -88,8 +87,8 @@ struct TimerView: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("迷你计时窗或沉浸模式")
-            .accessibilityLabel("更多专注方式")
+            .help("迷你小窗或精简视图")
+            .accessibilityLabel("更多视图方式")
         }
         .background(
             Capsule()
@@ -156,7 +155,7 @@ struct TimerView: View {
                             Button {
                                 FocusModeController.shared.exit()
                             } label: {
-                                Text("退出专注")
+                                Text("退出全屏")
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
                                     .padding(.horizontal, 12)
@@ -171,8 +170,8 @@ struct TimerView: View {
                                     )
                             }
                             .buttonStyle(.plain)
-                            .help("退出专注模式 (Esc)")
-                            .accessibilityLabel("退出专注模式")
+                            .help("退出全屏沉浸 (Esc)")
+                            .accessibilityLabel("退出全屏沉浸")
                         } else {
                             focusEntry
                         }
@@ -249,7 +248,7 @@ struct TimerView: View {
                         layout: layout,
                         modeColor: modeColor,
                         showResetConfirm: $showResetConfirm,
-                        onPlayToggle: requestStartOrToggle
+                        onPlayToggle: { timerStore.toggle() }
                     )
                     .padding(.top, 8)
 
@@ -279,24 +278,6 @@ struct TimerView: View {
         .onChange(of: timerStore.mode) { _ in
             syncAmbientMotion()
         }
-        .confirmationDialog(
-            "开始专注",
-            isPresented: $showFocusModeHint,
-            titleVisibility: .visible
-        ) {
-            Button("直接开始") { timerStore.toggle() }
-            Button("打开系统专注设置…") {
-                SystemSettingsLinks.openFocus()
-                timerStore.toggle()
-            }
-            Button("不再提示并开始") {
-                settings.showFocusModeHintOnStart = false
-                timerStore.toggle()
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("建议在系统设置中开启专注模式，减少通知打扰。iFocus 无法代替系统一键开关勿扰。")
-        }
     }
 
     private var ambientBackground: some View {
@@ -324,18 +305,6 @@ struct TimerView: View {
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: quiet ? 0.2 : 0.4), value: timerStore.mode)
-    }
-
-    private func requestStartOrToggle() {
-        let willStartWork = !timerStore.isRunning
-            && !timerStore.isSessionInProgress
-            && timerStore.mode == .work
-            && settings.showFocusModeHintOnStart
-        if willStartWork {
-            showFocusModeHint = true
-        } else {
-            timerStore.toggle()
-        }
     }
 
     /// Keep ring-breath / play-invite motion synced with mode and focus state.
