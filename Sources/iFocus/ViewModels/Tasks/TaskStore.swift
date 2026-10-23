@@ -290,6 +290,7 @@ class TaskStore: ObservableObject {
     enum DueOverride: Equatable {
         case today
         case tomorrow
+        case later
         case inbox
     }
     
@@ -412,6 +413,7 @@ class TaskStore: ObservableObject {
             switch dueOverride {
             case .today: dueDate = today
             case .tomorrow: dueDate = Calendar.current.date(byAdding: .day, value: 1, to: today)
+            case .later: dueDate = dayAfterTomorrow
             case .inbox: dueDate = nil
             }
         } else {

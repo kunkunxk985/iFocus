@@ -122,14 +122,26 @@ struct TaskListView: View {
         filter(for: viewState.selectedScreen ?? .todayTask)
     }
     
-    private var placeholderText: String {
+    private var defaultDueTarget: TaskStore.DueOverride {
         switch viewState.selectedScreen {
-        case .todayTask: return "添加今天的任务，回车保存"
-        case .tomorrowTask: return "添加明天的任务，回车保存"
-        case .weekTask: return "添加稍后的任务，回车保存"
-        case .plannedTask: return "添加计划任务，回车保存"
-        case .inboxTask: return "先丢进收集箱…"
-        default: return "添加任务，回车保存"
+        case .todayTask, .plannedTask: return .today
+        case .tomorrowTask: return .tomorrow
+        case .weekTask: return .later
+        case .inboxTask, .completedTask: return .inbox
+        default: return .today
+        }
+    }
+
+    private var activeDueTarget: TaskStore.DueOverride {
+        dueOverride ?? defaultDueTarget
+    }
+
+    private var placeholderText: String {
+        switch activeDueTarget {
+        case .today: return "添加今天的任务，回车保存"
+        case .tomorrow: return "添加明天的任务，回车保存"
+        case .later: return "添加稍后的任务，回车保存"
+        case .inbox: return "先丢进收集箱，回车保存"
         }
     }
     
@@ -667,10 +679,10 @@ struct TaskListView: View {
                 .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.70))
                 .padding(.trailing, 2)
 
-                dueChip(title: "跟随列表", override: nil)
-                dueChip(title: "今天", override: .today)
-                dueChip(title: "明天", override: .tomorrow)
-                dueChip(title: "收集箱", override: .inbox)
+                dueChip(title: "今天", target: .today)
+                dueChip(title: "明天", target: .tomorrow)
+                dueChip(title: "稍后", target: .later)
+                dueChip(title: "收集箱", target: .inbox)
                 Spacer(minLength: 0)
             }
             .padding(.leading, 3)
@@ -777,11 +789,11 @@ struct TaskListView: View {
         }
     }
 
-    private func dueChip(title: String, override: TaskStore.DueOverride?) -> some View {
-        let selected = dueOverride == override
+    private func dueChip(title: String, target: TaskStore.DueOverride) -> some View {
+        let selected = activeDueTarget == target
         return Button {
             withAnimation(AppTheme.springInteractive) {
-                dueOverride = override
+                dueOverride = (target == defaultDueTarget) ? nil : target
             }
         } label: {
             HStack(spacing: 3) {
