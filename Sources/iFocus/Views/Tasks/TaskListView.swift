@@ -62,7 +62,7 @@ struct TaskListView: View {
     @State private var showStudyPlanImport = false
     /// nil = follow current list defaults; else force today / tomorrow / inbox.
     @State private var dueOverride: TaskStore.DueOverride? = nil
-    @Namespace private var filterAnimation
+    @State private var listViewportHeight: CGFloat = 640
     
     private func filter(for screen: AppScreen) -> TaskStore.TaskFilter {
         switch screen {
@@ -223,50 +223,12 @@ struct TaskListView: View {
                         tint: AppTheme.accent
                     )
                     .overlay(alignment: .trailing) {
-                        HStack(spacing: 8) {
-                            if viewState.selectedScreen != .completedTask {
-                                Button {
-                                    showStudyPlanImport = true
-                                } label: {
-                                    Label("学习计划", systemImage: "map")
-                                        .font(.system(size: 11.5, weight: .semibold))
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                                .tint(AppTheme.accent)
-                                .help("预览并导入加速版 4 周学习路线")
-                                .accessibilityLabel("导入学习计划")
-                                .sheet(isPresented: $showStudyPlanImport) {
-                                    StudyPlanImportSheet {
-                                        viewState.selectedScreen = .todayTask
-                                    }
-                                }
-                            }
-
-                            if !currentTasks.isEmpty {
-                                Button {
-                                    withAnimation(AppTheme.springInteractive) {
-                                        isSelecting.toggle()
-                                        if !isSelecting { selectedIDs.removeAll() }
-                                    }
-                                } label: {
-                                    Label(
-                                        isSelecting ? "完成" : "批量",
-                                        systemImage: isSelecting ? "checkmark" : "checklist"
-                                    )
-                                    .font(.system(size: 11.5, weight: .semibold))
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                                .tint(AppTheme.accent)
-                            }
-                        }
+                        listTools
                     }
-
-                    if viewState.selectedScreen == .todayTask {
-                        TodayFocusOverview()
-                            .padding(.top, 14)
-                            .padding(.bottom, 2)
+                    .sheet(isPresented: $showStudyPlanImport) {
+                        StudyPlanImportSheet {
+                            viewState.selectedScreen = .todayTask
+                        }
                     }
 
                     if !baseTasks.isEmpty || !searchText.isEmpty || isSearchFocused {
@@ -274,12 +236,6 @@ struct TaskListView: View {
                             .padding(.top, 12)
                     }
 
-                    if !baseTasks.isEmpty {
-                        filterChipsBar
-                            .padding(.top, 14)
-                            .padding(.bottom, 12)
-                    }
-                    
                     if isSelecting {
                         batchToolbar
                             .padding(.bottom, 12)
@@ -295,6 +251,13 @@ struct TaskListView: View {
                 }
             }
             .softScroll()
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear { listViewportHeight = geo.size.height }
+                        .onChange(of: geo.size.height) { listViewportHeight = $0 }
+                }
+            )
         }
         .overlay(alignment: .bottom) {
             if let banner = taskStore.undoDeletionBanner {
@@ -453,86 +416,66 @@ struct TaskListView: View {
         .help("搜索当前列表中的标题、备注、分类或链接（⌘F）")
     }
     
-    private var filterChipsBar: some View {
-        ChipFlowLayout(spacing: 5, rowSpacing: 4) {
-            ForEach(availableChips) { chip in
-                    let selected = activeChip.id == chip.id
-                    let count = chipCount(chip)
-                    Button {
-                        withAnimation(AppTheme.springInteractive) {
-                            activeChip = chip
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(chip.title)
-                                .font(.system(size: 12, weight: selected ? .semibold : .medium))
-                                .foregroundColor(
-                                    selected
-                                    ? AppTheme.primaryText(for: colorScheme)
-                                    : AppTheme.secondaryText(for: colorScheme).opacity(0.85)
-                                )
+    /// Quiet actions beside the title. Filters live in one menu so they don't
+    /// become a second row of navigation under the sidebar.
+    private var listTools: some View {
+        HStack(spacing: 14) {
+            if viewState.selectedScreen != .completedTask {
+                Button("学习计划") {
+                    showStudyPlanImport = true
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                .help("预览并导入加速版 4 周学习路线")
+                .accessibilityLabel("导入学习计划")
+            }
 
-                            // Subtle count badge
-                            Text("\(count)")
-                                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                .foregroundColor(
-                                    selected
-                                    ? AppTheme.accent
-                                    : AppTheme.secondaryText(for: colorScheme).opacity(0.55)
-                                )
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1.5)
-                                .background(
-                                    Capsule()
-                                        .fill(
-                                            selected
-                                            ? AppTheme.accent.opacity(colorScheme == .light ? 0.12 : 0.20)
-                                            : AppTheme.elevatedBackground(for: colorScheme).opacity(0.6)
-                                        )
-                                )
-                        }
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 6)
-                        .background {
-                            if selected {
-                                Capsule()
-                                    .fill(AppTheme.cardBackground(for: colorScheme))
-                                    .overlay(
-                                        Capsule()
-                                            .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                                    )
-                                    .overlay(
-                                        Capsule()
-                                            .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.75)
-                                    )
-                                    .matchedGeometryEffect(id: "activeFilterPill", in: filterAnimation)
+            if availableChips.count > 1 {
+                Menu {
+                    ForEach(availableChips) { chip in
+                        Button {
+                            activeChip = chip
+                        } label: {
+                            if activeChip.id == chip.id {
+                                Label("\(chip.title)  \(chipCount(chip))", systemImage: "checkmark")
+                            } else {
+                                Text("\(chip.title)  \(chipCount(chip))")
                             }
                         }
                     }
-                    .buttonStyle(.plain)
+                    if !taskStore.customCategories.isEmpty {
+                        Divider()
+                        Button("管理分类…") {
+                            activeSheet = .categories
+                        }
+                    }
+                } label: {
+                    Text(activeChip.id == TaskListChip.all.id ? "筛选" : activeChip.title)
+                        .font(.system(size: 12, weight: activeChip.id == TaskListChip.all.id ? .medium : .semibold))
+                        .foregroundColor(
+                            activeChip.id == TaskListChip.all.id
+                            ? AppTheme.secondaryText(for: colorScheme)
+                            : AppTheme.accent
+                        )
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .accessibilityLabel("筛选当前列表")
             }
 
-            if !taskStore.customCategories.isEmpty {
-                Button {
-                    activeSheet = .categories
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 9.5, weight: .semibold))
-                        Text("管理分类")
-                            .font(.system(size: 11, weight: .medium))
+            if !currentTasks.isEmpty || isSelecting {
+                Button(isSelecting ? "完成" : "批量") {
+                    withAnimation(AppTheme.springInteractive) {
+                        isSelecting.toggle()
+                        if !isSelecting { selectedIDs.removeAll() }
                     }
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.8))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 5)
-                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .help("管理自定义分类的名称、颜色与图标")
-                .accessibilityLabel("管理自定义分类")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
         }
-        .padding(.vertical, 3)
     }
 
     private var batchToolbar: some View {
@@ -908,10 +851,17 @@ struct TaskListView: View {
         }
     }
     
+    /// Push an empty list into the middle of the page, under the title and composer.
+    private var emptyStateMinHeight: CGFloat {
+        let chrome: CGFloat = viewState.selectedScreen == .completedTask ? 140 : 280
+        return max(240, listViewportHeight - chrome)
+    }
+
     private var taskListSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             if currentTasks.isEmpty {
                 emptyState
+                    .frame(maxWidth: .infinity, minHeight: emptyStateMinHeight, alignment: .center)
             } else if viewState.selectedScreen == .todayTask {
                 if !overdueTasks.isEmpty {
                     taskSection(title: "已逾期", tint: AppTheme.danger, tasks: overdueTasks)
@@ -1082,49 +1032,6 @@ struct TaskListView: View {
     }
 }
 
-
-// MARK: - Chip flow layout
-
-/// Wraps filter chips instead of hiding the tail behind a horizontal scroller.
-private struct ChipFlowLayout: Layout {
-    var spacing: CGFloat = 6
-    var rowSpacing: CGFloat = 6
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let maxWidth = proposal.width ?? .infinity
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var rowHeight: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > maxWidth {
-                x = 0
-                y += rowHeight + rowSpacing
-                rowHeight = 0
-            }
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-        return CGSize(width: maxWidth, height: y + rowHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX
-        var y = bounds.minY
-        var rowHeight: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x > bounds.minX, x + size.width > bounds.maxX {
-                x = bounds.minX
-                y += rowHeight + rowSpacing
-                rowHeight = 0
-            }
-            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-    }
-}
 
 // MARK: - Undo toast
 

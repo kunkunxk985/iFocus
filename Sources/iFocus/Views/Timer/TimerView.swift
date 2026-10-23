@@ -180,7 +180,7 @@ struct TimerView: View {
                     .padding(.top, layout.stageTopChrome)
 
                     if !stageImmersive {
-                        TimerTaskFocusBlock(layout: layout, modeColor: modeColor)
+                        TimerTaskFocusBlock()
                             .frame(maxWidth: min(layout.taskBlockMaxWidth, layout.width - layout.horizontalPadding * 2))
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     } else {

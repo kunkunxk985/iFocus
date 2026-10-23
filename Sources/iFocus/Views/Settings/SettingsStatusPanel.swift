@@ -21,7 +21,7 @@ struct SettingsStatusPanel: View {
         var count = 0
         if taskStore.dataLoadErrorMessage != nil { count += 1 }
         if timerStore.notificationStatus == "已拒绝" { count += 1 }
-        if loginStatus == .requiresApproval || loginStatus == .notFound { count += 1 }
+        if LaunchAtLogin.needsAttention(userWantsEnabled: settings.launchAtLogin) { count += 1 }
         if backupFailed { count += 1 }
         return count
     }
@@ -35,6 +35,7 @@ struct SettingsStatusPanel: View {
     }
 
     private var loginLabel: String {
+        guard settings.launchAtLogin else { return "未开启" }
         switch loginStatus {
         case .enabled: return "已开启"
         case .requiresApproval: return "等待批准"
@@ -45,6 +46,9 @@ struct SettingsStatusPanel: View {
     }
 
     private var loginColor: Color {
+        guard settings.launchAtLogin else {
+            return AppTheme.secondaryText(for: colorScheme)
+        }
         switch loginStatus {
         case .enabled: return AppTheme.success
         case .requiresApproval, .notFound: return AppTheme.warning
@@ -164,7 +168,7 @@ struct SettingsStatusPanel: View {
 
             SettingsDivider()
 
-            if loginStatus == .notFound {
+            if settings.launchAtLogin, loginStatus == .notFound {
                 statusCaption("请先把 iFocus 放到「应用程序」文件夹，再重新打开登录项设置。", isError: true)
                 SettingsDivider()
             }

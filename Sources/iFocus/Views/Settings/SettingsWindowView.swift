@@ -94,7 +94,7 @@ struct SettingsWindowView: View {
         var count = 0
         if taskStore.dataLoadErrorMessage != nil { count += 1 }
         if timerStore.notificationStatus == "已拒绝" { count += 1 }
-        if LaunchAtLogin.status == .requiresApproval || LaunchAtLogin.status == .notFound { count += 1 }
+        if LaunchAtLogin.needsAttention(userWantsEnabled: settings.launchAtLogin) { count += 1 }
         if let feedback = settings.backupFeedback,
            feedback.contains("失败") || feedback.contains("未完成") {
             count += 1

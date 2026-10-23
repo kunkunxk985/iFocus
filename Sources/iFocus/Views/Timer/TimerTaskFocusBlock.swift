@@ -2,8 +2,6 @@ import SwiftUI
 
 /// Task picker strip above the focus ring.
 struct TimerTaskFocusBlock: View {
-    let layout: WindowLayoutMetrics
-    let modeColor: Color
     @EnvironmentObject var timerStore: TimerStore
     @EnvironmentObject var taskStore: TaskStore
     @EnvironmentObject var viewState: ContentViewState
@@ -21,66 +19,48 @@ struct TimerTaskFocusBlock: View {
     }
 
     private func selectedRow(_ task: FocusTask) -> some View {
-        let glyph = TimerLayoutMath.lerp(34, 42, layout.eased)
-        let titleSize = TimerLayoutMath.lerp(13.5, 15.5, layout.eased)
-        let pad = TimerLayoutMath.lerp(9, 13, layout.eased)
-        return Menu {
+        Menu {
             menuContent
         } label: {
-            HStack(spacing: 12) {
-                glyphView(task.category.icon, color: task.category.color, size: glyph)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(task.title)
-                        .font(.system(size: titleSize, weight: .semibold))
-                        .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                        .lineLimit(1)
-                    Text("\(task.category.name) · \(task.completedPomodoros)/\(task.estimatedPomodoros) 番茄")
-                        .font(.caption)
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                }
-                Spacer(minLength: 6)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-            }
-            .padding(pad)
-            .background(blockBackground(emphasized: true))
+            pickerLine(title: task.title, detail: task.category.name)
         }
         .menuStyle(.borderlessButton)
+        .fixedSize(horizontal: false, vertical: true)
         .disabled(timerStore.isRunning)
         .opacity(timerStore.isRunning ? 0.85 : 1)
     }
 
     private var emptyPicker: some View {
         let items = taskStore.incompleteTasks
-        let glyph = TimerLayoutMath.lerp(34, 42, layout.eased)
-        let titleSize = TimerLayoutMath.lerp(13.5, 15.5, layout.eased)
-        let pad = TimerLayoutMath.lerp(9, 13, layout.eased)
         return Menu {
             menuContent
         } label: {
-            HStack(spacing: 12) {
-                glyphView("list.bullet", color: modeColor, size: glyph)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(items.isEmpty ? "自由专注" : "选择任务")
-                        .font(.system(size: titleSize, weight: .semibold))
-                        .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                    Text(items.isEmpty
-                         ? "空格开始，或先去清单添加"
-                         : "\(items.count) 个未完成")
-                        .font(.caption)
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 6)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-            }
-            .padding(pad)
-            .background(blockBackground(emphasized: false))
+            pickerLine(
+                title: items.isEmpty ? "自由专注" : "选择任务",
+                detail: items.isEmpty ? "空格开始" : "\(items.count) 个未完成"
+            )
         }
         .menuStyle(.borderlessButton)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func pickerLine(title: String, detail: String) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                .lineLimit(1)
+            Text(detail)
+                .font(.system(size: 12))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -113,30 +93,4 @@ struct TimerTaskFocusBlock: View {
         }
     }
 
-    private func glyphView(_ systemName: String, color: Color, size: CGFloat) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(color.opacity(0.16))
-                .frame(width: size, height: size)
-            Image(systemName: systemName)
-                .font(.system(size: size * 0.38, weight: .semibold))
-                .foregroundColor(color)
-        }
-    }
-
-    private func blockBackground(emphasized: Bool) -> some View {
-        RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
-            .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.96 : 0.82))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
-                    .stroke(
-                        emphasized ? modeColor.opacity(0.24) : AppTheme.separator(for: colorScheme),
-                        lineWidth: 1
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
-                    .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.75)
-            )
-    }
 }

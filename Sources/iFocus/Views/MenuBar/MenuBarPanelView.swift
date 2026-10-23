@@ -166,17 +166,31 @@ struct MenuBarPanelView: View {
 
                 Spacer(minLength: 4)
 
-                panelIcon("pip", help: "迷你计时窗") {
-                    NotificationCenter.default.post(name: AppNavigation.toggleMiniTimer, object: nil)
-                    onClose()
+                Menu {
+                    Button("迷你计时窗") {
+                        NotificationCenter.default.post(name: AppNavigation.toggleMiniTimer, object: nil)
+                        onClose()
+                    }
+                    Button("全屏专注") {
+                        NotificationCenter.default.post(name: AppNavigation.toggleFocusMode, object: nil)
+                        onClose()
+                    }
+                    Divider()
+                    Button("设置") {
+                        onOpenSettings()
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
                 }
-                panelIcon("arrow.up.left.and.arrow.down.right", help: "全屏专注模式") {
-                    NotificationCenter.default.post(name: AppNavigation.toggleFocusMode, object: nil)
-                    onClose()
-                }
-                panelIcon("gearshape", help: "设置") {
-                    onOpenSettings()
-                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("迷你计时窗、全屏专注、设置")
+                .accessibilityLabel("更多")
             }
 
             HStack {
@@ -200,24 +214,5 @@ struct MenuBarPanelView: View {
         .preferredColorScheme(settings.appearance.colorScheme)
         .onReceive(timerStore.clockTick) { _ in clockVersion &+= 1 }
         .accessibilityElement(children: .contain)
-    }
-
-    private func panelIcon(
-        _ systemName: String,
-        help: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                .frame(width: 24, height: 24)
-                .background(
-                    Circle().fill(AppTheme.elevatedBackground(for: colorScheme).opacity(0.75))
-                )
-        }
-        .buttonStyle(SoftScaleButtonStyle())
-        .help(help)
-        .accessibilityLabel(help)
     }
 }

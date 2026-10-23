@@ -34,6 +34,18 @@ enum LaunchAtLogin {
     static var isEnabled: Bool {
         status == .enabled
     }
+
+    /// A missing or pending login item only matters after the user turns the switch on.
+    /// Leaving it off is a normal choice, not a status-center issue.
+    static func needsAttention(userWantsEnabled: Bool) -> Bool {
+        guard userWantsEnabled else { return false }
+        switch status {
+        case .requiresApproval, .notFound:
+            return true
+        case .enabled, .disabled, .unsupported:
+            return false
+        }
+    }
     
     @discardableResult
     static func setEnabled(_ enabled: Bool) -> (ok: Bool, message: String?) {
