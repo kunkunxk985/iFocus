@@ -45,43 +45,43 @@ struct MiniTimerView: View {
 
     var body: some View {
         HStack(spacing: 11) {
-            ZStack {
-                Circle()
-                    .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 4)
-                Circle()
-                    .trim(from: 0, to: max(0.001, progress))
-                    .stroke(
-                        timerStore.mode.accent,
-                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
-                    )
-                    .rotationEffect(.degrees(-90))
-                Image(systemName: modeIcon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(timerStore.mode.accent)
+            HStack(spacing: 11) {
+                ZStack {
+                    Circle()
+                        .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 4)
+                    Circle()
+                        .trim(from: 0, to: max(0.001, progress))
+                        .stroke(
+                            timerStore.mode.accent,
+                            style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                    Image(systemName: modeIcon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(timerStore.mode.accent)
+                }
+                .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(stateLabel)
+                        .font(TypeScale.eyebrow)
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    Text(time)
+                        .font(.system(size: 23, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                    Text(taskTitle)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        .lineLimit(1)
+                        .help(taskTitle)
+                }
+                .frame(minWidth: 92, maxWidth: .infinity, alignment: .leading)
             }
-            .frame(width: 42, height: 42)
             .overlay(
                 MiniWindowDragArea()
                     .accessibilityHidden(true)
             )
             .help("拖动迷你窗")
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(stateLabel)
-                    .font(TypeScale.eyebrow)
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                Text(time)
-                    .font(.system(size: 23, weight: .bold, design: .rounded).monospacedDigit())
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                Text(taskTitle)
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                    .lineLimit(1)
-                    .help(taskTitle)
-            }
-            .frame(minWidth: 92, alignment: .leading)
-
-            Spacer(minLength: 4)
 
             HStack(spacing: 5) {
                 miniButton(

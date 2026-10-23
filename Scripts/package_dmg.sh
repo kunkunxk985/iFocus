@@ -34,8 +34,9 @@ echo "Preparing temporary directory for DMG..."
 rm -rf "$TEMP_DIR"
 mkdir -p "$TEMP_DIR"
 
-# Copy the .app bundle
+# Copy the .app bundle and strip any extended attributes before packaging
 cp -R "$APP_DIR" "$TEMP_DIR/"
+xattr -cr "$TEMP_DIR/${APP_NAME}.app" 2>/dev/null || true
 
 # Create a symlink to /Applications inside the DMG folder for easy installation
 ln -s /Applications "$TEMP_DIR/Applications"

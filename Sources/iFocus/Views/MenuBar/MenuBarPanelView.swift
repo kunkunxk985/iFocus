@@ -145,7 +145,7 @@ struct MenuBarPanelView: View {
                             } label: {
                                 Label(
                                     "\(task.title)  ·  \(task.completedPomodoros)/\(task.estimatedPomodoros)",
-                                    systemImage: task.category.icon
+                                    systemImage: taskStore.activeTaskId == task.id ? "checkmark" : task.category.icon
                                 )
                             }
                         }
@@ -202,14 +202,10 @@ struct MenuBarPanelView: View {
                 .foregroundColor(AppTheme.secondaryText(for: colorScheme))
 
                 Spacer()
-
-                Text("右键状态图标可打开完整菜单")
-                    .font(.system(size: 9.5))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.7))
             }
         }
         .padding(16)
-        .frame(width: 300, height: 244, alignment: .top)
+        .frame(width: 300, height: 228, alignment: .top)
         .tint(AppTheme.accent)
         .preferredColorScheme(settings.appearance.colorScheme)
         .onReceive(timerStore.clockTick) { _ in clockVersion &+= 1 }

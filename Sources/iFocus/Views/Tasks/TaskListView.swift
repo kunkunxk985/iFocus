@@ -59,7 +59,6 @@ struct TaskListView: View {
     @FocusState private var isQuickAddFocused: Bool
     @FocusState private var isSearchFocused: Bool
     @State private var searchText = ""
-    @State private var showStudyPlanImport = false
     /// nil = follow current list defaults; else force today / tomorrow / inbox.
     @State private var dueOverride: TaskStore.DueOverride? = nil
     @State private var listViewportHeight: CGFloat = 640
@@ -225,11 +224,6 @@ struct TaskListView: View {
                     .overlay(alignment: .trailing) {
                         listTools
                     }
-                    .sheet(isPresented: $showStudyPlanImport) {
-                        StudyPlanImportSheet {
-                            viewState.selectedScreen = .todayTask
-                        }
-                    }
 
                     if !baseTasks.isEmpty || !searchText.isEmpty || isSearchFocused {
                         taskSearchField
@@ -302,7 +296,7 @@ struct TaskListView: View {
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .edit(let session):
-                EditTaskView(session: session, categories: taskStore.allCategories) { title, category, priority, pomodoros, due, recurrence, notes, linkURL, items, itemUnit, startDate in
+                EditTaskView(session: session, categories: taskStore.allCategories) { title, category, priority, pomodoros, due, recurrence, notes, linkURL in
                     taskStore.updateTask(
                         id: session.id,
                         title: title,
@@ -312,14 +306,11 @@ struct TaskListView: View {
                         dueDate: due,
                         recurrence: recurrence,
                         notes: notes,
-                        linkURL: linkURL,
-                        items: items,
-                        itemUnit: itemUnit,
-                        startDate: startDate
+                        linkURL: linkURL
                     )
                 }
                 // Force full re-init of @State when reopening the same task after save.
-                .id("\(session.id)-\(session.notes)-\(session.linkURL)-\(session.title)-\(session.priority)-\(session.itemUnit)-\(session.startDate?.timeIntervalSince1970 ?? 0)-\(session.items.map(\.id))")
+                .id("\(session.id)-\(session.notes)-\(session.linkURL)-\(session.title)-\(session.priority)")
             case .categories:
                 CategoryManagementView()
                     .environmentObject(taskStore)
@@ -420,17 +411,6 @@ struct TaskListView: View {
     /// become a second row of navigation under the sidebar.
     private var listTools: some View {
         HStack(spacing: 14) {
-            if viewState.selectedScreen != .completedTask {
-                Button("学习计划") {
-                    showStudyPlanImport = true
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                .help("预览并导入加速版 4 周学习路线")
-                .accessibilityLabel("导入学习计划")
-            }
-
             if availableChips.count > 1 {
                 Menu {
                     ForEach(availableChips) { chip in
