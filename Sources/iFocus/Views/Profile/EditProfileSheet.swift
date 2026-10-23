@@ -42,6 +42,40 @@ struct EditProfileSheet: View {
                     username: tempUsername.isEmpty ? "小番茄" : tempUsername,
                     size: 68
                 )
+
+                if settings.avatarPath == nil {
+                    HStack(spacing: 8) {
+                        ForEach(0..<UnifiedAvatarView.palette.count, id: \.self) { index in
+                            let selected = settings.avatarColorIndex == index
+                            let swatchColor = UnifiedAvatarView.palette[index]
+                            Button {
+                                settings.avatarColorIndex = index
+                            } label: {
+                                ZStack {
+                                    Circle()
+                                        .fill(swatchColor)
+                                        .frame(width: 18, height: 18)
+                                    if index == 0 {
+                                        Image(systemName: "sparkles")
+                                            .font(.system(size: 8, weight: .bold))
+                                            .foregroundColor(.white)
+                                    } else if selected {
+                                        Circle()
+                                            .fill(Color.white)
+                                            .frame(width: 6, height: 6)
+                                    }
+                                }
+                                .padding(2)
+                                .overlay(
+                                    Circle()
+                                        .stroke(selected ? swatchColor : Color.clear, lineWidth: 1.5)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .help(index == 0 ? "默认应用图标" : "配色 \(index)")
+                        }
+                    }
+                }
                 
                 HStack(spacing: 12) {
                     Button {

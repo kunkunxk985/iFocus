@@ -462,7 +462,7 @@ struct OnboardingOverlay: View {
     private var focusStep: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(spacing: 0) {
-                shortcutRow(keys: ["空格"], title: "开始 / 暂停", detail: "专注页")
+                shortcutRow(keys: [settings.toggleShortcut.label], title: "开始 / 暂停", detail: "专注页")
                 onboardingDivider
                 shortcutRow(keys: ["⌥", "⌘", "M"], title: "迷你计时窗", detail: "置顶小窗")
                 onboardingDivider
@@ -645,7 +645,7 @@ struct OnboardingOverlay: View {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.counterclockwise")
                     .font(.system(size: 10, weight: .semibold))
-                Text("随时可以在「设置 › 通用 › 引导与帮助」重新播放。")
+                Text("随时可以在「设置 › 通用 › 新手引导」重新播放。")
                     .font(.system(size: 10.5))
             }
             .foregroundColor(secondary)
@@ -858,9 +858,10 @@ struct OnboardingOverlay: View {
     }
 
     private var startHint: String {
-        settings.countUpWork
-            ? "回到专注钟，按空格开始正计时"
-            : "回到专注钟，按空格开始 \(settings.workMinutes) 分钟"
+        let keyLabel = settings.toggleShortcut.label
+        return settings.countUpWork
+            ? "回到专注钟，按\(keyLabel)开始正计时"
+            : "回到专注钟，按\(keyLabel)开始 \(settings.workMinutes) 分钟"
     }
 
     private var notificationStatusCopy: String {

@@ -2,10 +2,18 @@ import SwiftUI
 import AppKit
 
 struct UnifiedAvatarView: View {
+    static let palette: [Color] = AccentPreset.allCases.map(\.color)
+
     let path: String?
     let colorIndex: Int
     let username: String
     let size: CGFloat
+
+    private var initialCharacter: String {
+        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = trimmed.first else { return "小" }
+        return String(first).uppercased()
+    }
     
     var body: some View {
         ZStack {
@@ -13,6 +21,19 @@ struct UnifiedAvatarView: View {
                 Image(nsImage: nsImage)
                     .resizable()
                     .scaledToFill()
+            } else if colorIndex > 0 {
+                let tint = Self.palette[colorIndex % Self.palette.count]
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [tint.opacity(0.95), tint.opacity(0.75)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                Text(initialCharacter)
+                    .font(.system(size: size * 0.44, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
             } else {
                 // Default tomato avatar using the macOS high-res App Icon!
                 if let appIcon = NSApplication.shared.applicationIconImage {

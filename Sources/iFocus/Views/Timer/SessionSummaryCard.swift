@@ -94,16 +94,12 @@ struct SessionSummaryCard: View {
                     }
                     .buttonStyle(SoftScaleButtonStyle())
                 } else {
-                    Text("本轮专注已写入记录")
+                    Text("本轮专注已记入历史")
                         .font(TypeScale.meta)
                         .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                 }
 
                 Spacer(minLength: 0)
-
-                Text("已记入专注历史")
-                    .font(.system(size: 10, weight: .regular))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.75))
             }
         }
         .padding(16)
