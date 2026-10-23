@@ -42,7 +42,7 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
         case .appearance:
             return "外观 浅色 深色 跟随系统 强调色 菜单栏 图标 动态光晕 动效 界面密度 舒适 紧凑 提示音 声音 触觉 程序坞 Dock"
         case .data:
-            return "数据 本地 离线 任务 专注历史 导出 备份 恢复 快照 自动保护 访达 Finder 文件夹 学习记录 CSV 周报 存储"
+            return "数据 本地 离线 任务 专注历史 导出 备份 恢复 快照 自动保护 访达 Finder 文件夹 存储"
         case .status:
             return "状态 健康 权限 通知 登录项 系统专注 数据 文件 备份 版本 检查"
         }
@@ -859,20 +859,6 @@ struct SettingsWindowView: View {
                 ) {
                     Button("打开数据文件夹") {
                         settings.openDataFolderInFinder()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-
-                SettingsDivider()
-
-                SettingsRow(
-                    title: "学习记录",
-                    subtitle: "表格和每周报告",
-                    keywords: "学习记录 CSV 周报 访达 Finder 文件夹"
-                ) {
-                    Button("打开学习记录") {
-                        settings.openStudyLogFolderInFinder()
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)

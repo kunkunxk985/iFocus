@@ -236,7 +236,7 @@ struct iFocusApp: App {
             storageDirectory: TaskStore.defaultStorageDirectory(),
             currentVersion: AppVersion.short
         )
-        let taskStore = TaskStore(studyLogDirectory: StudyLogWriter.defaultDirectory())
+        let taskStore = TaskStore()
         if let preUpgradeFolder, taskStore.skippedItemsOnLoad > 0 {
             taskStore.upgradeNotice = PreUpgradeGuard.skippedItemsNotice(
                 count: taskStore.skippedItemsOnLoad,

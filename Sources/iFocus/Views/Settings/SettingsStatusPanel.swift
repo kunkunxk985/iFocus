@@ -241,20 +241,6 @@ struct SettingsStatusPanel: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             }
-
-            SettingsDivider()
-
-            SettingsRow(
-                title: "学习记录目录",
-                subtitle: "~/StudyLog 的 CSV 与每周报告",
-                keywords: "学习记录 CSV 周报 文件"
-            ) {
-                Button("打开") {
-                    settings.openStudyLogFolderInFinder()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
         }
     }
 
