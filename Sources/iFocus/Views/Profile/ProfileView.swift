@@ -128,13 +128,11 @@ struct ProfileView: View {
                         )
                         .frame(maxWidth: .infinity)
                     }
-                    .padding(.top, 24)
                 }
                 .padding(.bottom, timerStore.isSessionInProgress ? 96 : 32)
             }
             .softScroll()
         }
-        .id(colorScheme)
         .overlay {
             if isEditing {
                 ZStack {

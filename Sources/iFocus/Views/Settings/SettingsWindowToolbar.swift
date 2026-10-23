@@ -7,6 +7,13 @@ final class SettingsSearchModel: ObservableObject {
     static let shared = SettingsSearchModel()
 
     @Published var query = ""
+
+    func matchesRow(title: String, subtitle: String? = nil, keywords: String = "") -> Bool {
+        let tokens = query.split(whereSeparator: \.isWhitespace)
+        guard !tokens.isEmpty else { return false }
+        let haystack = "\(title) \(subtitle ?? "") \(keywords)"
+        return tokens.allSatisfy { haystack.localizedCaseInsensitiveContains(String($0)) }
+    }
 }
 
 /// Gives the Settings window the same native 52pt titlebar band as the main window,

@@ -5,39 +5,15 @@ struct ProfileHeaderBar: View {
     let onEdit: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            PageTitle(
-                title: "个人资料",
-                systemImage: "person.crop.circle"
-            )
-
-            Spacer(minLength: 12)
-
-            Button(action: onEdit) {
-                HStack(spacing: 5) {
-                    Image(systemName: "pencil")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text("编辑资料")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(AppTheme.cardBackground(for: colorScheme))
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                        )
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.75)
-                        )
-                        .multiLayerShadow(elevation: .row, colorScheme: colorScheme)
-                )
-            }
-            .buttonStyle(SpringScaleButtonStyle(pressedScale: 0.94))
+        PageTitle(
+            title: "个人资料",
+            systemImage: "person.crop.circle"
+        )
+        .overlay(alignment: .trailing) {
+            Button("编辑资料", action: onEdit)
+                .buttonStyle(.plain)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
         }
     }
 }

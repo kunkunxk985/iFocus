@@ -119,7 +119,8 @@ struct SettingsStatusPanel: View {
         SettingsGroup(title: "权限与系统") {
             SettingsRow(
                 title: "系统通知",
-                subtitle: "专注结束时的横幅与提示音"
+                subtitle: "专注结束时的横幅与提示音",
+                keywords: "权限 通知 检查"
             ) {
                 HStack(spacing: 8) {
                     Text(timerStore.notificationStatus)
@@ -152,7 +153,8 @@ struct SettingsStatusPanel: View {
 
             SettingsRow(
                 title: "登录时自动打开",
-                subtitle: "由「系统设置 → 通用 → 登录项」管理"
+                subtitle: "由「系统设置 → 通用 → 登录项」管理",
+                keywords: "登录项 权限 开机 启动"
             ) {
                 HStack(spacing: 8) {
                     Text(loginLabel)
@@ -175,7 +177,8 @@ struct SettingsStatusPanel: View {
 
             SettingsRow(
                 title: "系统专注模式",
-                subtitle: "由 macOS 管理，iFocus 无法直接开关"
+                subtitle: "由 macOS 管理，iFocus 无法直接开关",
+                keywords: "系统专注 权限 勿扰"
             ) {
                 Button("打开设置…") {
                     SystemSettingsLinks.openFocus()
@@ -190,7 +193,8 @@ struct SettingsStatusPanel: View {
         SettingsGroup(title: "数据健康") {
             SettingsRow(
                 title: "本地数据文件",
-                subtitle: "\(taskStore.tasks.count) 个任务 · \(taskStore.focusSessions.count) 次专注记录"
+                subtitle: "\(taskStore.tasks.count) 个任务 · \(taskStore.focusSessions.count) 次专注记录",
+                keywords: "状态 健康 数据 文件 检查"
             ) {
                 HStack(spacing: 8) {
                     Text(taskStore.dataLoadErrorMessage == nil ? "正常" : "需要注意")
@@ -228,7 +232,8 @@ struct SettingsStatusPanel: View {
 
             SettingsRow(
                 title: "备份与恢复",
-                subtitle: settings.backupFeedback ?? "导出或恢复都在「数据与备份」中完成"
+                subtitle: settings.backupFeedback ?? "导出或恢复都在「数据与备份」中完成",
+                keywords: "备份 恢复 状态 健康"
             ) {
                 Button("前往") {
                     onOpenData()
@@ -241,7 +246,8 @@ struct SettingsStatusPanel: View {
 
             SettingsRow(
                 title: "学习记录目录",
-                subtitle: "~/StudyLog 的 CSV 与每周报告"
+                subtitle: "~/StudyLog 的 CSV 与每周报告",
+                keywords: "学习记录 CSV 周报 文件"
             ) {
                 Button("打开") {
                     settings.openStudyLogFolderInFinder()

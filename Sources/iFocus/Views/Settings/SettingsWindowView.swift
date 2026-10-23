@@ -302,6 +302,14 @@ struct SettingsWindowView: View {
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundColor(AppTheme.primaryText(for: colorScheme))
             Spacer()
+            if isSearching {
+                Button("清除搜索") {
+                    SettingsWindowToolbar.shared.clearSearchField()
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppTheme.accent)
+            }
         }
         .padding(.horizontal, 28)
         .padding(.top, AppTheme.detailTopInset)
@@ -334,7 +342,8 @@ struct SettingsWindowView: View {
             SettingsGroup(title: "启动") {
                 SettingsRow(
                     title: "登录时自动打开",
-                    subtitle: "开机后在后台打开"
+                    subtitle: "开机后在后台打开",
+                    keywords: "登录 开机 启动 登录项"
                 ) {
                     Toggle("", isOn: Binding(
                         get: { settings.launchAtLogin },
@@ -373,6 +382,7 @@ struct SettingsWindowView: View {
 
                 SettingsRow(
                     title: "有今天的任务时，先打开今天",
+                    keywords: "智能 今日 清单 启动"
                 ) {
                     Toggle("", isOn: $settings.smartLaunchLanding)
                         .toggleStyle(.switch)
@@ -382,7 +392,10 @@ struct SettingsWindowView: View {
             }
 
             SettingsGroup(title: "快捷键") {
-                SettingsRow(title: "开始 / 暂停") {
+                SettingsRow(
+                    title: "开始 / 暂停",
+                    keywords: "快捷键 空格 暂停 开始"
+                ) {
                     Picker("", selection: $settings.toggleShortcut) {
                         ForEach(ToggleShortcutPreset.allCases) { preset in
                             Text(preset.label).tag(preset)
@@ -395,7 +408,10 @@ struct SettingsWindowView: View {
             }
 
             SettingsGroup(title: "其他") {
-                SettingsRow(title: "任务分类") {
+                SettingsRow(
+                    title: "任务分类",
+                    keywords: "分类 标签 自定义 颜色 图标 管理"
+                ) {
                     Button("管理…") {
                         showCategoryManager = true
                     }
@@ -405,7 +421,10 @@ struct SettingsWindowView: View {
 
                 SettingsDivider()
 
-                SettingsRow(title: "新手引导") {
+                SettingsRow(
+                    title: "新手引导",
+                    keywords: "新手 引导 欢迎 帮助 教程"
+                ) {
                     Button("重新播放") {
                         UserDefaults.standard.set(true, forKey: AppNavigation.pendingOnboardingReplayKey)
                         NotificationCenter.default.post(name: AppNavigation.showOnboarding, object: nil)
@@ -424,7 +443,8 @@ struct SettingsWindowView: View {
             SettingsGroup(title: "番茄时钟节奏") {
                 SettingsRow(
                     title: "专注用正计时",
-                    subtitle: "从 00:00 往上数，满 \(TimerStore.countUpCapMinutes / 60) 小时自动结束"
+                    subtitle: "从 00:00 往上数，满 \(TimerStore.countUpCapMinutes / 60) 小时自动结束",
+                    keywords: "正计时 番茄"
                 ) {
                     Toggle("", isOn: $settings.countUpWork)
                         .toggleStyle(.switch)
@@ -439,6 +459,7 @@ struct SettingsWindowView: View {
 
                 DurationSettingRow(
                     title: "专注时长",
+                    keywords: "专注时长 番茄 分钟",
                     minutes: $settings.workMinutes,
                     range: 1...90,
                     step: 5,
@@ -451,6 +472,7 @@ struct SettingsWindowView: View {
 
                 DurationSettingRow(
                     title: "短休息",
+                    keywords: "短休息 休息 分钟",
                     minutes: $settings.shortBreakMinutes,
                     range: 1...30,
                     step: 1,
@@ -463,6 +485,7 @@ struct SettingsWindowView: View {
 
                 DurationSettingRow(
                     title: "长休息",
+                    keywords: "长休息 长休 休息 分钟",
                     minutes: $settings.longBreakMinutes,
                     range: 5...60,
                     step: 5,
@@ -473,7 +496,10 @@ struct SettingsWindowView: View {
 
                 SettingsDivider()
 
-                SettingsRow(title: "长休间隔") {
+                SettingsRow(
+                    title: "长休间隔",
+                    keywords: "长休 间隔 番茄"
+                ) {
                     HStack(spacing: 6) {
                         Text("每 \(settings.longBreakEvery) 个番茄")
                             .font(.system(size: 12.5, weight: .semibold, design: .rounded))
@@ -487,7 +513,10 @@ struct SettingsWindowView: View {
             }
 
             SettingsGroup(title: "自动开始") {
-                SettingsRow(title: "专注结束后自动休息") {
+                SettingsRow(
+                    title: "专注结束后自动休息",
+                    keywords: "自动休息 自动流转"
+                ) {
                     Toggle("", isOn: $settings.autoStartBreaks)
                         .toggleStyle(.switch)
                         .labelsHidden()
@@ -496,7 +525,10 @@ struct SettingsWindowView: View {
 
                 SettingsDivider()
 
-                SettingsRow(title: "休息结束后自动专注") {
+                SettingsRow(
+                    title: "休息结束后自动专注",
+                    keywords: "自动专注 自动流转"
+                ) {
                     Toggle("", isOn: $settings.autoStartWork)
                         .toggleStyle(.switch)
                         .labelsHidden()
@@ -507,7 +539,8 @@ struct SettingsWindowView: View {
 
                 SettingsRow(
                     title: "进行中不能跳过",
-                    subtitle: "打开后，专注时不能提前结束这一段"
+                    subtitle: "打开后，专注时不能提前结束这一段",
+                    keywords: "严格自律 跳过"
                 ) {
                     Toggle("", isOn: $settings.strictMode)
                         .toggleStyle(.switch)
@@ -519,7 +552,8 @@ struct SettingsWindowView: View {
 
                 SettingsRow(
                     title: "开始前提示系统专注",
-                    subtitle: "提醒去系统设置里减少通知"
+                    subtitle: "提醒去系统设置里减少通知",
+                    keywords: "系统专注模式 勿扰"
                 ) {
                     Toggle("", isOn: $settings.showFocusModeHintOnStart)
                         .toggleStyle(.switch)
@@ -529,7 +563,10 @@ struct SettingsWindowView: View {
             }
 
             SettingsGroup(title: "目标与提醒") {
-                SettingsRow(title: "每天的目标") {
+                SettingsRow(
+                    title: "每天的目标",
+                    keywords: "每日目标 番茄"
+                ) {
                     HStack(spacing: 6) {
                         Text("\(settings.dailyGoal) 个番茄")
                             .font(.system(size: 12.5, weight: .semibold, design: .rounded))
@@ -545,7 +582,8 @@ struct SettingsWindowView: View {
 
                 SettingsRow(
                     title: "暂停太久时提醒",
-                    subtitle: "超过设定时间还没继续，就提示一下"
+                    subtitle: "超过设定时间还没继续，就提示一下",
+                    keywords: "暂停提醒"
                 ) {
                     HStack(spacing: 8) {
                         if settings.pauseReminderEnabled {
@@ -572,7 +610,10 @@ struct SettingsWindowView: View {
     private var appearancePanel: some View {
         VStack(alignment: .leading, spacing: 18) {
             SettingsGroup(title: "界面外观") {
-                SettingsRow(title: "外观") {
+                SettingsRow(
+                    title: "外观",
+                    keywords: "浅色 深色 跟随系统 主题"
+                ) {
                     Picker("", selection: $settings.appearance) {
                         ForEach(AppearanceMode.allCases) { mode in
                             Text(mode.rawValue).tag(mode)
@@ -586,7 +627,10 @@ struct SettingsWindowView: View {
 
                 SettingsDivider()
 
-                SettingsRow(title: "间距") {
+                SettingsRow(
+                    title: "间距",
+                    keywords: "界面密度 舒适 紧凑"
+                ) {
                     Picker("", selection: $settings.uiDensity) {
                         ForEach(UIDensity.allCases) { density in
                             Text(density.label).tag(density)
@@ -600,7 +644,10 @@ struct SettingsWindowView: View {
 
                 SettingsDivider()
 
-                SettingsRow(title: "强调色") {
+                SettingsRow(
+                    title: "强调色",
+                    keywords: "颜色 主题色"
+                ) {
                     HStack(spacing: 10) {
                         ForEach(AccentPreset.allCases) { preset in
                             let selected = settings.accentPreset == preset
@@ -633,7 +680,10 @@ struct SettingsWindowView: View {
 
                 SettingsDivider()
 
-                SettingsRow(title: "菜单栏") {
+                SettingsRow(
+                    title: "菜单栏",
+                    keywords: "图标 菜单栏"
+                ) {
                     Picker("", selection: $settings.menuBarDisplayStyle) {
                         ForEach(MenuBarDisplayStyle.allCases) { style in
                             Text(style.label).tag(style)
@@ -648,7 +698,8 @@ struct SettingsWindowView: View {
 
                 SettingsRow(
                     title: "圆环呼吸",
-                    subtitle: "专注时圆环轻轻缩放"
+                    subtitle: "专注时圆环轻轻缩放",
+                    keywords: "动态光晕 动效 动画"
                 ) {
                     Toggle("", isOn: $settings.decorativeMotionEnabled)
                         .toggleStyle(.switch)
@@ -658,7 +709,10 @@ struct SettingsWindowView: View {
             }
 
             SettingsGroup(title: "声音与反馈") {
-                SettingsRow(title: "结束时播放提示音") {
+                SettingsRow(
+                    title: "结束时播放提示音",
+                    keywords: "提示音 声音"
+                ) {
                     Toggle("", isOn: $settings.soundEnabled)
                         .toggleStyle(.switch)
                         .labelsHidden()
@@ -668,7 +722,10 @@ struct SettingsWindowView: View {
                 if settings.soundEnabled {
                     SettingsDivider()
 
-                    SettingsRow(title: "提示音") {
+                    SettingsRow(
+                        title: "提示音",
+                        keywords: "声音 音效 试听"
+                    ) {
                         HStack(spacing: 8) {
                             Picker("", selection: $settings.soundName) {
                                 ForEach(SettingsStore.availableSounds, id: \.self) { name in
@@ -700,7 +757,10 @@ struct SettingsWindowView: View {
 
                 SettingsDivider()
 
-                SettingsRow(title: "按键触感") {
+                SettingsRow(
+                    title: "按键触感",
+                    keywords: "触觉 震动 反馈"
+                ) {
                     Toggle("", isOn: $settings.hapticsEnabled)
                         .toggleStyle(.switch)
                         .labelsHidden()
@@ -710,7 +770,8 @@ struct SettingsWindowView: View {
                 SettingsDivider()
 
                 SettingsRow(
-                    title: "结束时程序坞图标跳一下"
+                    title: "结束时程序坞图标跳一下",
+                    keywords: "程序坞 Dock"
                 ) {
                     Toggle("", isOn: $settings.dockBounceOnComplete)
                         .toggleStyle(.switch)
@@ -727,7 +788,8 @@ struct SettingsWindowView: View {
             SettingsGroup(title: "备份") {
                 SettingsRow(
                     title: "导出完整数据备份",
-                    subtitle: "包含所有任务、专注记录与设置"
+                    subtitle: "包含所有任务、专注记录与设置",
+                    keywords: "导出 备份"
                 ) {
                     Button("导出备份…") {
                         switch DataBackupService.exportBackup(
@@ -751,7 +813,8 @@ struct SettingsWindowView: View {
 
                 SettingsRow(
                     title: "从备份恢复",
-                    subtitle: "会先留下现在的数据，再覆盖"
+                    subtitle: "会先留下现在的数据，再覆盖",
+                    keywords: "恢复 备份 快照"
                 ) {
                     Button("从备份恢复…") {
                         switch DataBackupService.selectBackup() {
@@ -791,7 +854,8 @@ struct SettingsWindowView: View {
             SettingsGroup(title: "文件") {
                 SettingsRow(
                     title: "本机记录",
-                    subtitle: "\(taskStore.tasks.count) 个任务 · \(taskStore.focusSessions.count) 次专注。每天自动留一份最近 5 天的快照。"
+                    subtitle: "\(taskStore.tasks.count) 个任务 · \(taskStore.focusSessions.count) 次专注。每天自动留一份最近 5 天的快照。",
+                    keywords: "数据 本地 离线 任务 专注历史 快照 自动保护 访达 Finder 文件夹 存储"
                 ) {
                     Button("打开数据文件夹") {
                         settings.openDataFolderInFinder()
@@ -804,7 +868,8 @@ struct SettingsWindowView: View {
 
                 SettingsRow(
                     title: "学习记录",
-                    subtitle: "表格和每周报告"
+                    subtitle: "表格和每周报告",
+                    keywords: "学习记录 CSV 周报 访达 Finder 文件夹"
                 ) {
                     Button("打开学习记录") {
                         settings.openStudyLogFolderInFinder()
@@ -910,6 +975,7 @@ struct SettingsGroup<Content: View>: View {
                 RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
                     .fill(AppTheme.cardBackground(for: colorScheme))
             )
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
                     .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
@@ -921,16 +987,22 @@ struct SettingsGroup<Content: View>: View {
 struct SettingsRow<Content: View>: View {
     let title: String
     var subtitle: String? = nil
+    var keywords: String = ""
     var alignment: VerticalAlignment = .center
     @ViewBuilder let content: () -> Content
+    @ObservedObject private var search = SettingsSearchModel.shared
     @Environment(\.colorScheme) private var colorScheme
+
+    private var isSearchMatch: Bool {
+        search.matchesRow(title: title, subtitle: subtitle, keywords: keywords)
+    }
 
     var body: some View {
         HStack(alignment: alignment, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13.5, weight: .medium))
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                    .font(.system(size: 13.5, weight: isSearchMatch ? .semibold : .medium))
+                    .foregroundColor(isSearchMatch ? AppTheme.accent : AppTheme.primaryText(for: colorScheme))
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.system(size: 11.5))
@@ -943,6 +1015,11 @@ struct SettingsRow<Content: View>: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .background(
+            isSearchMatch
+                ? AppTheme.accent.opacity(colorScheme == .light ? 0.08 : 0.14)
+                : Color.clear
+        )
     }
 }
 
@@ -959,19 +1036,25 @@ struct SettingsDivider: View {
 private struct DurationSettingRow: View {
     let title: String
     var subtitle: String? = nil
+    var keywords: String = ""
     @Binding var minutes: Int
     let range: ClosedRange<Int>
     let step: Int
     let quickPills: [Int]
     var onCommit: () -> Void = {}
+    @ObservedObject private var search = SettingsSearchModel.shared
     @Environment(\.colorScheme) private var colorScheme
+
+    private var isSearchMatch: Bool {
+        search.matchesRow(title: title, subtitle: subtitle, keywords: keywords)
+    }
 
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13.5, weight: .medium))
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                    .font(.system(size: 13.5, weight: isSearchMatch ? .semibold : .medium))
+                    .foregroundColor(isSearchMatch ? AppTheme.accent : AppTheme.primaryText(for: colorScheme))
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.system(size: 11.5))
@@ -1022,5 +1105,10 @@ private struct DurationSettingRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
+        .background(
+            isSearchMatch
+                ? AppTheme.accent.opacity(colorScheme == .light ? 0.08 : 0.14)
+                : Color.clear
+        )
     }
 }

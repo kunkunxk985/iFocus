@@ -84,32 +84,23 @@ struct AnalyticsView: View {
     }
 
     private func header(model: AnalyticsDashboardModel) -> some View {
-        HStack(alignment: .top) {
-            PageTitle(
-                title: "数据统计",
-                subtitle: model.rangeSubtitle,
-                systemImage: "chart.bar.fill"
-            )
-            Spacer(minLength: 12)
-            HStack(spacing: 4) {
+        PageTitle(
+            title: "数据统计",
+            subtitle: model.rangeSubtitle,
+            systemImage: "chart.bar.fill"
+        )
+        .overlay(alignment: .trailing) {
+            HStack(spacing: 14) {
                 customizeCardsButton
                 if model.hasAnyHistory {
-                    Button(action: shareReport) {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
-                            .frame(width: 28, height: 28)
-                            .background(
-                                Circle()
-                                    .fill(AppTheme.cardBackground(for: colorScheme))
-                                    .overlay(Circle().strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1))
-                            )
-                    }
-                    .buttonStyle(SpringScaleButtonStyle(pressedScale: 0.92))
-                    .help("导出摘要（邮件或剪贴板）")
+                    Button("导出摘要", action: shareReport)
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        .help("导出摘要（邮件或剪贴板）")
+                        .accessibilityLabel("导出摘要")
                 }
             }
-            .padding(.top, 6)
         }
     }
 
@@ -184,20 +175,12 @@ struct AnalyticsView: View {
     }
 
     private var customizeCardsButton: some View {
-        Button {
+        Button("自定义卡片") {
             showCustomizeCards.toggle()
-        } label: {
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
-                .frame(width: 28, height: 28)
-                .background(
-                    Circle()
-                        .fill(AppTheme.cardBackground(for: colorScheme))
-                        .overlay(Circle().strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1))
-                )
         }
-        .buttonStyle(SpringScaleButtonStyle(pressedScale: 0.92))
+        .buttonStyle(.plain)
+        .font(.system(size: 12, weight: .medium))
+        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
         .help("自定义展示卡片")
         .popover(isPresented: $showCustomizeCards, arrowEdge: .bottom) {
             AnalyticsCardVisibilityEditor(settings: settings, style: .compact)

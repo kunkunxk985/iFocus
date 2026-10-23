@@ -444,11 +444,9 @@ struct TaskListView: View {
                             }
                         }
                     }
-                    if !taskStore.customCategories.isEmpty {
-                        Divider()
-                        Button("管理分类…") {
-                            activeSheet = .categories
-                        }
+                    Divider()
+                    Button("管理分类…") {
+                        activeSheet = .categories
                     }
                 } label: {
                     Text(activeChip.id == TaskListChip.all.id ? "筛选" : activeChip.title)
@@ -873,12 +871,6 @@ struct TaskListView: View {
                         tasks: dueTodayTasks
                     )
                 }
-                if !currentTasks.isEmpty {
-                    Text("拖拽左侧把手可排序 · 图钉可置顶")
-                        .font(.caption2)
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
-                        .padding(.top, 4)
-                }
             } else if viewState.selectedScreen == .completedTask {
                 ForEach(currentTasks) { task in
                     taskRow(task)
@@ -899,11 +891,8 @@ struct TaskListView: View {
                     .font(.caption.weight(.bold))
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                 Text("\(tasks.count)")
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(tint)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(tint.opacity(0.12)))
+                    .font(.system(size: 11.5, weight: .medium, design: .rounded).monospacedDigit())
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.75))
                 Spacer()
             }
             .padding(.horizontal, 2)
@@ -981,7 +970,6 @@ struct TaskListView: View {
                 AppEmptyState(
                     systemImage: "magnifyingglass",
                     title: "未找到相关任务",
-                    subtitle: "换个关键词，或清除搜索。",
                     actionTitle: "清除搜索",
                     action: { searchText = "" }
                 )
@@ -994,7 +982,6 @@ struct TaskListView: View {
                 AppEmptyState(
                     systemImage: "line.3.horizontal.decrease.circle",
                     title: "没有匹配的任务",
-                    subtitle: "当前筛选下没有任务。",
                     actionTitle: "显示全部",
                     action: { activeChip = .all }
                 )
@@ -1007,7 +994,6 @@ struct TaskListView: View {
                 AppEmptyState(
                     systemImage: "checkmark.circle",
                     title: "还没有完成记录",
-                    subtitle: "完成任务后会出现在这里。",
                     actionTitle: "去今天",
                     action: { viewState.selectedScreen = .todayTask }
                 )
@@ -1019,9 +1005,6 @@ struct TaskListView: View {
             AppEmptyState(
                 systemImage: isToday ? "sun.max" : (isLater ? "clock" : "tray"),
                 title: isToday ? "今天还没有任务" : (isLater ? "稍后还没有任务" : "还没有任务"),
-                subtitle: isToday
-                    ? "先添加一件小事，或者直接开始一段专注。"
-                    : (isLater ? "放后天到 7 天内要做的事。" : "添加一条任务，开始安排今天。"),
                 actionTitle: "添加任务",
                 action: { DispatchQueue.main.async { isQuickAddFocused = true } },
                 secondaryActionTitle: "开始专注",
