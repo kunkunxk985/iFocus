@@ -57,7 +57,7 @@ struct AppSidebar: View {
                 icon: "checkmark.circle"
             ),
             SidebarItem(
-                title: "数据统计",
+                title: "我的记录",
                 screen: .analytics,
                 badge: nil,
                 icon: "chart.bar"
@@ -160,6 +160,7 @@ struct AppSidebar: View {
         showsOverdue: Bool = false
     ) -> some View {
         let isSelected = viewState.selectedScreen == screen
+            || (screen == .analytics && viewState.selectedScreen == .profile)
         return Button {
             viewState.selectedScreen = screen
         } label: {

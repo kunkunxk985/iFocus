@@ -50,7 +50,7 @@ iFocus 是一个单进程、本地优先的 macOS 专注/番茄钟应用：
 | --- | --- | --- |
 | App Shell & Navigation | App 生命周期、窗口 chrome、工具栏安装、菜单命令、深链路由、页面枚举 | `App/iFocusApp.swift`, `App/Navigation/AppScreen.swift`, `DeepLinkRouter.swift`, `AppNavigation.swift` |
 | Auxiliary Windows | 窗口状态、迷你计时窗、全屏专注 | `App/Windows/WindowStateModel.swift`, `WindowLayoutStore.swift`, `FloatingTimerWindowController.swift`, `FocusModeController.swift` |
-| Main Window UI | 侧栏 + 专注钟 / 任务 / 数据统计 / 个人资料；原生侧栏切换工具栏 | `Views/Content/ContentView.swift`, `AppSidebar.swift`, `SidebarToolbar.swift`, `Views/Timer|Tasks|Analytics|Profile` |
+| Main Window UI | 侧栏 + 专注钟 / 任务 / 我的记录（统计与资料同一页）；原生侧栏切换工具栏 | `Views/Content/ContentView.swift`, `AppSidebar.swift`, `SidebarToolbar.swift`, `Views/Timer|Tasks|Analytics|Profile` |
 | Settings Window UI | 四个偏好面板（通用、专注与计时、外观与声音、数据与备份）、原生搜索工具栏、分类管理、备份与通知 | `Views/Settings/SettingsWindowView.swift`, `SettingsWindowToolbar.swift`, `Views/Tasks/CategoryManagementView.swift` |
 | Menu Bar Extra | 状态栏宿主与面板；面板是 SwiftUI，宿主是 AppKit | `App/MenuBar/MenuBarController.swift`, `Views/MenuBar/MenuBarPanelView.swift` |
 | Domain Stores | TimerStore、TaskStore、SettingsStore、AnalyticsDashboardModel。任务和专注记录的字段在 `FocusTask.swift`，存取在 `TaskStore.swift`。TaskCategory 承载内置与自定义分类 | `ViewModels/Timer`, `ViewModels/Tasks`, `ViewModels/Settings`, `ViewModels/Analytics` |

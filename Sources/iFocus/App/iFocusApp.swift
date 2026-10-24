@@ -322,10 +322,8 @@ struct iFocusApp: App {
                     .keyboardShortcut("6", modifiers: .command)
                 Divider()
                 Button("已完成") { AppNavigation.post(.completedTask) }
-                Button("数据统计") { AppNavigation.post(.analytics) }
+                Button("我的记录") { AppNavigation.post(.analytics) }
                     .keyboardShortcut("2", modifiers: .command)
-                Button("个人资料") { AppNavigation.post(.profile) }
-                    .keyboardShortcut("7", modifiers: .command)
             }
             CommandGroup(replacing: .appSettings) {
                 Button("设置…") {

@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import iFocusCore
 
-/// Stats dashboard — thin composition over `AnalyticsDashboardModel`.
+/// One record page: who you are, then this range, then the longer picture.
 struct AnalyticsView: View {
     @EnvironmentObject var timerStore: TimerStore
     @EnvironmentObject var settings: SettingsStore
@@ -12,6 +12,8 @@ struct AnalyticsView: View {
     /// Dashboard numbers are minute-granularity. Ignore per-second ticks inside the same minute.
     @State private var liveMinuteBucket: Int = -1
     @State private var range: AnalyticsTimeRange = .today
+    @State private var isEditingProfile = false
+    @State private var tempUsername = ""
 
     private var model: AnalyticsDashboardModel {
         _ = clockVersion
@@ -40,6 +42,7 @@ struct AnalyticsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header(model: m)
+                    identityRow
                     rangeChipsBar
 
                     if !m.hasAnyHistory {
@@ -47,6 +50,35 @@ struct AnalyticsView: View {
                     } else {
                         AnalyticsCards.weeklyCard(model: m, colorScheme: colorScheme)
                             .frame(height: chartHeight)
+                    }
+
+                    ProfileHeatmapCard(
+                        grid: heatmapGrid,
+                        monthLabels: heatmapMonthLabels
+                    )
+
+                    HStack(alignment: .top, spacing: 20) {
+                        ProfileInsightsCard(
+                            maxSingleFocusSession: taskStore.focusSessions.map(\.durationMinutes).max() ?? 0,
+                            averageDailyLabel: FocusStats.formatTotalMinutes(
+                                FocusStats.averageDailyFocusMinutes(
+                                    sessionTimestamps: sessionTimestamps,
+                                    totalMinutes: totalMinutes
+                                )
+                            ),
+                            peakHours: FocusStats.peakFocusHoursString(sessionTimestamps: sessionTimestamps),
+                            completionRate: FocusStats.completionRate(
+                                total: taskStore.tasks.count,
+                                completed: taskStore.tasks.filter(\.isCompleted).count
+                            )
+                        )
+                        .frame(maxWidth: .infinity)
+
+                        ProfileCategoriesCard(
+                            stats: categoryStats,
+                            isEmpty: taskStore.focusSessions.isEmpty
+                        )
+                        .frame(maxWidth: .infinity)
                     }
                 }
                 .frame(width: contentW, alignment: .topLeading)
@@ -68,23 +100,124 @@ struct AnalyticsView: View {
             liveMinuteBucket = bucket
             clockVersion &+= 1
         }
+        .overlay {
+            if isEditingProfile {
+                ZStack {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { isEditingProfile = false }
+                    EditProfileSheet(
+                        tempUsername: $tempUsername,
+                        isPresented: $isEditingProfile
+                    )
+                    .transition(.scale(scale: 0.98).combined(with: .opacity))
+                }
+                .zIndex(20)
+            }
+        }
+        .animation(.easeOut(duration: 0.16), value: isEditingProfile)
     }
 
     private func header(model: AnalyticsDashboardModel) -> some View {
         PageTitle(
-            title: "数据统计",
+            title: "我的记录",
             subtitle: model.rangeSubtitle,
-            systemImage: "chart.bar.fill"
+            systemImage: "chart.bar"
         )
         .overlay(alignment: .trailing) {
-            if model.hasAnyHistory {
-                Button("导出摘要", action: shareReport)
-                    .buttonStyle(.plain)
+            HStack(spacing: 14) {
+                Button("编辑资料") {
+                    tempUsername = displayName
+                    isEditingProfile = true
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                if model.hasAnyHistory {
+                    Button("导出摘要", action: shareReport)
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        .help("导出摘要（邮件或剪贴板）")
+                        .accessibilityLabel("导出摘要")
+                }
+            }
+        }
+    }
+
+    private var displayName: String {
+        let name = settings.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "小番茄" : name
+    }
+
+    private var sessionTimestamps: [Date] {
+        taskStore.focusSessions.map(\.timestamp)
+    }
+
+    private var totalMinutes: Int {
+        taskStore.focusSessions.reduce(0) { $0 + $1.durationMinutes }
+    }
+
+    private var heatmapGrid: [[FocusStats.ContributionCell]] {
+        let pairs = taskStore.focusSessions.map { ($0.timestamp, $0.durationMinutes) }
+        let byDay = FocusStats.minutesByDay(sessions: pairs)
+        return FocusStats.contributionGrid(minutesByDay: byDay)
+    }
+
+    private var heatmapMonthLabels: [Int: String] {
+        FocusStats.monthLabels(for: heatmapGrid)
+    }
+
+    private var categoryStats: [ProfileCategoryStat] {
+        var minutesByID = [String: Int]()
+        var countByID = [String: Int]()
+        var categoriesByID = Dictionary(
+            uniqueKeysWithValues: taskStore.categoriesInUse.map { ($0.id, $0) }
+        )
+        for session in taskStore.focusSessions {
+            let category: TaskCategory
+            if let stored = session.taskCategory {
+                category = stored
+            } else if let taskId = session.taskId,
+                      let task = taskStore.tasks.first(where: { $0.id == taskId }) {
+                category = task.category
+            } else {
+                category = .other
+            }
+            if categoriesByID[category.id] == nil {
+                categoriesByID[category.id] = category
+            }
+            minutesByID[category.id, default: 0] += session.durationMinutes
+            countByID[category.id, default: 0] += 1
+        }
+        return taskStore.categoriesInUse.map { cat in
+            ProfileCategoryStat(
+                category: categoriesByID[cat.id] ?? cat,
+                minutes: minutesByID[cat.id] ?? 0,
+                count: countByID[cat.id] ?? 0
+            )
+        }
+        .sorted { $0.minutes > $1.minutes }
+    }
+
+    private var identityRow: some View {
+        let streak = FocusStats.streaks(sessionTimestamps: sessionTimestamps)
+        return HStack(spacing: 12) {
+            UnifiedAvatarView(
+                path: settings.avatarPath,
+                colorIndex: settings.avatarColorIndex,
+                username: displayName,
+                size: 44
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(displayName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                Text("连续 \(streak.current) 天 · 累计 \(FocusStats.formatTotalMinutes(totalMinutes))")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                    .help("导出摘要（邮件或剪贴板）")
-                    .accessibilityLabel("导出摘要")
             }
+            Spacer(minLength: 0)
         }
     }
 

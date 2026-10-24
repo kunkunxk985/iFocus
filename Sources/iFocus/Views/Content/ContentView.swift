@@ -80,10 +80,6 @@ struct ContentView: View {
                         .zIndex(25)
 
                     AccountMenuPopover(
-                        onProfile: {
-                            viewState.selectedScreen = .profile
-                            dismissAccountMenu()
-                        },
                         onSettings: {
                             openWindow(id: "settings")
                             dismissAccountMenu()
@@ -402,11 +398,8 @@ struct ContentView: View {
                 case .todayTask, .tomorrowTask, .weekTask, .plannedTask, .completedTask, .inboxTask:
                     TaskListView()
                         .transition(pageTransition)
-                case .analytics:
+                case .analytics, .profile:
                     AnalyticsView()
-                        .transition(pageTransition)
-                case .profile:
-                    ProfileView()
                         .transition(pageTransition)
                 case nil:
                     AppEmptyState(

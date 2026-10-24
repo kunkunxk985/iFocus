@@ -131,8 +131,8 @@ Sources/
       MenuBar/          # 状态栏面板（SwiftUI；宿主在 App/MenuBar）
       Timer/            # 专注钟页、迷你计时视图
       Tasks/            # 清单页、任务行、编辑任务、分类管理
-      Analytics/        # 数据统计页（Chrome / Charts / Cards）
-      Profile/          # 个人资料页
+      Analytics/        # 我的记录：范围、趋势图，以及资料里的热力图
+      Profile/          # 头像、热力图、分类等记录组件
       Settings/         # 设置窗口
       DesignSystem/     # 颜色、字号、间距、材质与共用小组件
     AppIcon.icns

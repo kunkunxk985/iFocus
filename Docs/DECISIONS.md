@@ -116,4 +116,4 @@ The window's `backgroundColor` is an opaque colour: the glass blurs what is behi
 
 ### One quiet timer, one chart
 
-The long-break round is a row of dots under the ring, not inside it. A finished work session is one line at the bottom of the window (`N 分钟 · 任务名`), not a sheet. 数据统计 keeps the range control, the range totals and one trend chart. 个人资料 keeps the avatar, name and color. The mini timer is a circle: time at rest, pause / skip / open / close on hover. Its frame is stored separately from the old wide bar.
+The long-break round is a row of dots under the ring, not inside it. A finished work session is one line at the bottom of the window (`N 分钟 · 任务名`), not a sheet. 数据统计 and 个人资料 are one page, 我的记录. The top row is the avatar, name, streak and total time. The range controls one trend chart. Below that, the year heatmap and the category summary stay, because they answer a different question than the chart. The sidebar, ⌘2, and the old profile deep link open this page. The account menu only opens Settings. The mini timer is a circle: time at rest, pause / skip / open / close on hover. Its frame is stored separately from the old wide bar.

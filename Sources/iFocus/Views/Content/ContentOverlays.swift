@@ -636,7 +636,7 @@ struct OnboardingOverlay: View {
                 onboardingDivider
                 readyRow(number: 2, title: "开始专注", detail: startHint)
                 onboardingDivider
-                readyRow(number: 3, title: "看看节奏", detail: "结束后在「数据统计」查看专注历史")
+                readyRow(number: 3, title: "看看节奏", detail: "结束后在「我的记录」查看专注历史")
             }
             .padding(.horizontal, 13)
             .padding(.vertical, 4)
@@ -976,7 +976,6 @@ struct AccountMenuPopover: View {
     @EnvironmentObject var settings: SettingsStore
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openWindow) private var openWindow
-    var onProfile: () -> Void
     var onSettings: () -> Void
 
     var body: some View {
@@ -998,7 +997,6 @@ struct AccountMenuPopover: View {
 
             Divider().opacity(0.7)
 
-            menuButton("个人资料", icon: "person.crop.circle", action: onProfile)
             menuButton("设置", icon: "gearshape", action: onSettings)
                 .keyboardShortcut(",", modifiers: .command)
         }
