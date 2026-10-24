@@ -16,6 +16,10 @@ class TaskStore: ObservableObject {
     private var saveSessionsWorkItem: DispatchWorkItem?
     private var saveStateWorkItem: DispatchWorkItem?
     private var undoDeletionWorkItem: DispatchWorkItem?
+    /// Cached `tasks(for:)` results for the current calendar day (cleared when `tasks` changes).
+    private var tasksListCacheDay: Date?
+    private var tasksListByID: [UUID: FocusTask]?
+    private var tasksListByFilter: [TaskFilter: [FocusTask]] = [:]
     /// Soft-deleted tasks awaiting undo (may accumulate multiple deletes in the window).
     private var pendingDeletedTasks: [FocusTask] = []
     /// Only set when a delete actually cleared the active task.
@@ -24,6 +28,7 @@ class TaskStore: ObservableObject {
     @Published var tasks: [FocusTask] = [] {
         didSet {
             guard !isLoadingFromDisk else { return }
+            invalidateTasksListCache()
             scheduleSaveTasks()
         }
     }
@@ -96,7 +101,7 @@ class TaskStore: ObservableObject {
         return tasks.first { $0.id == id }
     }
     
-    enum TaskFilter {
+    enum TaskFilter: Hashable {
         case todayTask
         case tomorrowTask
         case weekTask
@@ -104,8 +109,34 @@ class TaskStore: ObservableObject {
         case completedTask
         case inboxTask
     }
+
+    private func invalidateTasksListCache() {
+        tasksListByID = nil
+        tasksListByFilter.removeAll(keepingCapacity: true)
+    }
+
+    private func taskByIDLookup() -> [UUID: FocusTask] {
+        if let tasksListByID { return tasksListByID }
+        var byID: [UUID: FocusTask] = [:]
+        byID.reserveCapacity(tasks.count)
+        for task in tasks where byID[task.id] == nil {
+            byID[task.id] = task
+        }
+        tasksListByID = byID
+        return byID
+    }
     
     func tasks(for filter: TaskFilter) -> [FocusTask] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        if tasksListCacheDay != today {
+            tasksListCacheDay = today
+            invalidateTasksListCache()
+        }
+        if let cached = tasksListByFilter[filter] {
+            return cached
+        }
+
         let kind: TaskListFilter
         switch filter {
         case .todayTask: kind = .today
@@ -117,15 +148,10 @@ class TaskStore: ObservableObject {
         }
         
         let orderedIDs = TaskFiltering.filter(tasks.map(\.snapshot), as: kind).map(\.id)
-        // Prefer first occurrence if corrupt data ever duplicates ids (never crash).
-        var byID: [UUID: FocusTask] = [:]
-        byID.reserveCapacity(tasks.count)
-        for task in tasks where byID[task.id] == nil {
-            byID[task.id] = task
-        }
+        let byID = taskByIDLookup()
         let base = orderedIDs.compactMap { byID[$0] }
         // Pin first, then user sortIndex, then keep filter order as tie-breaker.
-        return base.enumerated().sorted { a, b in
+        let result = base.enumerated().sorted { a, b in
             if a.element.isPinned != b.element.isPinned {
                 return a.element.isPinned && !b.element.isPinned
             }
@@ -134,6 +160,8 @@ class TaskStore: ObservableObject {
             }
             return a.offset < b.offset
         }.map(\.element)
+        tasksListByFilter[filter] = result
+        return result
     }
     
     /// Sidebar badges in one pass (no six sorted filters).
@@ -642,6 +670,7 @@ class TaskStore: ObservableObject {
         loadState()
         reconcileCategoriesAfterLoad()
         isLoadingFromDisk = false
+        invalidateTasksListCache()
         
         if tasksOK && sessionsOK {
             dataLoadErrorMessage = nil

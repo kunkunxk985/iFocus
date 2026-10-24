@@ -2,6 +2,109 @@ import Foundation
 import SwiftUI
 import iFocusCore
 
+/// Profile cards + heatmap bundled with the range dashboard — one pass over sessions/tasks per refresh.
+struct AnalyticsPageSnapshot {
+    let model: AnalyticsDashboardModel
+    let heatmapGrid: [[FocusStats.ContributionCell]]
+    let heatmapMonthLabels: [Int: String]
+    let categoryStats: [ProfileCategoryStat]
+    let totalMinutesAllTime: Int
+    let maxSingleFocusSession: Int
+    let averageDailyLabel: String
+    let peakHours: String
+    let completionRate: String
+
+    static func build(
+        range: AnalyticsTimeRange,
+        focusSessions: [FocusSession],
+        tasks: [FocusTask],
+        categoriesInUse: [TaskCategory],
+        dailyGoal: Int,
+        completedPomodoros: Int,
+        totalSecondsToday: Int,
+        isWorkMode: Bool,
+        sessionLive: Bool,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> AnalyticsPageSnapshot {
+        let taskByID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        let pairs = focusSessions.map { ($0.timestamp, $0.durationMinutes) }
+        let sessionTimestamps = focusSessions.map(\.timestamp)
+
+        var totalMinutesAllTime = 0
+        var maxSingle = 0
+        var minutesByCategoryID = [String: Int]()
+        var countByCategoryID = [String: Int]()
+        var categoriesByID = Dictionary(uniqueKeysWithValues: categoriesInUse.map { ($0.id, $0) })
+
+        for session in focusSessions {
+            totalMinutesAllTime += session.durationMinutes
+            maxSingle = max(maxSingle, session.durationMinutes)
+            let category = AnalyticsDashboardModel.resolveCategory(
+                for: session,
+                taskByID: taskByID
+            )
+            if categoriesByID[category.id] == nil {
+                categoriesByID[category.id] = category
+            }
+            minutesByCategoryID[category.id, default: 0] += session.durationMinutes
+            countByCategoryID[category.id, default: 0] += 1
+        }
+
+        let byDay = FocusStats.minutesByDay(sessions: pairs)
+        let heatmapGrid = FocusStats.contributionGrid(minutesByDay: byDay)
+        let heatmapMonthLabels = FocusStats.monthLabels(for: heatmapGrid)
+
+        let categoryStats = categoriesInUse
+            .map { cat in
+                ProfileCategoryStat(
+                    category: categoriesByID[cat.id] ?? cat,
+                    minutes: minutesByCategoryID[cat.id] ?? 0,
+                    count: countByCategoryID[cat.id] ?? 0
+                )
+            }
+            .sorted { $0.minutes > $1.minutes }
+
+        let completedTasks = tasks.reduce(0) { $0 + ($1.isCompleted ? 1 : 0) }
+        let completionRate = FocusStats.completionRate(total: tasks.count, completed: completedTasks)
+        let averageDailyLabel = FocusStats.formatTotalMinutes(
+            FocusStats.averageDailyFocusMinutes(
+                sessionTimestamps: sessionTimestamps,
+                totalMinutes: totalMinutesAllTime
+            )
+        )
+        let peakHours = FocusStats.peakFocusHoursString(sessionTimestamps: sessionTimestamps)
+
+        let model = AnalyticsDashboardModel.build(
+            range: range,
+            focusSessions: focusSessions,
+            tasks: tasks,
+            taskByID: taskByID,
+            sessionPairs: pairs,
+            sessionTimestamps: sessionTimestamps,
+            dailyGoal: dailyGoal,
+            completedPomodoros: completedPomodoros,
+            totalSecondsToday: totalSecondsToday,
+            isWorkMode: isWorkMode,
+            sessionLive: sessionLive,
+            now: now,
+            calendar: calendar
+        )
+
+        return AnalyticsPageSnapshot(
+            model: model,
+            heatmapGrid: heatmapGrid,
+            heatmapMonthLabels: heatmapMonthLabels,
+            categoryStats: categoryStats,
+            totalMinutesAllTime: totalMinutesAllTime,
+            maxSingleFocusSession: maxSingle,
+            averageDailyLabel: averageDailyLabel,
+            peakHours: peakHours,
+            completionRate: completionRate
+        )
+    }
+}
+
 /// Pure-ish snapshot of analytics page metrics — keeps heavy derivation out of the View body.
 struct AnalyticsDashboardModel {
     let range: AnalyticsTimeRange
@@ -63,9 +166,43 @@ struct AnalyticsDashboardModel {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> AnalyticsDashboardModel {
+        let taskByID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        let pairs = focusSessions.map { ($0.timestamp, $0.durationMinutes) }
+        let sessionTimestamps = focusSessions.map(\.timestamp)
+        return build(
+            range: range,
+            focusSessions: focusSessions,
+            tasks: tasks,
+            taskByID: taskByID,
+            sessionPairs: pairs,
+            sessionTimestamps: sessionTimestamps,
+            dailyGoal: dailyGoal,
+            completedPomodoros: completedPomodoros,
+            totalSecondsToday: totalSecondsToday,
+            isWorkMode: isWorkMode,
+            sessionLive: sessionLive,
+            now: now,
+            calendar: calendar
+        )
+    }
+
+    static func build(
+        range: AnalyticsTimeRange,
+        focusSessions: [FocusSession],
+        tasks: [FocusTask],
+        taskByID: [UUID: FocusTask],
+        sessionPairs pairs: [(timestamp: Date, minutes: Int)],
+        sessionTimestamps: [Date],
+        dailyGoal: Int,
+        completedPomodoros: Int,
+        totalSecondsToday: Int,
+        isWorkMode: Bool,
+        sessionLive: Bool,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> AnalyticsDashboardModel {
         let todayStart = calendar.startOfDay(for: now)
         let bounds = range.dayBounds(relativeTo: now, calendar: calendar)
-        let pairs = focusSessions.map { ($0.timestamp, $0.durationMinutes) }
         let sessionsInRange = focusSessions.filter { session in
             let day = calendar.startOfDay(for: session.timestamp)
             return day >= bounds.from && day <= bounds.through
@@ -99,7 +236,7 @@ struct AnalyticsDashboardModel {
         ).minutes
 
         let streak = FocusStats.streaks(
-            sessionTimestamps: focusSessions.map(\.timestamp),
+            sessionTimestamps: sessionTimestamps,
             relativeTo: now,
             calendar: calendar
         ).current
@@ -129,7 +266,7 @@ struct AnalyticsDashboardModel {
             hasAnyHistory: !focusSessions.isEmpty
         )
 
-        let categoryTop = Self.categoryTop(sessions: sessionsInRange, tasks: tasks)
+        let categoryTop = Self.categoryTop(sessions: sessionsInRange, taskByID: taskByID)
 
         let timelineInput = focusSessions.map {
             (timestamp: $0.timestamp, minutes: $0.durationMinutes, title: $0.taskTitle)
@@ -172,25 +309,23 @@ struct AnalyticsDashboardModel {
         )
     }
 
+    static func resolveCategory(for session: FocusSession, taskByID: [UUID: FocusTask]) -> TaskCategory {
+        if let stored = session.taskCategory { return stored }
+        if let taskId = session.taskId, let task = taskByID[taskId] {
+            return task.category
+        }
+        return .other
+    }
+
     private static func categoryTop(
         sessions: [FocusSession],
-        tasks: [FocusTask]
+        taskByID: [UUID: FocusTask]
     ) -> [(name: String, icon: String, color: Color, minutes: Int)] {
         var minutesByID = [String: Int]()
         var categoryByID = [String: TaskCategory]()
         for session in sessions {
-            let cat: TaskCategory?
-            if let c = session.taskCategory {
-                cat = c
-            } else if let id = session.taskId,
-                      let task = tasks.first(where: { $0.id == id }) {
-                cat = task.category
-            } else if session.taskId == nil {
-                cat = nil
-            } else {
-                cat = .other
-            }
-            guard let cat else { continue }
+            if session.taskId == nil, session.taskCategory == nil { continue }
+            let cat = resolveCategory(for: session, taskByID: taskByID)
             if categoryByID[cat.id] == nil { categoryByID[cat.id] = cat }
             minutesByID[cat.id, default: 0] += session.durationMinutes
         }
@@ -204,12 +339,9 @@ struct AnalyticsDashboardModel {
     }
 
     func resolvedCategory(for session: FocusSession, tasks: [FocusTask]) -> TaskCategory? {
-        if let c = session.taskCategory { return c }
-        if let id = session.taskId,
-           let task = tasks.first(where: { $0.id == id }) {
-            return task.category
-        }
-        return nil
+        let taskByID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        if session.taskId == nil, session.taskCategory == nil { return nil }
+        return Self.resolveCategory(for: session, taskByID: taskByID)
     }
 
     func reportText(username: String) -> (subject: String, body: String) {
