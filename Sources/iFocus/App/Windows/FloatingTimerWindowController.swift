@@ -11,7 +11,8 @@ final class FloatingTimerWindowController: NSObject, NSWindowDelegate {
     private var panel: NSPanel?
     private var timerStore: TimerStore?
     private var toggleObserver: NSObjectProtocol?
-    private var frameKey = "miniTimerFrame"
+    private var frameKey = "miniTimerCircleFrame"
+    private let panelSide: CGFloat = 176
 
     func configure(timerStore: TimerStore) {
         self.timerStore = timerStore
@@ -61,7 +62,7 @@ final class FloatingTimerWindowController: NSObject, NSWindowDelegate {
         )
         let hosting = NSHostingController(rootView: root)
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 340, height: 112),
+            contentRect: NSRect(x: 0, y: 0, width: panelSide, height: panelSide),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -82,20 +83,20 @@ final class FloatingTimerWindowController: NSObject, NSWindowDelegate {
 
     private func defaultFrame() -> NSRect {
         guard let screen = NSScreen.main?.visibleFrame else {
-            return NSRect(x: 40, y: 40, width: 340, height: 112)
+            return NSRect(x: 40, y: 40, width: panelSide, height: panelSide)
         }
         return NSRect(
-            x: screen.maxX - 356,
-            y: screen.maxY - 136,
-            width: 340,
-            height: 112
+            x: screen.maxX - panelSide - 24,
+            y: screen.maxY - panelSide - 24,
+            width: panelSide,
+            height: panelSide
         )
     }
 
     private func savedFrame() -> NSRect? {
         guard let raw = UserDefaults.standard.string(forKey: frameKey) else { return nil }
         let frame = NSRectFromString(raw)
-        guard frame.width > 100, frame.height > 60 else { return nil }
+        guard frame.width > 80, frame.height > 80 else { return nil }
         return constrainedFrame(frame)
     }
 

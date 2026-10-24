@@ -25,8 +25,21 @@ struct TimerTopMeta: View {
         return "今天 \(timerStore.completedPomodoros)/\(settings.dailyGoal) · 已专注 \(minutes) 分"
     }
 
+    private var cycleLength: Int {
+        max(2, settings.longBreakEvery)
+    }
+
+    /// Filled dots are finished work sessions in the current round.
+    /// A long break means the round just completed, so every dot is filled.
+    private var filledCycleDots: Int {
+        if timerStore.mode == .longBreak { return cycleLength }
+        return timerStore.completedPomodoros % cycleLength
+    }
+
     var body: some View {
         VStack(spacing: 8) {
+            cycleDots
+
             Text(todaySummary)
                 .font(.system(size: 13, weight: .medium))
                 .monospacedDigit()
@@ -88,6 +101,18 @@ struct TimerTopMeta: View {
         .onChange(of: settings.decorativeMotionEnabled) { _ in
             onDecorativeMotionChange()
         }
+    }
+
+    private var cycleDots: some View {
+        HStack(spacing: 7) {
+            ForEach(0..<cycleLength, id: \.self) { index in
+                Circle()
+                    .fill(index < filledCycleDots ? modeColor : modeColor.opacity(0.22))
+                    .frame(width: 7, height: 7)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("这一轮已完成 \(filledCycleDots) 个，共 \(cycleLength) 个")
     }
 }
 

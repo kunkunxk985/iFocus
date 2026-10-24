@@ -75,6 +75,10 @@ final class TaskStoreTests: XCTestCase {
         store.moveTask(id: id, to: .tomorrowTask)
         XCTAssertTrue(Calendar.current.isDateInTomorrow(store.tasks[0].dueDate!))
 
+        store.moveTask(id: id, to: .weekTask)
+        let later = Calendar.current.date(byAdding: .day, value: 2, to: Calendar.current.startOfDay(for: Date()))!
+        XCTAssertEqual(store.tasks[0].dueDate, later)
+
         store.moveTask(id: id, to: .inboxTask)
         XCTAssertNil(store.tasks[0].dueDate)
 

@@ -1,7 +1,7 @@
 # iFocus 架构总览
 
 - **状态**：当前状态（current-state）
-- **日期**：2026-10-22
+- **日期**：2026-10-24
 - **范围**：`Sources/iFocus`（可执行 App）、`Sources/iFocusCore`（纯逻辑库）、本地持久化与应用运行时的 macOS 集成；不包含发布流水线和 UI 视觉规范细节。
 - **受众**：后续维护者、评审者、需要安全改动这个仓库的 AI 代理。
 - **证据强度**：模块依赖和持久化路径直接来自代码（高）；窗口/组件分组是从目录和视图组合推导出的逻辑边界（中）；自动化客户端（Shortcuts/Alfred/脚本）是已设计的集成方式，具体客户端由用户决定（中）。
@@ -11,7 +11,7 @@
 iFocus 是一个单进程、本地优先的 macOS 专注/番茄钟应用：
 
 - SwiftUI 负责界面，AppKit 负责窗口 chrome、工具栏、菜单栏、窗口状态和系统集成。
-- 数据只落在本机：`~/Library/Application Support/iFocus/*.json`、`UserDefaults`、`~/StudyLog` 和用户选择的备份文件夹。
+- 数据只落在本机：`~/Library/Application Support/iFocus/*.json`、`UserDefaults` 和用户选择的备份文件夹。`~/StudyLog` 的写出代码还在，但现在的应用启动时不传目录，所以不会再生成或更新那个文件夹。
 - 没有网络客户端、账号、云端同步或第三方运行时依赖；任务里的 `http(s)` 链接只是文本，不会被抓取。
 - `iFocusCore` 是只依赖 Foundation 的纯逻辑层，可脱离 AppKit/SwiftUI 测试。
 
@@ -39,7 +39,7 @@ iFocus 是一个单进程、本地优先的 macOS 专注/番茄钟应用：
 | iFocus App | 单进程应用：主窗口、设置窗口、菜单栏、状态层和本地服务 | Swift, SwiftUI, AppKit |
 | Local Data Files | 任务、专注记录、当前任务、可恢复计时快照 | JSON |
 | Preferences | 设置偏好与窗口布局 | UserDefaults |
-| Study Log Export | 可读的 CSV/周报镜像，删除后可由专注记录重建 | CSV, Markdown |
+| Study Log Export | 旧的可读镜像。写出器仍在，正式应用不再调用，已有的 `~/StudyLog` 文件会留在原地 | CSV, Markdown |
 | Backup Packages | 用户选择的备份文件夹：数据 JSON + 设置 + 头像 + manifest | JSON |
 
 > C4 的“容器”通常指可独立部署的单元。这里是单进程桌面应用，因此 App 是唯一的运行容器；数据文件/偏好/镜像按数据容器建模，主窗口、设置窗口和菜单栏在组件视图中展开。
@@ -48,14 +48,14 @@ iFocus 是一个单进程、本地优先的 macOS 专注/番茄钟应用：
 
 | 组件 | 职责 | 关键证据 |
 | --- | --- | --- |
-| App Shell & Navigation | App 生命周期、窗口 chrome、工具栏安装、菜单命令、深链路由 | `App/iFocusApp.swift`, `App/Navigation/DeepLinkRouter.swift`, `App/Navigation/AppNavigation.swift` |
+| App Shell & Navigation | App 生命周期、窗口 chrome、工具栏安装、菜单命令、深链路由、页面枚举 | `App/iFocusApp.swift`, `App/Navigation/AppScreen.swift`, `DeepLinkRouter.swift`, `AppNavigation.swift` |
 | Auxiliary Windows | 窗口状态、迷你计时窗、全屏专注 | `App/Windows/WindowStateModel.swift`, `WindowLayoutStore.swift`, `FloatingTimerWindowController.swift`, `FocusModeController.swift` |
 | Main Window UI | 侧栏 + 专注钟 / 任务 / 数据统计 / 个人资料；原生侧栏切换工具栏 | `Views/Content/ContentView.swift`, `AppSidebar.swift`, `SidebarToolbar.swift`, `Views/Timer|Tasks|Analytics|Profile` |
-| Settings Window UI | 五个偏好面板、原生搜索工具栏、分类管理、备份/通知/登录项操作 | `Views/Settings/SettingsWindowView.swift`, `SettingsWindowToolbar.swift`, `Views/Tasks/CategoryManagementView.swift` |
+| Settings Window UI | 四个偏好面板（通用、专注与计时、外观与声音、数据与备份）、原生搜索工具栏、分类管理、备份与通知 | `Views/Settings/SettingsWindowView.swift`, `SettingsWindowToolbar.swift`, `Views/Tasks/CategoryManagementView.swift` |
 | Menu Bar Extra | 状态栏宿主与面板；面板是 SwiftUI，宿主是 AppKit | `App/MenuBar/MenuBarController.swift`, `Views/MenuBar/MenuBarPanelView.swift` |
-| Domain Stores | TimerStore、TaskStore、SettingsStore、AnalyticsDashboardModel；TaskCategory 承载内置与自定义分类 | `ViewModels/Timer`, `ViewModels/Tasks`, `ViewModels/Settings`, `ViewModels/Analytics` |
-| Local Services | 备份、学习记录写出、升级前复制、登录项注册、系统设置链接 | `Services/*` |
-| iFocusCore | 过滤、搜索、统计、格式化、学习计划、备份与学习记录格式。文件仍平铺：同一模块、数量少，不再按领域拆目录 | `iFocusCore/*` |
+| Domain Stores | TimerStore、TaskStore、SettingsStore、AnalyticsDashboardModel。任务和专注记录的字段在 `FocusTask.swift`，存取在 `TaskStore.swift`。TaskCategory 承载内置与自定义分类 | `ViewModels/Timer`, `ViewModels/Tasks`, `ViewModels/Settings`, `ViewModels/Analytics` |
+| Local Services | 备份、升级前复制、登录项注册、系统设置链接。学习记录写出器还在，正式启动不再使用 | `Services/*` |
+| iFocusCore | 过滤、搜索、统计、格式化、备份格式。学习计划模板和旧学习记录格式仍在，供已有数据和测试读取，界面不再调用。文件仍平铺 | `iFocusCore/*` |
 
 ## 关键数据流
 
@@ -63,7 +63,7 @@ iFocus 是一个单进程、本地优先的 macOS 专注/番茄钟应用：
 
 1. 主窗口/菜单栏/深链 → `TimerStore` 的起停、跳过、重置。
 2. 结束时 `TimerStore.commitSession` 调 `TaskStore.addFocusTime` 与 `logFocusSession`。
-3. `TaskStore` 立即写 `focus_sessions.json`，并在 `saveSessions` 后调用 `StudyLogWriter.export`。
+3. `TaskStore` 立即写 `focus_sessions.json`。只有传入了学习记录目录时才会再导出 CSV；正式应用不传，所以这一步现在停在 JSON。
 4. 运行中/退出时 `TimerStore` 把可恢复快照写到 `timer_session.json`；下次启动 offer resume。
 5. `TimerStore` 向 `UNUserNotificationCenter` 预约结束提醒，并更新 Dock 徽标。
 
@@ -87,7 +87,7 @@ iFocus 是一个单进程、本地优先的 macOS 专注/番茄钟应用：
 - 本地 JSON 路径与文件名：`TaskStore.swift:602-628`、`TimerSessionSnapshot.swift:52-80`。
 - `iFocusCore` 所有文件只 `import Foundation`。
 - 没有网络客户端：`grep URLSession|Network|WebSocket Sources/iFocus` 无运行时代码；README 明确“本地优先”。
-- 备份、学习记录、登录项、通知的实现都有明确调用点。
+- 备份、登录项、通知都有明确调用点。学习记录写出器只有在传入目录时才会跑，正式启动不传。
 
 **中置信 / 假设**
 

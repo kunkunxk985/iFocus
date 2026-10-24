@@ -84,17 +84,9 @@ bash Scripts/smoke_test.sh --replace-running
 
 设置项（时长、主题、昵称等）使用 `UserDefaults`。
 
-### 学习记录导出（~/StudyLog）
+### 学习记录（~/StudyLog）
 
-每次记录专注后，应用会把全部专注记录同步成可直接阅读的文件（设置 → 数据 →「打开学习记录」）：
-
-```
-~/StudyLog/
-  sessions.csv         # 全部专注：日期,开始,结束,分钟,分类,任务（开始时间为估算）
-  weeks/2026-10-19.md  # 每周（周一至周日）一份周报：每日总计、学习分类时长、按任务汇总、明细
-```
-
-这个文件夹由 `focus_sessions.json` 生成，删掉也会在下次启动或记录时重建。
+现在的应用不再往 `~/StudyLog` 写文件。以前生成过的 `sessions.csv` 和每周报告会留在原地，不会被删，也不会再自动更新。专注记录以 `focus_sessions.json` 为准。
 
 正计时：设置 → 专注与计时 →「专注用正计时」。专注从 00:00 往上数，点「完成」（⌘→）记录并进入休息，满 2 小时自动结束。
 
@@ -125,13 +117,13 @@ Sources/
     App/                # 进程入口与 macOS 集成
       iFocusApp.swift   # 入口、窗口外观、命令
       AppLog.swift
-      Navigation/       # 深链与页面路由
+      Navigation/       # 页面名称、深链与路由
       MenuBar/          # 状态栏宿主
       Windows/          # 窗口状态、迷你计时窗、全屏专注
     Services/           # 本地备份、学习记录、升级前保护、登录项、系统设置
     ViewModels/         # 可观察状态，按领域分目录
       Timer/            # TimerStore、可恢复快照
-      Tasks/            # TaskStore、TaskCategory
+      Tasks/            # 任务字段 FocusTask、存取 TaskStore、分类
       Settings/
       Analytics/
     Views/

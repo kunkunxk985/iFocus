@@ -435,7 +435,7 @@ struct TaskRowView: View {
                 Section("移到") {
                     Button("今天") { taskStore.moveTask(id: task.id, to: .todayTask) }
                     Button("明天") { taskStore.moveTask(id: task.id, to: .tomorrowTask) }
-                    Button("稍后") { taskStore.moveTask(id: task.id, to: .plannedTask) }
+                    Button("稍后") { taskStore.moveTask(id: task.id, to: .weekTask) }
                     Button("收集箱") { taskStore.moveTask(id: task.id, to: .inboxTask) }
                 }
                 Menu("优先级") {
@@ -619,7 +619,7 @@ struct TaskRowView: View {
                 taskStore.moveTask(id: task.id, to: .tomorrowTask)
             }
             Button("稍后") {
-                taskStore.moveTask(id: task.id, to: .plannedTask)
+                taskStore.moveTask(id: task.id, to: .weekTask)
             }
             Button("收集箱") {
                 taskStore.moveTask(id: task.id, to: .inboxTask)

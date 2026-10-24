@@ -198,9 +198,6 @@ struct TimerView: View {
                         decorativeMotion: settings.decorativeMotionEnabled,
                         ringBreath: ringBreath,
                         isWorkMode: timerStore.mode == .work,
-                        sessionIndex: timerStore.completedPomodoros + 1,
-                        completedInCycle: timerStore.completedPomodoros % max(1, settings.longBreakEvery),
-                        cycleLength: max(1, settings.longBreakEvery),
                         isPaused: isPaused
                     )
                     .scaleEffect(

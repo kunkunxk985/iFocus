@@ -22,7 +22,7 @@
 | `ifocus.app.core` | component | current | high | `Sources/iFocusCore/*.swift` | All files import only Foundation. |
 | `ifocus.dataFiles` | data store | current | high | `TaskStore.swift:602-628`, `TimerSessionSnapshot.swift:52-80`, `README.md:70-86` | `tasks.json`, `focus_sessions.json`, `app_state.json`, `timer_session.json`. |
 | `ifocus.preferences` | data store | current | high | `SettingsStore.swift:62-105`, `WindowLayoutStore.swift:1-50` | UserDefaults keys + `mainWindowFrame`/`sidebarCollapsed`. |
-| `ifocus.studyLog` | data store | current | high | `StudyLogWriter.swift:1-70`, `README.md:88-101` | `sessions.csv` + `weeks/*.md`, derived from sessions. |
+| `ifocus.studyLog` | data store | legacy | high | `StudyLogWriter.swift`, `iFocusApp.swift` (`TaskStore()` with no directory) | Writer remains. The shipped app does not pass a directory, so `~/StudyLog` is not regenerated. |
 | `ifocus.backups` | data store | current | high | `Services/DataBackupService.swift`, `LocalBackup.swift:1-80` | User-selected folder, manifest + JSON payloads. |
 
 ## Edge evidence
@@ -38,7 +38,7 @@
 | `menuBar` | `stores` | `bindStores` observes timer/task/settings; menu actions | high | `MenuBarController.swift:247-272, 413-478` |
 | `stores` | `core` | Imports and pure helper calls | high | `TimerStore.swift`, `TaskStore.swift`, `AnalyticsDashboardModel.swift`; `Sources/iFocusCore` |
 | `services` | `core` | `LocalBackup`, `StudyLogExport`, `StudyPlan` | high | `DataBackupService.swift`, `StudyLogWriter.swift`; `LocalBackup.swift` |
-| `stores` | `services` | `TaskStore.saveSessions` → `StudyLogWriter.export`; `SettingsStore.applyLaunchAtLoginPreference` → `LaunchAtLogin` | high | `TaskStore.swift:894-899, 978`, `SettingsStore.swift:380-392` |
+| `stores` | `services` | `StudyLogWriter.export` only when a directory was injected; `SettingsStore.applyLaunchAtLoginPreference` → `LaunchAtLogin` | high | `TaskStore` init and `saveSessions`, `SettingsStore.applyLaunchAtLoginPreference` |
 | `services` | `stores` | Backup service reads/writes stores | high | `DataBackupService.swift:15-170` |
 | `stores` | `dataFiles` | `TaskStore.saveTasks/loadTasks`, `saveSessions/loadSessions`, `saveState/loadState`; `TimerSessionPersistence` | high | `TaskStore.swift:750-940, 602-628`, `TimerSessionSnapshot.swift:52-80` |
 | `stores` | `preferences` | `SettingsStore` didSet → UserDefaults; `WindowLayoutStore` | high | `SettingsStore.swift:107-300`, `WindowLayoutStore.swift` |

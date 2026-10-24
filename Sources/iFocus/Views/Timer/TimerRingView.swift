@@ -14,9 +14,6 @@ struct TimerRingView: View {
     let decorativeMotion: Bool
     let ringBreath: Bool
     var isWorkMode: Bool = true
-    var sessionIndex: Int = 1
-    var completedInCycle: Int = 0
-    var cycleLength: Int = 4
     var isPaused: Bool = false
 
     @Environment(\.colorScheme) private var colorScheme
@@ -220,18 +217,6 @@ struct TimerRingView: View {
                     color: isPaused ? AppTheme.paused : modeColor,
                     isPill: true
                 )
-
-                if isWorkMode && cycleLength > 0 {
-                    HStack(spacing: 4.5) {
-                        ForEach(0..<cycleLength, id: \.self) { index in
-                            Circle()
-                                .fill(index < completedInCycle ? modeColor : modeColor.opacity(0.22))
-                                .frame(width: 4, height: 4)
-                        }
-                    }
-                    .padding(.top, 2)
-                    .help("当前番茄周期进度: \(completedInCycle)/\(cycleLength)")
-                }
             }
         }
         .frame(width: size * 1.28, height: size * 1.28)

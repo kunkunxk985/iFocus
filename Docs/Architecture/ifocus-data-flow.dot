@@ -73,7 +73,7 @@ digraph iFocusDataFlow {
         style="rounded";
 
         notifications [label="通知中心\nUNUserNotificationCenter"];
-        finder [label="Finder\n数据 / 学习记录"];
+        finder [label="Finder\n数据文件夹"];
         sysSettings [label="系统设置\n通知 / 登录项 / 专注模式"];
     }
 
@@ -128,7 +128,7 @@ digraph iFocusDataFlow {
     prefs -> login [label="应用登录项偏好"];
     login -> sysSettings [label="注册登录项"];
 
-    settings -> finder [label="打开数据 / 学习记录"];
+    settings -> finder [label="打开数据文件夹"];
     settings -> sysSettings [label="打开系统设置"];
     user -> finder [label="查看"];
     user -> sysSettings [label="授权 / 设置"];

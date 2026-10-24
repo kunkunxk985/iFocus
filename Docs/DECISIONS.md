@@ -76,6 +76,12 @@ Task rows now share `AppTheme.success / warning / danger / paused / violet`, `Ty
 
 On the timer stage, today's progress is one line under the ring (`今天 2/4 · 已专注 50 分`), not a card above it. The corner control is 「进入专注」; mini timer and immersive mode live in its menu. Mode chips are a flat fill with no glow or stacked strokes, and the side controls are flat circles. The play button stays a flat accent circle, which is the one loud control. A paused session changes the ring badge to an amber「mode · 已暂停」with a pause glyph; the play control's help and accessibility label say「继续」. The current-task picker uses a stronger surface and a larger category tile so it reads as a control without competing with the ring.
 
+### Where the task record and the page names live
+
+`FocusTask`, `FocusSession` and `TaskRecurrence` live in `ViewModels/Tasks/FocusTask.swift`. `TaskStore` only loads, saves and edits them. `AppScreen` and `ContentViewState` live in `App/Navigation/AppScreen.swift`, next to the deep-link router, so a page name is not defined inside a view file.
+
+The shipped app calls `TaskStore()` without a study-log directory, so `~/StudyLog` is no longer updated. The writer, the plan templates and checklist fields stay, because older task files may still contain them and the tests still read them. Settings is four panes; notification status sits in 外观与声音, and a corrupt data file is reported under 数据与备份.
+
 ### Session summary and the Settings status center
 
 A completed work session publishes `SessionSummary` and the main window presents it as a compact sheet. A top overlay was tried first and rejected: it covered the timer goal card and let fragments peek around the card at every window size. The sheet keeps the summary readable, lets the break continue behind it, and is dismissed by starting the next segment or closing; it does not auto-dismiss.
@@ -107,3 +113,7 @@ All pickers, chips and list menus read `TaskStore.allCategories`; category filte
 ### Window translucency
 
 The window's `backgroundColor` is an opaque colour: the glass blurs what is behind it inside the window, so the sidebar reads as a solid surface rather than picking up the desktop. Making the window clear would give the native translucency, but that previously caused an unpainted strip along the inset panel's bottom edge and has not been re-evaluated since the sidebar went full-bleed.
+
+### One quiet timer, one chart
+
+The long-break round is a row of dots under the ring, not inside it. A finished work session is one line at the bottom of the window (`N 分钟 · 任务名`), not a sheet. 数据统计 keeps the range control, the range totals and one trend chart. 个人资料 keeps the avatar, name and color. The mini timer is a circle: time at rest, pause / skip / open / close on hover. Its frame is stored separately from the old wide bar.

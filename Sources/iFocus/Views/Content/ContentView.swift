@@ -257,15 +257,12 @@ struct ContentView: View {
             }
             viewState.shouldFocusSearch = true
         }
-        .sheet(isPresented: Binding(
-            get: { timerStore.sessionSummary != nil },
-            set: { if !$0 { timerStore.dismissSessionSummary() } }
-        )) {
+        .overlay(alignment: .bottom) {
             if let summary = timerStore.sessionSummary {
                 SessionSummaryCard(summary: summary)
-                    .padding(20)
-                    .frame(width: 400)
-                    .background(AppTheme.contentBackground(for: colorScheme).ignoresSafeArea())
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, timerStore.isSessionInProgress ? 88 : 28)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .timerResetConfirmation(isPresented: $showResetConfirm, timerStore: timerStore)
