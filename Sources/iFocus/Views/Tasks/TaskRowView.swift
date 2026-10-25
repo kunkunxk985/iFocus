@@ -207,10 +207,6 @@ struct TaskRowView: View {
                     }
                     .help(completedFade ? "标为未完成" : "标为完成")
                     .accessibilityLabel(completedFade ? "标为未完成" : "标为完成")
-                    
-                    if !completedFade {
-                        focusButton(density: density)
-                    }
                 }
                 
                 VStack(alignment: .leading, spacing: density == .compact ? 2 : 4) {
@@ -236,13 +232,19 @@ struct TaskRowView: View {
 
                         if isActive && !completedFade {
                             Text(isRunning ? "专注中" : "当前")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
                                 .foregroundColor(isRunning ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1.5)
+                                .background(
+                                    Capsule()
+                                        .fill(AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.16))
+                                )
                         }
 
                         if task.isOverdue && !completedFade {
                             Text("逾期")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
                                 .foregroundColor(AppTheme.danger)
                         }
                         
@@ -300,7 +302,7 @@ struct TaskRowView: View {
         .padding(.trailing, density == .compact ? 10 : 12)
         .padding(.vertical, density.rowVerticalPadding)
         .background(rowBackground)
-        .contentShape(AppTheme.squircle(radius: AppTheme.radiusM))
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .onHover { isHovering = $0 }
         .onTapGesture(count: 2) {
             if !isSelecting { onEdit() }
@@ -321,40 +323,27 @@ struct TaskRowView: View {
         }
     }
 
-    private func focusButton(density: UIDensity) -> some View {
-        Button(action: handleFocusButton) {
-            ZStack {
-                if isActive && isRunning {
-                    Circle()
-                        .strokeBorder(AppTheme.accent.opacity(0.40), lineWidth: 1.5)
-                        .frame(width: 25 * density.scale, height: 25 * density.scale)
-                }
-                Circle()
-                    .fill(
-                        isActive
-                        ? AppTheme.accent
-                        : AppTheme.elevatedBackground(for: colorScheme)
-                    )
-                    .frame(width: 22 * density.scale, height: 22 * density.scale)
-                    .overlay(
-                        Circle().strokeBorder(
-                            isActive ? Color.clear : AppTheme.separatorLow(for: colorScheme),
-                            lineWidth: 0.75
-                        )
-                    )
-                Image(systemName: focusButtonIcon)
-                    .font(.system(size: AppTheme.iconMeta, weight: .bold))
-                    .foregroundColor(isActive ? .white : AppTheme.secondaryText(for: colorScheme))
-            }
-            .frame(width: 25 * density.scale, height: 25 * density.scale)
-        }
-        .buttonStyle(SpringScaleButtonStyle())
-        .help(focusButtonHelp)
-        .accessibilityLabel(focusButtonHelp)
-    }
-
     private var secondaryActionButtons: some View {
         HStack(spacing: 3) {
+            Button(action: handleFocusButton) {
+                Image(systemName: focusButtonIcon)
+                    .font(.system(size: AppTheme.iconAction, weight: .bold))
+                    .foregroundColor(isActive ? .white : AppTheme.secondaryText(for: colorScheme).opacity(0.85))
+                    .frame(width: 24, height: 24)
+                    .background(
+                        Circle()
+                            .fill(
+                                isActive
+                                ? AppTheme.accent
+                                : AppTheme.elevatedBackground(for: colorScheme).opacity(isHovering ? 0.85 : 0)
+                            )
+                    )
+            }
+            .buttonStyle(SpringScaleButtonStyle())
+            .help(focusButtonHelp)
+            .accessibilityLabel(focusButtonHelp)
+            .opacity(isActive || isHovering ? 1 : 0)
+
             Button {
                 taskStore.togglePin(for: task)
             } label: {
@@ -446,24 +435,11 @@ struct TaskRowView: View {
     
     @ViewBuilder
     private var focusDurationMeta: some View {
-        if task.isCompleted {
-            if task.timeSpentMinutes > 0 {
-                focusDurationLabel(
-                    FocusStats.formatTotalMinutes(task.timeSpentMinutes)
-                        .replacingOccurrences(of: "分钟", with: "分"),
-                    help: "累计专注时长"
-                )
-            } else {
-                Text("未专注")
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.45))
-                    .help("完成时未记录绑定的专注时长")
-            }
-        } else if task.timeSpentMinutes > 0 {
+        if task.timeSpentMinutes > 0 {
             focusDurationLabel(
                 FocusStats.formatTotalMinutes(task.timeSpentMinutes)
                     .replacingOccurrences(of: "分钟", with: "分"),
-                help: "已累计专注时长"
+                help: task.isCompleted ? "累计专注时长" : "已累计专注时长"
             )
         }
     }
@@ -481,43 +457,31 @@ struct TaskRowView: View {
     
     private var rowBackground: some View {
         let selected = isSelecting && isSelected
-        let emphasized = selected || isActive
         let fill: Color
         if selected {
             fill = AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.16)
         } else if isActive {
-            fill = AppTheme.accent.opacity(colorScheme == .light ? 0.055 : 0.10)
+            fill = AppTheme.accent.opacity(colorScheme == .light ? 0.06 : 0.10)
         } else if isHovering {
-            fill = AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.96 : 0.86)
+            fill = colorScheme == .light ? Color.black.opacity(0.04) : Color.white.opacity(0.06)
         } else {
-            // Resting rows stay quiet: no shadow, a barely-there surface.
-            fill = AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.68 : 0.60)
+            fill = Color.clear
         }
         let stroke: Color
-        if emphasized {
-            stroke = AppTheme.accent.opacity(selected ? 0.34 : 0.24)
+        if selected {
+            stroke = AppTheme.accent.opacity(0.32)
+        } else if isActive {
+            stroke = AppTheme.accent.opacity(0.20)
         } else if isHovering {
-            stroke = AppTheme.separator(for: colorScheme)
+            stroke = AppTheme.separatorLow(for: colorScheme)
         } else {
-            stroke = AppTheme.separatorLow(for: colorScheme).opacity(0.7)
+            stroke = Color.clear
         }
-        return AppTheme.squircle(radius: AppTheme.radiusM)
+        return RoundedRectangle(cornerRadius: 8, style: .continuous)
             .fill(fill)
             .overlay(
-                AppTheme.squircle(radius: AppTheme.radiusM)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .strokeBorder(stroke, lineWidth: 1)
-            )
-            .overlay(
-                AppTheme.squircle(radius: AppTheme.radiusM)
-                    .strokeBorder(
-                        AppTheme.cardInnerHighlight(for: colorScheme),
-                        lineWidth: isHovering || emphasized ? 0.75 : 0
-                    )
-            )
-            .shadow(
-                color: isHovering || emphasized ? AppTheme.softShadow(for: colorScheme) : .clear,
-                radius: isHovering ? 8 : 4,
-                y: 2
             )
             .animation(.easeOut(duration: 0.12), value: isHovering)
             .animation(.easeOut(duration: 0.16), value: selected)

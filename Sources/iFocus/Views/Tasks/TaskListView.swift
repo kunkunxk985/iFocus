@@ -403,9 +403,6 @@ struct TaskListView: View {
         .overlay(
             Capsule().strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
         )
-        .overlay(
-            Capsule().strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.75)
-        )
         .frame(maxWidth: 360, alignment: .leading)
         .help("搜索当前列表中的标题、备注或链接（⌘F）")
     }
@@ -621,10 +618,6 @@ struct TaskListView: View {
                                     : AppTheme.accent
                                 )
                         )
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.5)
-                        )
                     }
                     .buttonStyle(SpringScaleButtonStyle())
                     .disabled(taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -677,18 +670,14 @@ struct TaskListView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(
-            AppTheme.squircle(radius: AppTheme.radiusCard)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(AppTheme.cardBackground(for: colorScheme))
         )
         .overlay(
-            AppTheme.squircle(radius: AppTheme.radiusCard)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
         )
-        .overlay(
-            AppTheme.squircle(radius: AppTheme.radiusCard)
-                .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 1)
-        )
-        .multiLayerShadow(elevation: .card, colorScheme: colorScheme)
+        .shadow(color: AppTheme.softShadow(for: colorScheme), radius: 4, y: 1)
     }
 
     private func dueChip(title: String, target: TaskStore.DueOverride) -> some View {
