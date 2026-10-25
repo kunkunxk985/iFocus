@@ -15,12 +15,13 @@ struct AnalyticsView: View {
     @State private var isEditingProfile = false
     @State private var tempUsername = ""
 
-    private var model: AnalyticsDashboardModel {
+    private var snapshot: AnalyticsPageSnapshot {
         _ = clockVersion
-        return AnalyticsDashboardModel.build(
+        return AnalyticsPageSnapshot.build(
             range: range,
             focusSessions: taskStore.focusSessions,
             tasks: taskStore.tasks,
+            categoriesInUse: taskStore.categoriesInUse,
             dailyGoal: settings.dailyGoal,
             completedPomodoros: timerStore.completedPomodoros,
             totalSecondsToday: timerStore.totalSecondsToday,
@@ -37,12 +38,13 @@ struct AnalyticsView: View {
             let contentW = min(availableW, min(1100, max(720, availableW * 0.88)))
             let contentH = max(0, geo.size.height - topInset)
             let chartHeight = min(280, max(200, contentH * 0.42))
-            let m = model
+            let page = snapshot
+            let m = page.model
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header(model: m)
-                    identityRow
+                    identityRow(page: page)
                     rangeChipsBar
 
                     if !m.hasAnyHistory {
@@ -53,29 +55,21 @@ struct AnalyticsView: View {
                     }
 
                     ProfileHeatmapCard(
-                        grid: heatmapGrid,
-                        monthLabels: heatmapMonthLabels
+                        grid: page.heatmapGrid,
+                        monthLabels: page.heatmapMonthLabels
                     )
 
                     HStack(alignment: .top, spacing: 20) {
                         ProfileInsightsCard(
-                            maxSingleFocusSession: taskStore.focusSessions.map(\.durationMinutes).max() ?? 0,
-                            averageDailyLabel: FocusStats.formatTotalMinutes(
-                                FocusStats.averageDailyFocusMinutes(
-                                    sessionTimestamps: sessionTimestamps,
-                                    totalMinutes: totalMinutes
-                                )
-                            ),
-                            peakHours: FocusStats.peakFocusHoursString(sessionTimestamps: sessionTimestamps),
-                            completionRate: FocusStats.completionRate(
-                                total: taskStore.tasks.count,
-                                completed: taskStore.tasks.filter(\.isCompleted).count
-                            )
+                            maxSingleFocusSession: page.maxSingleFocusSession,
+                            averageDailyLabel: page.averageDailyLabel,
+                            peakHours: page.peakHours,
+                            completionRate: page.completionRate
                         )
                         .frame(maxWidth: .infinity)
 
                         ProfileCategoriesCard(
-                            stats: categoryStats,
+                            stats: page.categoryStats,
                             isEmpty: taskStore.focusSessions.isEmpty
                         )
                         .frame(maxWidth: .infinity)
@@ -150,58 +144,8 @@ struct AnalyticsView: View {
         return name.isEmpty ? "小番茄" : name
     }
 
-    private var sessionTimestamps: [Date] {
-        taskStore.focusSessions.map(\.timestamp)
-    }
-
-    private var totalMinutes: Int {
-        taskStore.focusSessions.reduce(0) { $0 + $1.durationMinutes }
-    }
-
-    private var heatmapGrid: [[FocusStats.ContributionCell]] {
-        let pairs = taskStore.focusSessions.map { ($0.timestamp, $0.durationMinutes) }
-        let byDay = FocusStats.minutesByDay(sessions: pairs)
-        return FocusStats.contributionGrid(minutesByDay: byDay)
-    }
-
-    private var heatmapMonthLabels: [Int: String] {
-        FocusStats.monthLabels(for: heatmapGrid)
-    }
-
-    private var categoryStats: [ProfileCategoryStat] {
-        var minutesByID = [String: Int]()
-        var countByID = [String: Int]()
-        var categoriesByID = Dictionary(
-            uniqueKeysWithValues: taskStore.categoriesInUse.map { ($0.id, $0) }
-        )
-        for session in taskStore.focusSessions {
-            let category: TaskCategory
-            if let stored = session.taskCategory {
-                category = stored
-            } else if let taskId = session.taskId,
-                      let task = taskStore.tasks.first(where: { $0.id == taskId }) {
-                category = task.category
-            } else {
-                category = .other
-            }
-            if categoriesByID[category.id] == nil {
-                categoriesByID[category.id] = category
-            }
-            minutesByID[category.id, default: 0] += session.durationMinutes
-            countByID[category.id, default: 0] += 1
-        }
-        return taskStore.categoriesInUse.map { cat in
-            ProfileCategoryStat(
-                category: categoriesByID[cat.id] ?? cat,
-                minutes: minutesByID[cat.id] ?? 0,
-                count: countByID[cat.id] ?? 0
-            )
-        }
-        .sorted { $0.minutes > $1.minutes }
-    }
-
-    private var identityRow: some View {
-        let streak = FocusStats.streaks(sessionTimestamps: sessionTimestamps)
+    private func identityRow(page: AnalyticsPageSnapshot) -> some View {
+        let m = page.model
         return HStack(spacing: 12) {
             UnifiedAvatarView(
                 path: settings.avatarPath,
@@ -213,7 +157,7 @@ struct AnalyticsView: View {
                 Text(displayName)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                Text("连续 \(streak.current) 天 · 累计 \(FocusStats.formatTotalMinutes(totalMinutes))")
+                Text("连续 \(m.streakCurrent) 天 · 累计 \(FocusStats.formatTotalMinutes(page.totalMinutesAllTime))")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
@@ -252,7 +196,7 @@ struct AnalyticsView: View {
     }
 
     private func shareReport() {
-        let report = model.reportText(username: settings.username)
+        let report = snapshot.model.reportText(username: settings.username)
         var allowed = CharacterSet.alphanumerics
         allowed.insert(charactersIn: "-._~")
         guard let encodedSubject = report.subject.addingPercentEncoding(withAllowedCharacters: allowed),

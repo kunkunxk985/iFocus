@@ -178,15 +178,40 @@ struct TaskListView: View {
         return incompleteFiltered.filter { !$0.isOverdue }
     }
     
+    private struct ListChipCounts {
+        var total = 0
+        var highPriority = 0
+        var pinned = 0
+        var hasNotes = 0
+        var hasLink = 0
+        var byCategoryID: [String: Int] = [:]
+    }
+
+    private var baseListChipCounts: ListChipCounts {
+        var counts = ListChipCounts()
+        for task in baseTasks {
+            counts.total += 1
+            if task.priority >= 3 { counts.highPriority += 1 }
+            if task.isPinned { counts.pinned += 1 }
+            if !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                counts.hasNotes += 1
+            }
+            if task.hasLink { counts.hasLink += 1 }
+            counts.byCategoryID[task.category.id, default: 0] += 1
+        }
+        return counts
+    }
+
     private var availableChips: [TaskListChip] {
         // Only chips that match something — hide empty filters (less chrome).
+        let counts = baseListChipCounts
         var chips: [TaskListChip] = [.all]
         let candidates: [TaskListChip] = [.highPriority, .pinned, .hasNotes, .hasLink]
-        for chip in candidates where chipCount(chip) > 0 {
+        for chip in candidates where chipCount(chip, counts: counts) > 0 {
             chips.append(chip)
         }
         // Categories appear only when the current list actually contains one.
-        for cat in taskStore.allCategories where chipCount(.category(cat)) > 0 {
+        for cat in taskStore.allCategories where (counts.byCategoryID[cat.id] ?? 0) > 0 {
             chips.append(.category(cat))
         }
         return chips
@@ -210,17 +235,16 @@ struct TaskListView: View {
         }
     }
     
-    private func chipCount(_ chip: TaskListChip) -> Int {
-        baseTasks.filter { task in
-            switch chip {
-            case .all: return true
-            case .highPriority: return task.priority >= 3
-            case .pinned: return task.isPinned
-            case .hasNotes: return !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case .hasLink: return task.hasLink
-            case .category(let cat): return task.category.id == cat.id
-            }
-        }.count
+    private func chipCount(_ chip: TaskListChip, counts: ListChipCounts? = nil) -> Int {
+        let c = counts ?? baseListChipCounts
+        switch chip {
+        case .all: return c.total
+        case .highPriority: return c.highPriority
+        case .pinned: return c.pinned
+        case .hasNotes: return c.hasNotes
+        case .hasLink: return c.hasLink
+        case .category(let cat): return c.byCategoryID[cat.id] ?? 0
+        }
     }
     
     var body: some View {
@@ -424,15 +448,16 @@ struct TaskListView: View {
     private var listTools: some View {
         HStack(spacing: 14) {
             if availableChips.count > 1 {
+                let filterCounts = baseListChipCounts
                 Menu {
                     ForEach(availableChips) { chip in
                         Button {
                             activeChip = chip
                         } label: {
                             if activeChip.id == chip.id {
-                                Label("\(chip.title)  \(chipCount(chip))", systemImage: "checkmark")
+                                Label("\(chip.title)  \(chipCount(chip, counts: filterCounts))", systemImage: "checkmark")
                             } else {
-                                Text("\(chip.title)  \(chipCount(chip))")
+                                Text("\(chip.title)  \(chipCount(chip, counts: filterCounts))")
                             }
                         }
                     }

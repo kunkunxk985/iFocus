@@ -175,6 +175,41 @@ final class PerformanceBenchmarksTests: XCTestCase {
             _ = store.tasks(for: .inboxTask)
         }
     }
+
+    func testPerf_filterAllLists_500Tasks_cachedSecondPass() {
+        let store = seedTaskStore(tasks: 500, sessions: 0)
+        _ = store.tasks(for: .todayTask)
+        _ = store.tasks(for: .tomorrowTask)
+        _ = store.tasks(for: .weekTask)
+        _ = store.tasks(for: .plannedTask)
+        _ = store.tasks(for: .completedTask)
+        _ = store.tasks(for: .inboxTask)
+        assertUnder(0.012, "tasks(for:) ×6 filters @500 cached") {
+            _ = store.tasks(for: .todayTask)
+            _ = store.tasks(for: .tomorrowTask)
+            _ = store.tasks(for: .weekTask)
+            _ = store.tasks(for: .plannedTask)
+            _ = store.tasks(for: .completedTask)
+            _ = store.tasks(for: .inboxTask)
+        }
+    }
+
+    func testPerf_analyticsPageSnapshot_5kSessions500Tasks() {
+        let store = seedTaskStore(tasks: 500, sessions: 5_000)
+        assertUnder(0.220, "AnalyticsPageSnapshot 5k sessions + 500 tasks") {
+            _ = AnalyticsPageSnapshot.build(
+                range: .today,
+                focusSessions: store.focusSessions,
+                tasks: store.tasks,
+                categoriesInUse: store.categoriesInUse,
+                dailyGoal: 4,
+                completedPomodoros: 2,
+                totalSecondsToday: 3_600,
+                isWorkMode: true,
+                sessionLive: true
+            )
+        }
+    }
     
     func testPerf_sidebarBadgeCounts_500Tasks() {
         let store = seedTaskStore(tasks: 500, sessions: 0)
