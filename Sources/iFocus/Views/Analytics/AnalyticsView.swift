@@ -98,7 +98,8 @@ struct AnalyticsView: View {
         .overlay {
             if isEditingProfile {
                 ZStack {
-                    Color.clear
+                    Color.black.opacity(colorScheme == .light ? 0.20 : 0.45)
+                        .ignoresSafeArea()
                         .contentShape(Rectangle())
                         .onTapGesture { isEditingProfile = false }
                     EditProfileSheet(

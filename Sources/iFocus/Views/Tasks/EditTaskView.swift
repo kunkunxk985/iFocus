@@ -48,6 +48,10 @@ struct EditTaskView: View {
     ) -> Void
     
     @State private var title: String
+    @State private var selectedCategory: TaskCategory
+    @State private var estimatedPomodoros: Int
+    @State private var priority: Int
+    @State private var recurrence: TaskRecurrence
     @State private var dueDate: Date
     @State private var hasDueDate: Bool
     @State private var notes: String
@@ -64,6 +68,10 @@ struct EditTaskView: View {
         self.categories = categories
         self.onSave = onSave
         _title = State(initialValue: session.title)
+        _selectedCategory = State(initialValue: session.category)
+        _estimatedPomodoros = State(initialValue: session.estimatedPomodoros)
+        _priority = State(initialValue: session.priority)
+        _recurrence = State(initialValue: session.recurrence)
         _notes = State(initialValue: session.notes)
         _linkURL = State(initialValue: session.linkURL)
         if let due = session.dueDate {
@@ -101,6 +109,68 @@ struct EditTaskView: View {
                     }
                     
                     Divider().opacity(0.5)
+
+                    fieldRow("分类") {
+                        Picker("", selection: $selectedCategory) {
+                            ForEach(categories) { cat in
+                                Label(cat.name, systemImage: cat.icon).tag(cat)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(maxWidth: 160)
+                        .onChange(of: selectedCategory) { _ in
+                            AppHaptics.selectionChanged()
+                        }
+                    }
+
+                    Divider().opacity(0.5)
+
+                    fieldRow("预计番茄") {
+                        HStack(spacing: 6) {
+                            Text("\(estimatedPomodoros) 个")
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                            Stepper("", value: $estimatedPomodoros, in: 1...20, step: 1)
+                                .labelsHidden()
+                                .controlSize(.small)
+                                .onChange(of: estimatedPomodoros) { _ in
+                                    AppHaptics.selectionChanged()
+                                }
+                        }
+                    }
+
+                    Divider().opacity(0.5)
+
+                    fieldRow("优先级") {
+                        Picker("", selection: $priority) {
+                            Text("普通").tag(1)
+                            Text("中").tag(2)
+                            Text("高").tag(3)
+                            Text("紧急").tag(4)
+                        }
+                        .labelsHidden()
+                        .frame(maxWidth: 160)
+                        .onChange(of: priority) { _ in
+                            AppHaptics.selectionChanged()
+                        }
+                    }
+
+                    Divider().opacity(0.5)
+
+                    fieldRow("重复") {
+                        Picker("", selection: $recurrence) {
+                            ForEach(TaskRecurrence.allCases) { rec in
+                                Text(rec.rawValue).tag(rec)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(maxWidth: 160)
+                        .onChange(of: recurrence) { _ in
+                            AppHaptics.selectionChanged()
+                        }
+                    }
+
+                    Divider().opacity(0.5)
                     
                     fieldRow("截止日期") {
                         Toggle("", isOn: $hasDueDate)
@@ -130,6 +200,7 @@ struct EditTaskView: View {
                             .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                         TextEditor(text: $notes)
                             .font(.body)
+                            .scrollContentBackground(.hidden)
                             .frame(minHeight: 72, maxHeight: 120)
                             .padding(8)
                             .background(
@@ -200,6 +271,7 @@ struct EditTaskView: View {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
                 )
+                .shadow(color: Color.black.opacity(colorScheme == .light ? 0.04 : 0.16), radius: 8, x: 0, y: 2)
                 .padding(.horizontal, 20)
             }
             .frame(maxHeight: 420)
@@ -214,13 +286,14 @@ struct EditTaskView: View {
                 Spacer()
                 
                 Button("保存") {
+                    AppHaptics.buttonClick()
                     onSave(
                         title,
-                        session.category,
-                        session.priority,
-                        session.estimatedPomodoros,
+                        selectedCategory,
+                        priority,
+                        estimatedPomodoros,
                         hasDueDate ? Calendar.current.startOfDay(for: dueDate) : nil,
-                        session.recurrence,
+                        recurrence,
                         notes,
                         linkURL
                     )
@@ -236,6 +309,7 @@ struct EditTaskView: View {
             .padding(.bottom, 16)
         }
         .frame(width: 480)
+        .background(AppTheme.contentBackground(for: colorScheme))
     }
 
     private func fieldRow<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {

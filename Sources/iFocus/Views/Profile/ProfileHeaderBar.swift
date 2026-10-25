@@ -26,24 +26,17 @@ struct ProfileIdentityBlock: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            ZStack {
+            UnifiedAvatarView(
+                path: avatarPath,
+                colorIndex: avatarColorIndex,
+                username: username,
+                size: 88
+            )
+            .overlay(
                 Circle()
-                    .fill(AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.20))
-                    .frame(width: 100, height: 100)
-                    .blur(radius: 10)
-
-                UnifiedAvatarView(
-                    path: avatarPath,
-                    colorIndex: avatarColorIndex,
-                    username: username,
-                    size: 88
-                )
-                .overlay(
-                    Circle()
-                        .strokeBorder(Color.white.opacity(colorScheme == .light ? 0.6 : 0.15), lineWidth: 2)
-                )
-                .shadow(color: Color.black.opacity(colorScheme == .light ? 0.08 : 0.3), radius: 8, x: 0, y: 4)
-            }
+                    .strokeBorder(AppTheme.separator(for: colorScheme), lineWidth: 1.5)
+            )
+            .shadow(color: Color.black.opacity(colorScheme == .light ? 0.06 : 0.22), radius: 8, x: 0, y: 3)
 
             Text(username)
                 .font(.system(size: 21, weight: .bold, design: .rounded))

@@ -37,7 +37,7 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
         case .timer:
             return "正计时 专注时长 短休息 长休息 长休 自动休息 自动专注 严格自律 跳过 每日目标 暂停提醒"
         case .appearance:
-            return "外观 浅色 深色 跟随系统 强调色 菜单栏 图标 通知 权限 提示音 声音 音效 试听 程序坞 Dock"
+            return "外观 浅色 深色 跟随系统 强调色 菜单栏 图标 界面密度 密度 舒适 紧凑 通知 权限 提示音 声音 音效 试听 程序坞 Dock 触感 触控板 震动 反馈 haptics"
         case .data:
             return "数据 本地 离线 任务 专注历史 导出 备份 恢复 快照 自动保护 访达 Finder 文件夹 存储"
         }
@@ -54,6 +54,7 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
 struct SettingsWindowView: View {
     @State private var selectedPanel: SettingsWindowPanel = .general
     @State private var pendingRestorePreview: DataBackupService.RestorePreview?
+    @State private var isManagingCategories = false
     @ObservedObject private var search = SettingsSearchModel.shared
     @FocusState private var focusedPanel: SettingsWindowPanel?
     @EnvironmentObject var settings: SettingsStore
@@ -156,6 +157,10 @@ struct SettingsWindowView: View {
                 },
                 secondaryButton: .cancel(Text("取消"))
             )
+        }
+        .sheet(isPresented: $isManagingCategories) {
+            CategoryManagementView()
+                .environmentObject(taskStore)
         }
     }
 
@@ -385,6 +390,21 @@ struct SettingsWindowView: View {
                 }
             }
 
+            SettingsGroup(title: "任务与分类") {
+                SettingsRow(
+                    title: "分类管理",
+                    subtitle: "自定义任务分类名称、颜色与图标",
+                    keywords: "分类 标签 自定义 颜色 图标 管理"
+                ) {
+                    Button("管理分类…") {
+                        AppHaptics.buttonClick()
+                        isManagingCategories = true
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+
             SettingsGroup(title: "其他") {
                 SettingsRow(
                     title: "新手引导",
@@ -575,6 +595,9 @@ struct SettingsWindowView: View {
                     .pickerStyle(.segmented)
                     .frame(width: 210)
                     .accessibilityLabel("外观模式")
+                    .onChange(of: settings.appearance) { _ in
+                        AppHaptics.selectionChanged()
+                    }
                 }
 
                 SettingsDivider()
@@ -588,6 +611,7 @@ struct SettingsWindowView: View {
                             let selected = settings.accentPreset == preset
                             Button {
                                 settings.accentPreset = preset
+                                AppHaptics.selectionChanged()
                             } label: {
                                 ZStack {
                                     Circle()
@@ -616,6 +640,27 @@ struct SettingsWindowView: View {
                 SettingsDivider()
 
                 SettingsRow(
+                    title: "界面密度",
+                    subtitle: "控制任务列表、边距与字体舒适度",
+                    keywords: "界面密度 密度 舒适 紧凑"
+                ) {
+                    Picker("", selection: $settings.uiDensity) {
+                        ForEach(UIDensity.allCases) { density in
+                            Text(density.label).tag(density)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 140)
+                    .accessibilityLabel("界面密度")
+                    .onChange(of: settings.uiDensity) { _ in
+                        AppHaptics.selectionChanged()
+                    }
+                }
+
+                SettingsDivider()
+
+                SettingsRow(
                     title: "菜单栏",
                     keywords: "图标 菜单栏"
                 ) {
@@ -630,7 +675,7 @@ struct SettingsWindowView: View {
                 }
             }
 
-            SettingsGroup(title: "声音与通知") {
+            SettingsGroup(title: "声音、触感与通知") {
                 SettingsRow(
                     title: "系统通知",
                     subtitle: "专注或休息结束时发送系统横幅提醒",
@@ -703,6 +748,7 @@ struct SettingsWindowView: View {
                             .accessibilityLabel("提示音效")
 
                             Button {
+                                AppHaptics.buttonClick()
                                 NSSound(named: settings.soundName)?.play()
                             } label: {
                                 Image(systemName: "speaker.wave.2.fill")
@@ -719,6 +765,22 @@ struct SettingsWindowView: View {
                             .accessibilityLabel("试听提示音")
                         }
                     }
+                }
+
+                SettingsDivider()
+
+                SettingsRow(
+                    title: "触控板触感反馈",
+                    subtitle: "完成任务、切换模式与关键操作时的轻微触觉反馈",
+                    keywords: "触感 触控板 震动 反馈 haptics"
+                ) {
+                    Toggle("", isOn: $settings.hapticsEnabled)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .accessibilityLabel("触控板触感反馈")
+                        .onChange(of: settings.hapticsEnabled) { _ in
+                            AppHaptics.buttonClick()
+                        }
                 }
 
                 SettingsDivider()
@@ -1029,6 +1091,7 @@ private struct DurationSettingRow: View {
                     Button {
                         minutes = pill
                         onCommit()
+                        AppHaptics.buttonClick()
                     } label: {
                         Text("\(pill)′")
                             .font(.system(size: 11, weight: minutes == pill ? .bold : .medium, design: .rounded))

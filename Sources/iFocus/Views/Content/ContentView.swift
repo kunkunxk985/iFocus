@@ -80,6 +80,10 @@ struct ContentView: View {
                         .zIndex(25)
 
                     AccountMenuPopover(
+                        onProfile: {
+                            viewState.selectedScreen = .analytics
+                            dismissAccountMenu()
+                        },
                         onSettings: {
                             openWindow(id: "settings")
                             dismissAccountMenu()

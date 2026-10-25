@@ -77,8 +77,8 @@ struct ProfileHeatmapCard: View {
                                                 )
                                         )
                                         .scaleEffect(isHovered ? 1.25 : 1.0)
-                                        .shadow(color: level >= 3 ? AppTheme.accent.opacity(0.35) : Color.clear, radius: 2, x: 0, y: 0)
                                         .animation(AppTheme.springInteractive, value: isHovered)
+                                        .zIndex(isHovered ? 1 : 0)
                                         .onHover { h in
                                             withAnimation(AppTheme.springInteractive) {
                                                 hoveredCell = h ? cell : nil

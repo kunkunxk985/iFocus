@@ -26,4 +26,10 @@ public enum AppHaptics {
         guard isEnabled else { return }
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
     }
+
+    /// Subtle alignment feedback for picking presets, color swatches, or tabs.
+    public static func selectionChanged() {
+        guard isEnabled else { return }
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+    }
 }

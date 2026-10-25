@@ -110,7 +110,10 @@ struct MiniTimerView: View {
         filled: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        Button {
+            AppHaptics.buttonClick()
+            action()
+        } label: {
             Image(systemName: systemName)
                 .font(.system(size: filled ? 11 : 9.5, weight: .semibold))
                 .foregroundColor(filled ? .white : AppTheme.secondaryText(for: colorScheme))

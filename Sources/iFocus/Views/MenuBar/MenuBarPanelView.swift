@@ -71,6 +71,7 @@ struct MenuBarPanelView: View {
 
                 HStack(spacing: 5) {
                     Button {
+                        AppHaptics.buttonClick()
                         timerStore.toggle()
                     } label: {
                         Image(systemName: timerStore.isRunning ? "pause.fill" : "play.fill")
@@ -84,6 +85,7 @@ struct MenuBarPanelView: View {
                     .accessibilityLabel(timerStore.isRunning ? "暂停" : (timerStore.isSessionInProgress ? "继续" : "开始"))
 
                     Button {
+                        AppHaptics.buttonClick()
                         timerStore.skipToNext()
                     } label: {
                         Image(systemName: "forward.end.fill")
@@ -125,6 +127,7 @@ struct MenuBarPanelView: View {
 
             HStack(spacing: 8) {
                 Button {
+                    AppHaptics.buttonClick()
                     onOpenMain()
                 } label: {
                     Label("专注钟", systemImage: "timer")
@@ -140,6 +143,7 @@ struct MenuBarPanelView: View {
                     } else {
                         ForEach(tasks) { task in
                             Button {
+                                AppHaptics.buttonClick()
                                 timerStore.requestStartWorkFocus(taskId: task.id)
                                 onClose()
                             } label: {
@@ -151,6 +155,7 @@ struct MenuBarPanelView: View {
                         }
                         Divider()
                         Button {
+                            AppHaptics.buttonClick()
                             timerStore.requestStartWorkFocus(taskId: nil)
                             onClose()
                         } label: {

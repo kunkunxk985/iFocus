@@ -50,6 +50,7 @@ struct EditProfileSheet: View {
                             let swatchColor = UnifiedAvatarView.palette[index]
                             Button {
                                 settings.avatarColorIndex = index
+                                AppHaptics.selectionChanged()
                             } label: {
                                 ZStack {
                                     Circle()
@@ -86,6 +87,7 @@ struct EditProfileSheet: View {
                     
                     if settings.avatarPath != nil {
                         Button(role: .destructive) {
+                            AppHaptics.buttonClick()
                             settings.removeAvatar()
                         } label: {
                             Label("恢复默认", systemImage: "arrow.counterclockwise")
@@ -110,6 +112,7 @@ struct EditProfileSheet: View {
                 .keyboardShortcut(.cancelAction)
                 
                 Button("保存") {
+                    AppHaptics.buttonClick()
                     settings.username = tempUsername
                     settings.sanitizeUsername()
                     // Avatar already on disk from picker — keep current path.
@@ -133,6 +136,7 @@ struct EditProfileSheet: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(AppTheme.separator(for: colorScheme), lineWidth: 1)
         )
+        .shadow(color: Color.black.opacity(colorScheme == .light ? 0.16 : 0.40), radius: 24, x: 0, y: 10)
         .onAppear {
             originalAvatarPath = settings.avatarPath
             originalAvatarColorIndex = settings.avatarColorIndex

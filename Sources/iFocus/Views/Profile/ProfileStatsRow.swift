@@ -47,15 +47,8 @@ struct ProfileStatsRow: View {
     }
     
     private var statDivider: some View {
-        LinearGradient(
-            colors: [
-                Color.clear,
-                AppTheme.separatorLow(for: colorScheme),
-                Color.clear
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .frame(width: 1, height: 28)
+        Rectangle()
+            .fill(AppTheme.separatorLow(for: colorScheme))
+            .frame(width: 0.5, height: 22)
     }
 }

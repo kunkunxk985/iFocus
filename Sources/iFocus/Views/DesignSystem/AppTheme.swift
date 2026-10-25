@@ -663,21 +663,11 @@ struct AppEmptyState: View {
                         .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.75))
                 } else {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    AppTheme.accent.opacity(0.14),
-                                    AppTheme.accent.opacity(0.04)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 68, height: 68)
+                        .fill(AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.16))
+                        .frame(width: 64, height: 64)
                     Image(systemName: systemImage)
-                        .font(.system(size: 26, weight: .light))
+                        .font(.system(size: 26, weight: .regular))
                         .foregroundColor(AppTheme.accent)
-                        .symbolRenderingMode(.hierarchical)
                 }
             }
             VStack(spacing: compact ? 4 : 6) {
@@ -696,7 +686,10 @@ struct AppEmptyState: View {
             if actionTitle != nil || secondaryActionTitle != nil {
                 HStack(spacing: 8) {
                     if let actionTitle, let action {
-                        Button(action: action) {
+                        Button {
+                            AppHaptics.buttonClick()
+                            action()
+                        } label: {
                             Text(actionTitle)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundColor(.white)
@@ -707,9 +700,14 @@ struct AppEmptyState: View {
                         .buttonStyle(SoftScaleButtonStyle())
                     }
                     if let secondaryActionTitle, let secondaryAction {
-                        Button(secondaryActionTitle, action: secondaryAction)
-                            .buttonStyle(.bordered)
-                            .controlSize(.regular)
+                        Button {
+                            AppHaptics.buttonClick()
+                            secondaryAction()
+                        } label: {
+                            Text(secondaryActionTitle)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.regular)
                     }
                 }
                 .padding(.top, 2)

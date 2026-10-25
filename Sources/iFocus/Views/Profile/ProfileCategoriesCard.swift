@@ -35,11 +35,14 @@ struct ProfileCategoriesCard: View {
             
             VStack(spacing: 12) {
                 if isEmpty {
-                    Text("暂无专注记录")
-                        .font(.system(size: 12.5))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 24)
+                    AppEmptyState(
+                        systemImage: "square.grid.2x2",
+                        title: "暂无专注记录",
+                        subtitle: "完成专注后将按分类统计时间",
+                        compact: true
+                    )
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 16)
                 } else {
                     ForEach(Array(stats.prefix(4).enumerated()), id: \.element.id) { index, item in
                         let pct = CGFloat(item.minutes) / CGFloat(totalMinutes)
@@ -84,14 +87,7 @@ struct ProfileCategoriesCard: View {
                                         .fill(AppTheme.separatorLow(for: colorScheme))
                                         .frame(height: 6)
                                     Capsule()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [item.category.color, item.category.color.opacity(0.85)],
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
-                                        )
-                                        .shadow(color: item.category.color.opacity(0.3), radius: 2, x: 0, y: 0)
+                                        .fill(item.category.color)
                                         .frame(width: max(6, geo.size.width * pct), height: 6)
                                 }
                             }

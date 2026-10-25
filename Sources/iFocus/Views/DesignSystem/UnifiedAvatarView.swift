@@ -24,13 +24,7 @@ struct UnifiedAvatarView: View {
             } else if colorIndex > 0 {
                 let tint = Self.palette[colorIndex % Self.palette.count]
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [tint.opacity(0.95), tint.opacity(0.75)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(tint)
                 Text(initialCharacter)
                     .font(.system(size: size * 0.44, weight: .bold, design: .rounded))
                     .foregroundColor(.white)

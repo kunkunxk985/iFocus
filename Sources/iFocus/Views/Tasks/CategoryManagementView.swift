@@ -207,6 +207,7 @@ struct CategoryManagementView: View {
     private func customRow(_ category: TaskCategory) -> some View {
         let isSelected = !isCreating && category.id == selectedID
         return Button {
+            AppHaptics.selectionChanged()
             select(category)
         } label: {
             HStack(spacing: 9) {
@@ -417,6 +418,7 @@ struct CategoryManagementView: View {
     private func colorSwatch(_ option: CategoryColorOption) -> some View {
         let isSelected = draftColorHex == option.hex
         return Button {
+            AppHaptics.selectionChanged()
             draftColorHex = option.hex
             showSaved = false
         } label: {
@@ -450,6 +452,7 @@ struct CategoryManagementView: View {
         let isSelected = draftIcon == icon
         let tint = Color(hex: draftColorHex)
         return Button {
+            AppHaptics.selectionChanged()
             draftIcon = icon
             showSaved = false
         } label: {
@@ -496,6 +499,7 @@ struct CategoryManagementView: View {
     }
 
     private func beginCreating() {
+        AppHaptics.buttonClick()
         isCreating = true
         selectedID = nil
         draftName = ""
@@ -545,6 +549,7 @@ struct CategoryManagementView: View {
 
         switch result {
         case .success(let category):
+            AppHaptics.buttonClick()
             isCreating = false
             selectedID = category.id
             draftName = category.name
@@ -562,6 +567,7 @@ struct CategoryManagementView: View {
     }
 
     private func delete(_ category: TaskCategory) {
+        AppHaptics.buttonClick()
         taskStore.deleteCustomCategory(id: category.id)
         if let next = taskStore.customCategories.first {
             select(next)

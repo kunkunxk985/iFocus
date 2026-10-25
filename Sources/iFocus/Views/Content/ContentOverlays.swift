@@ -98,20 +98,10 @@ struct DailyGoalCelebrationOverlay: View {
             VStack(spacing: 18) {
                 ZStack {
                     Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [
-                                    AppTheme.accent.opacity(0.28),
-                                    AppTheme.accent.opacity(0.06)
-                                ],
-                                center: .center,
-                                startRadius: 4,
-                                endRadius: 56
-                            )
-                        )
-                        .frame(width: 96, height: 96)
+                        .fill(AppTheme.accent.opacity(colorScheme == .light ? 0.12 : 0.18))
+                        .frame(width: 88, height: 88)
                     Image(systemName: "sparkles")
-                        .font(.system(size: 36, weight: .semibold))
+                        .font(.system(size: 34, weight: .semibold))
                         .foregroundColor(AppTheme.accent)
                 }
                 
@@ -128,7 +118,10 @@ struct DailyGoalCelebrationOverlay: View {
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                     .multilineTextAlignment(.center)
                 
-                Button(action: onDismiss) {
+                Button {
+                    AppHaptics.buttonClick()
+                    onDismiss()
+                } label: {
                     Text("好的")
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(.white)
@@ -302,19 +295,7 @@ struct OnboardingOverlay: View {
         .padding(.bottom, 20)
         .frame(width: 192)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(
-            ZStack {
-                AppTheme.cardBackground(for: colorScheme)
-                LinearGradient(
-                    colors: [
-                        AppTheme.accent.opacity(colorScheme == .light ? 0.15 : 0.12),
-                        AppTheme.accent.opacity(colorScheme == .light ? 0.04 : 0.03)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            }
-        )
+        .background(AppTheme.elevatedBackground(for: colorScheme))
         .overlay(alignment: .trailing) {
             Rectangle()
                 .fill(AppTheme.separatorLow(for: colorScheme))
@@ -978,6 +959,7 @@ struct AccountMenuPopover: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openWindow) private var openWindow
     @ObservedObject private var updates = AppUpdateCenter.shared
+    var onProfile: (() -> Void)? = nil
     var onSettings: () -> Void
 
     private var isUpdateAvailable: Bool {
@@ -991,24 +973,42 @@ struct AccountMenuPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 12) {
-                UnifiedAvatarView(
-                    path: settings.avatarPath,
-                    colorIndex: settings.avatarColorIndex,
-                    username: settings.username.isEmpty ? "小番茄" : settings.username,
-                    size: 36
-                )
-                Text(settings.username.isEmpty ? "小番茄" : settings.username)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                    .lineLimit(1)
+            Button {
+                AppHaptics.buttonClick()
+                onProfile?()
+            } label: {
+                HStack(spacing: 10) {
+                    UnifiedAvatarView(
+                        path: settings.avatarPath,
+                        colorIndex: settings.avatarColorIndex,
+                        username: settings.username.isEmpty ? "小番茄" : settings.username,
+                        size: 34
+                    )
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(settings.username.isEmpty ? "小番茄" : settings.username)
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                            .lineLimit(1)
+                        Text("个人中心与记录")
+                            .font(.system(size: 10.5))
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.45))
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-            .padding(.horizontal, 4)
-            .padding(.bottom, 6)
+            .buttonStyle(AccountMenuRowButtonStyle())
+            .disabled(onProfile == nil)
 
             Divider().opacity(0.7)
 
             Button {
+                AppHaptics.buttonClick()
                 updates.checkOrInstall()
             } label: {
                 HStack(spacing: 10) {
@@ -1059,7 +1059,10 @@ struct AccountMenuPopover: View {
     }
 
     private func menuButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button {
+            AppHaptics.buttonClick()
+            action()
+        } label: {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .semibold))

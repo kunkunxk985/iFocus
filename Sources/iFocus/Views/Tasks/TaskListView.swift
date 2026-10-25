@@ -727,6 +727,7 @@ struct TaskListView: View {
     private func addTask(openEditor: Bool) {
         guard !taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         guard let id = taskStore.addTask(for: currentFilter, dueOverride: dueOverride) else { return }
+        AppHaptics.buttonClick()
         if openEditor, let task = taskStore.tasks.first(where: { $0.id == id }) {
             activeSheet = .edit(EditTaskSession(task: task))
         }
@@ -856,7 +857,6 @@ struct TaskListView: View {
                     actionTitle: "清除搜索",
                     action: { searchText = "" }
                 )
-                .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
             )
         }
 
@@ -868,7 +868,6 @@ struct TaskListView: View {
                     actionTitle: "显示全部",
                     action: { activeChip = .all }
                 )
-                .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
             )
         }
 
@@ -880,7 +879,6 @@ struct TaskListView: View {
                     actionTitle: "去今天",
                     action: { viewState.selectedScreen = .todayTask }
                 )
-                .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
             )
         }
 
@@ -893,7 +891,6 @@ struct TaskListView: View {
                 secondaryActionTitle: "开始专注",
                 secondaryAction: { viewState.selectedScreen = .timer }
             )
-            .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
         )
     }
 }
