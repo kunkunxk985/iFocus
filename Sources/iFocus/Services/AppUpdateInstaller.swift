@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-/// Downloads a release zip and swaps it over the running iFocus.app, then relaunches.
+/// Downloads a release DMG and swaps it over the running iFocus.app, then relaunches.
 @MainActor
 final class AppUpdateCenter: ObservableObject {
     static let shared = AppUpdateCenter()
@@ -133,26 +133,27 @@ enum AppUpdateInstaller {
         let work = FileManager.default.temporaryDirectory
             .appendingPathComponent("iFocus-update-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
-        let zip = work.appendingPathComponent("iFocus.zip")
+        let archiveName = package.lastPathComponent.isEmpty ? AppUpdateChecker.packageName : package.lastPathComponent
+        let archive = work.appendingPathComponent(archiveName)
         let expanded = work.appendingPathComponent("expanded", isDirectory: true)
+        try FileManager.default.createDirectory(at: expanded, withIntermediateDirectories: true)
 
         do {
             let (downloaded, response) = try await URLSession.shared.download(from: package)
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             guard code == 200 else { throw Failure.downloadFailed }
-            if FileManager.default.fileExists(atPath: zip.path) {
-                try FileManager.default.removeItem(at: zip)
+            if FileManager.default.fileExists(atPath: archive.path) {
+                try FileManager.default.removeItem(at: archive)
             }
             do {
-                try FileManager.default.moveItem(at: downloaded, to: zip)
+                try FileManager.default.moveItem(at: downloaded, to: archive)
             } catch {
-                try FileManager.default.copyItem(at: downloaded, to: zip)
+                try FileManager.default.copyItem(at: downloaded, to: archive)
             }
-            try run("/usr/bin/ditto", ["-x", "-k", zip.path, expanded.path])
-            guard let app = findApp(in: expanded) else { throw Failure.unreadablePackage }
-            guard bundleIdentifier(of: app) == "com.kun.ifocus" else { throw Failure.wrongApp }
-            try? run("/usr/bin/xattr", ["-cr", app.path])
-            return Prepared(app: app, work: work)
+            let stagedApp = try expandReleaseArchive(at: archive, into: expanded, work: work)
+            guard bundleIdentifier(of: stagedApp) == "com.kun.ifocus" else { throw Failure.wrongApp }
+            try? run("/usr/bin/xattr", ["-cr", stagedApp.path])
+            return Prepared(app: stagedApp, work: work)
         } catch let failure as Failure {
             try? FileManager.default.removeItem(at: work)
             throw failure
@@ -217,6 +218,25 @@ enum AppUpdateInstaller {
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         try process.run()
+    }
+
+    private static func expandReleaseArchive(at archive: URL, into expanded: URL, work: URL) throws -> URL {
+        let ext = archive.pathExtension.lowercased()
+        guard ext == "dmg" else { throw Failure.unreadablePackage }
+
+        let mount = work.appendingPathComponent("mount", isDirectory: true)
+        try FileManager.default.createDirectory(at: mount, withIntermediateDirectories: true)
+        try run("/usr/bin/hdiutil", ["attach", "-nobrowse", "-readonly", "-mountpoint", mount.path, archive.path])
+        defer {
+            _ = try? run("/usr/bin/hdiutil", ["detach", mount.path, "-quiet"])
+        }
+        guard let mounted = findApp(in: mount) else { throw Failure.unreadablePackage }
+        let staged = expanded.appendingPathComponent("iFocus.app", isDirectory: true)
+        if FileManager.default.fileExists(atPath: staged.path) {
+            try FileManager.default.removeItem(at: staged)
+        }
+        try run("/usr/bin/ditto", [mounted.path, staged.path])
+        return staged
     }
 
     private static func findApp(in root: URL) -> URL? {

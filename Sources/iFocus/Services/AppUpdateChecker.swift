@@ -1,9 +1,9 @@
 import Foundation
 
-/// Compares the running app with the latest GitHub release and finds its zip.
+/// Compares the running app with the latest GitHub release and finds its DMG.
 enum AppUpdateChecker {
     static let repository = "kunkunxk985/iFocus"
-    static let packageName = "iFocus.zip"
+    static let packageName = "iFocus.dmg"
 
     enum Status: Equatable {
         case upToDate
@@ -40,10 +40,10 @@ enum AppUpdateChecker {
         }
     }
 
-    /// Prefer the archive produced by packaging (`iFocus.zip`), then any other zip.
+    /// Prefer the disk image from packaging (`iFocus.dmg`), then any other `.dmg`.
     static func preferredPackage(among assets: [ReleaseAsset]) -> URL? {
         let named = assets.first { $0.name == packageName }
-            ?? assets.first { $0.name.lowercased().hasSuffix(".zip") }
+            ?? assets.first { $0.name.lowercased().hasSuffix(".dmg") }
         return named?.downloadURL
     }
 

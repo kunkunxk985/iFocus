@@ -13,13 +13,13 @@ final class AppUpdateCheckerTests: XCTestCase {
         XCTAssertEqual(AppUpdateChecker.displayVersion("v1.14.8+114"), "1.14.8")
     }
 
-    func testPreferredPackageUsesNamedZip() {
-        let named = URL(string: "https://example.com/iFocus.zip")!
-        let other = URL(string: "https://example.com/other.zip")!
+    func testPreferredPackageUsesNamedDmg() {
+        let named = URL(string: "https://example.com/iFocus.dmg")!
+        let other = URL(string: "https://example.com/other.dmg")!
         let assets = [
             AppUpdateChecker.ReleaseAsset(name: "notes.txt", downloadURL: URL(string: "https://example.com/notes.txt")!),
-            AppUpdateChecker.ReleaseAsset(name: "extra.zip", downloadURL: other),
-            AppUpdateChecker.ReleaseAsset(name: "iFocus.zip", downloadURL: named)
+            AppUpdateChecker.ReleaseAsset(name: "extra.dmg", downloadURL: other),
+            AppUpdateChecker.ReleaseAsset(name: "iFocus.dmg", downloadURL: named)
         ]
         XCTAssertEqual(AppUpdateChecker.preferredPackage(among: assets), named)
     }
