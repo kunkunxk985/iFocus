@@ -620,7 +620,7 @@ struct OnboardingOverlay: View {
             if let loginFeedbackText {
                 onboardingHint(icon: "exclamationmark.triangle.fill", text: loginFeedbackText, tint: AppTheme.warning)
             } else {
-                onboardingHint(icon: "info.circle", text: "两项都可以稍后在「设置 › 状态中心」更改。")
+                onboardingHint(icon: "info.circle", text: "两项都可以稍后在「设置」中更改。")
             }
         }
     }
