@@ -100,16 +100,8 @@ struct FloatingFocusPill: View {
         .background(.ultraThinMaterial, in: Capsule(style: .continuous))
         .overlay(
             Capsule(style: .continuous)
-                .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-        )
-        .overlay(
-            Capsule(style: .continuous)
-                .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 1)
-        )
-        .overlay(
-            Capsule(style: .continuous)
                 .strokeBorder(
-                    timerStore.mode.accent.opacity(timerStore.isRunning ? 0.28 : 0.12),
+                    timerStore.mode.accent.opacity(timerStore.isRunning ? 0.32 : 0.16),
                     lineWidth: 1
                 )
         )

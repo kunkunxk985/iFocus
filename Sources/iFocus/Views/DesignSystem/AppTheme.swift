@@ -390,9 +390,6 @@ struct DepthSurfaceModifier: ViewModifier {
             .overlay(
                 shape.strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
             )
-            .overlay(
-                shape.strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 1)
-            )
             .modifier(MultiLayerShadowModifier(elevation: elevation, colorScheme: colorScheme))
     }
 }
@@ -441,9 +438,6 @@ struct SoftCardBackground: View {
             .fill(AppTheme.cardBackground(for: colorScheme))
             .overlay(
                 shape.strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-            )
-            .overlay(
-                shape.strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 1)
             )
             .multiLayerShadow(elevation: elevated ? .elevated : .card, colorScheme: colorScheme)
     }

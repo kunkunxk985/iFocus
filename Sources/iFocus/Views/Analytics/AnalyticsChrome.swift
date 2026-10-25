@@ -94,9 +94,6 @@ struct StatCard: View {
 
                 shape
                     .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-
-                shape
-                    .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 1)
             }
             .multiLayerShadow(elevation: isHovering ? .elevated : .card, colorScheme: colorScheme)
         }
