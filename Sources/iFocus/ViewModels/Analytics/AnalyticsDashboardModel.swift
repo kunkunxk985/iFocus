@@ -27,7 +27,7 @@ struct AnalyticsPageSnapshot {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> AnalyticsPageSnapshot {
-        let taskByID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        let taskByID = AnalyticsDashboardModel.taskByID(from: tasks)
         let pairs = focusSessions.map { ($0.timestamp, $0.durationMinutes) }
         let sessionTimestamps = focusSessions.map(\.timestamp)
 
@@ -35,7 +35,7 @@ struct AnalyticsPageSnapshot {
         var maxSingle = 0
         var minutesByCategoryID = [String: Int]()
         var countByCategoryID = [String: Int]()
-        var categoriesByID = Dictionary(uniqueKeysWithValues: categoriesInUse.map { ($0.id, $0) })
+        var categoriesByID = AnalyticsDashboardModel.categoriesByID(from: categoriesInUse)
 
         for session in focusSessions {
             totalMinutesAllTime += session.durationMinutes
@@ -166,7 +166,7 @@ struct AnalyticsDashboardModel {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> AnalyticsDashboardModel {
-        let taskByID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        let taskByID = Self.taskByID(from: tasks)
         let pairs = focusSessions.map { ($0.timestamp, $0.durationMinutes) }
         let sessionTimestamps = focusSessions.map(\.timestamp)
         return build(
@@ -309,6 +309,24 @@ struct AnalyticsDashboardModel {
         )
     }
 
+    /// First task wins when corrupt data duplicates ids (matches `TaskStore.tasks(for:)`).
+    static func taskByID(from tasks: [FocusTask]) -> [UUID: FocusTask] {
+        var byID: [UUID: FocusTask] = [:]
+        byID.reserveCapacity(tasks.count)
+        for task in tasks where byID[task.id] == nil {
+            byID[task.id] = task
+        }
+        return byID
+    }
+
+    static func categoriesByID(from categories: [TaskCategory]) -> [String: TaskCategory] {
+        var byID: [String: TaskCategory] = [:]
+        for category in categories where byID[category.id] == nil {
+            byID[category.id] = category
+        }
+        return byID
+    }
+
     static func resolveCategory(for session: FocusSession, taskByID: [UUID: FocusTask]) -> TaskCategory {
         if let stored = session.taskCategory { return stored }
         if let taskId = session.taskId, let task = taskByID[taskId] {
@@ -339,9 +357,8 @@ struct AnalyticsDashboardModel {
     }
 
     func resolvedCategory(for session: FocusSession, tasks: [FocusTask]) -> TaskCategory? {
-        let taskByID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
         if session.taskId == nil, session.taskCategory == nil { return nil }
-        return Self.resolveCategory(for: session, taskByID: taskByID)
+        return Self.resolveCategory(for: session, taskByID: Self.taskByID(from: tasks))
     }
 
     func reportText(username: String) -> (subject: String, body: String) {

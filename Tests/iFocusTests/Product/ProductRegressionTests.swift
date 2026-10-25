@@ -504,4 +504,30 @@ final class ProductRegressionTests: XCTestCase {
         // Midpoint (1152pt window) -> 230pt
         XCTAssertEqual(sidebarWidth(for: 1152, collapsed: false), 230, accuracy: 0.001)
     }
+
+    func testAnalyticsPageSnapshotToleratesDuplicateTaskIDs() {
+        let sharedID = UUID()
+        let first = FocusTask(id: sharedID, title: "保留", category: .study)
+        let duplicate = FocusTask(id: sharedID, title: "重复", category: .work)
+        let session = FocusSession(
+            taskId: sharedID,
+            taskTitle: "保留",
+            taskCategory: nil,
+            durationMinutes: 25,
+            timestamp: Date()
+        )
+        let snapshot = AnalyticsPageSnapshot.build(
+            range: .today,
+            focusSessions: [session],
+            tasks: [first, duplicate],
+            categoriesInUse: [.study, .work],
+            dailyGoal: 4,
+            completedPomodoros: 1,
+            totalSecondsToday: 1_500,
+            isWorkMode: true,
+            sessionLive: false
+        )
+        XCTAssertEqual(snapshot.model.rangeTotals.pomodoros, 1)
+        XCTAssertEqual(snapshot.categoryStats.first?.category.id, TaskCategory.study.id)
+    }
 }

@@ -976,6 +976,7 @@ struct AccountMenuPopover: View {
     @EnvironmentObject var settings: SettingsStore
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openWindow) private var openWindow
+    @ObservedObject private var updates = AppUpdateCenter.shared
     var onSettings: () -> Void
 
     var body: some View {
@@ -996,6 +997,33 @@ struct AccountMenuPopover: View {
             .padding(.bottom, 6)
 
             Divider().opacity(0.7)
+
+            Button {
+                updates.checkAndInstall()
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        .frame(width: 22)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(updateTitle)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                        if let updateCaption {
+                            Text(updateCaption)
+                                .font(.system(size: 11))
+                                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            .buttonStyle(AccountMenuRowButtonStyle())
+            .disabled(updates.isBusy)
 
             menuButton("设置", icon: "gearshape", action: onSettings)
                 .keyboardShortcut(",", modifiers: .command)
@@ -1035,5 +1063,25 @@ struct AccountMenuPopover: View {
             .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(AccountMenuRowButtonStyle())
+    }
+
+    private var updateTitle: String {
+        switch updates.phase {
+        case .checking: return "正在检查…"
+        case .downloading: return "正在下载…"
+        case .installing: return "正在安装…"
+        case .idle, .upToDate, .noRelease, .failed: return "检查新版本"
+        }
+    }
+
+    private var updateCaption: String? {
+        switch updates.phase {
+        case .upToDate: return "已是最新版本"
+        case .noRelease: return "还没有发布的新版本"
+        case .downloading: return "正在下载新版本"
+        case .installing: return "安装后会重新打开"
+        case .failed(let message): return message
+        case .idle, .checking: return nil
+        }
     }
 }

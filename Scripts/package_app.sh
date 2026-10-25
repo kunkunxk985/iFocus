@@ -187,4 +187,20 @@ done
 for backup in "${BACKUPS[@]}"; do
   if [[ -e "$backup" ]]; then rm -rf "$backup"; fi
 done
+ZIP_PATH="$BUILD_DIR/iFocus.zip"
+rm -f "$ZIP_PATH"
+ditto -c -k --keepParent "$APP_DIR" "$ZIP_PATH"
+if ! ditto -x -k "$ZIP_PATH" "$BUILD_DIR/.zip-verify-$$" 2>/dev/null; then
+  rm -rf "$BUILD_DIR/.zip-verify-$$"
+  echo "ERROR: Could not read update archive $ZIP_PATH" >&2
+  exit 1
+fi
+if [[ ! -d "$BUILD_DIR/.zip-verify-$$/${APP_NAME}.app" ]]; then
+  rm -rf "$BUILD_DIR/.zip-verify-$$"
+  echo "ERROR: Update archive must contain ${APP_NAME}.app at the top level (ditto --keepParent)." >&2
+  exit 1
+fi
+rm -rf "$BUILD_DIR/.zip-verify-$$"
+
 printf 'Synchronized the same iFocus build to: %s\n' "${DESTINATIONS[*]}"
+echo "Update archive: $ZIP_PATH"
