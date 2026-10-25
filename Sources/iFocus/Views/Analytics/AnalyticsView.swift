@@ -44,12 +44,22 @@ struct AnalyticsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header(model: m)
-                    identityRow(page: page)
                     rangeChipsBar
 
                     if !m.hasAnyHistory {
                         AnalyticsCards.emptyShell(colorScheme: colorScheme)
                     } else {
+                        AnalyticsCards.achievementHero(
+                            model: m,
+                            tasks: taskStore.tasks,
+                            totalMinutesAllTime: page.totalMinutesAllTime,
+                            displayName: displayName,
+                            avatarPath: settings.avatarPath,
+                            avatarColorIndex: settings.avatarColorIndex,
+                            colorScheme: colorScheme,
+                            decorativeMotion: settings.decorativeMotionEnabled
+                        )
+
                         AnalyticsCards.weeklyCard(model: m, colorScheme: colorScheme)
                             .frame(height: chartHeight)
                     }
@@ -142,27 +152,6 @@ struct AnalyticsView: View {
     private var displayName: String {
         let name = settings.username.trimmingCharacters(in: .whitespacesAndNewlines)
         return name.isEmpty ? "小番茄" : name
-    }
-
-    private func identityRow(page: AnalyticsPageSnapshot) -> some View {
-        let m = page.model
-        return HStack(spacing: 12) {
-            UnifiedAvatarView(
-                path: settings.avatarPath,
-                colorIndex: settings.avatarColorIndex,
-                username: displayName,
-                size: 44
-            )
-            VStack(alignment: .leading, spacing: 2) {
-                Text(displayName)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                Text("连续 \(m.streakCurrent) 天 · 累计 \(FocusStats.formatTotalMinutes(page.totalMinutesAllTime))")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-            }
-            Spacer(minLength: 0)
-        }
     }
 
     private var rangeChipsBar: some View {

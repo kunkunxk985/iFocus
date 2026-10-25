@@ -15,24 +15,284 @@ enum AnalyticsCards {
     }
 
     static func emptyShell(colorScheme: ColorScheme) -> some View {
-        VStack(spacing: 12) {
-            Text("暂无专注记录")
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+        VStack(spacing: 18) {
+            AnalyticsProgressRing(
+                progress: 0,
+                size: 120,
+                lineWidth: 11,
+                tint: AppTheme.accent.opacity(0.55),
+                title: "0",
+                subtitle: "今日番茄"
+            )
+            Text("开始第一个番茄，这里会亮起进度")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                .multilineTextAlignment(.center)
 
             Button {
                 AppNavigation.post(.timer)
             } label: {
-                Text("去专注钟")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(AppTheme.accent)
+                HStack(spacing: 8) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 11, weight: .bold))
+                    Text("去专注钟")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 22)
+                .padding(.vertical, 11)
+                .background(
+                    Capsule().fill(AppTheme.accent)
+                )
             }
             .buttonStyle(.plain)
-            .padding(.top, 2)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.vertical, 36)
         .padding(.horizontal, 20)
+        .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
+    }
+
+    static func achievementHero(
+        model: AnalyticsDashboardModel,
+        tasks: [FocusTask],
+        totalMinutesAllTime: Int,
+        displayName: String,
+        avatarPath: String?,
+        avatarColorIndex: Int,
+        colorScheme: ColorScheme,
+        decorativeMotion: Bool
+    ) -> some View {
+        let days = dayCount(for: model)
+        let pomodoroProgress = pomodoroRingProgress(model: model, dayCount: days)
+        let focusProgress = focusRingProgress(model: model, dayCount: days)
+        let streakProgress = min(1.0, Double(model.streakCurrent) / 7.0)
+        let focusMinutes = model.range == .today ? model.totalMinutesToday : model.rangeTotals.minutes
+        let pomodoroCount = model.range == .today ? model.completedPomodoros : model.rangeTotals.pomodoros
+        let goalDone = model.range == .today && model.goalRemaining == 0 && model.completedPomodoros > 0
+
+        return GeometryReader { geo in
+            let ringSize = min(104, max(84, (geo.size.width - 48) / 3.2))
+            let line = max(8, ringSize * 0.095)
+
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(alignment: .top, spacing: 12) {
+                    UnifiedAvatarView(
+                        path: avatarPath,
+                        colorIndex: avatarColorIndex,
+                        username: displayName,
+                        size: 52
+                    )
+                    .overlay(alignment: .bottomTrailing) {
+                        if goalDone {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(AppTheme.accent)
+                                .background(Circle().fill(AppTheme.cardBackground(for: colorScheme)).padding(-2))
+                                .offset(x: 4, y: 4)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(displayName)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                        Text("累计 \(FocusStats.formatTotalMinutes(totalMinutesAllTime)) · 连续 \(model.streakCurrent) 天")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        motivationalLine(model: model, goalDone: goalDone, colorScheme: colorScheme)
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                HStack(spacing: 10) {
+                    AnalyticsProgressRing(
+                        progress: pomodoroProgress,
+                        size: ringSize,
+                        lineWidth: line,
+                        tint: AppTheme.accent,
+                        title: "\(pomodoroCount)",
+                        subtitle: model.range == .today ? "今日番茄" : "\(model.range.rawValue)番茄",
+                        celebrate: goalDone,
+                        allowPulse: decorativeMotion
+                    )
+                    AnalyticsProgressRing(
+                        progress: focusProgress,
+                        size: ringSize,
+                        lineWidth: line,
+                        tint: Color(hex: "#14B8A6"),
+                        title: FocusStats.formatTotalMinutes(focusMinutes)
+                            .replacingOccurrences(of: "分钟", with: "分")
+                            .replacingOccurrences(of: "小时", with: "时"),
+                        subtitle: model.range == .today ? "今日专注" : "专注时长",
+                        celebrate: focusProgress >= 0.999,
+                        allowPulse: decorativeMotion && focusProgress >= 0.85
+                    )
+                    AnalyticsProgressRing(
+                        progress: streakProgress,
+                        size: ringSize,
+                        lineWidth: line,
+                        tint: Color(hex: "#F97316"),
+                        title: "\(model.streakCurrent)",
+                        subtitle: "连续天数",
+                        celebrate: model.streakCurrent >= 7,
+                        allowPulse: decorativeMotion && model.streakCurrent >= 3
+                    )
+                }
+
+                if !model.recentSessions.isEmpty {
+                    recentFocusStrip(model: model, tasks: tasks, colorScheme: colorScheme)
+                }
+
+                if model.range == .today {
+                    focusCallToAction(goalDone: goalDone, colorScheme: colorScheme)
+                }
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
+            .overlay {
+                if goalDone {
+                    RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [
+                                    AppTheme.accent.opacity(0.55),
+                                    AppTheme.accent.opacity(0.15),
+                                    AppTheme.accent.opacity(0.35)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.2
+                        )
+                }
+            }
+        }
+        .frame(height: goalDone || !model.recentSessions.isEmpty ? 318 : 278)
+    }
+
+    @ViewBuilder
+    private static func motivationalLine(
+        model: AnalyticsDashboardModel,
+        goalDone: Bool,
+        colorScheme: ColorScheme
+    ) -> some View {
+        if goalDone {
+            Text("状态正好，要不要再存一段专注？")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(AppTheme.accent)
+        } else if model.range == .today, model.goalRemaining > 0 {
+            Text("还差 \(model.goalRemaining) 个番茄 · 圆环会跟着亮起来")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+        } else if let line = model.headlineInsight {
+            Text(line)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                .lineLimit(2)
+        }
+    }
+
+    private static func recentFocusStrip(
+        model: AnalyticsDashboardModel,
+        tasks: [FocusTask],
+        colorScheme: ColorScheme
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("最近完成")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
+            HStack(spacing: 8) {
+                ForEach(model.recentSessions.prefix(3)) { session in
+                    let cat = model.resolvedCategory(for: session, tasks: tasks)
+                    let tint = cat?.color ?? AppTheme.accent
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(tint)
+                            .frame(width: 6, height: 6)
+                        Text(session.taskTitle)
+                            .lineLimit(1)
+                        Text("\(session.durationMinutes)分")
+                            .monospacedDigit()
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.9))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(
+                        Capsule()
+                            .fill(AppTheme.elevatedBackground(for: colorScheme).opacity(0.65))
+                    )
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.8)
+                    )
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private static func focusCallToAction(goalDone: Bool, colorScheme: ColorScheme) -> some View {
+        Button {
+            AppNavigation.post(.timer)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 11, weight: .bold))
+                Text(goalDone ? "继续专注，积累更多记录" : "去专注钟，完成下一个番茄")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundColor(goalDone ? AppTheme.accent : .white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(
+                        goalDone
+                        ? AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.18)
+                        : AppTheme.accent
+                    )
+            }
+            .overlay {
+                if goalDone {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(AppTheme.accent.opacity(0.35), lineWidth: 1)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private static func dayCount(for model: AnalyticsDashboardModel) -> Int {
+        switch model.range {
+        case .today: return 1
+        case .days7: return 7
+        case .days30: return 30
+        case .month:
+            let days = model.calendar.dateComponents(
+                [.day],
+                from: model.rangeBounds.from,
+                to: model.rangeBounds.through
+            ).day ?? 0
+            return max(1, days + 1)
+        }
+    }
+
+    private static func pomodoroRingProgress(model: AnalyticsDashboardModel, dayCount days: Int) -> Double {
+        if model.range == .today {
+            return model.goalProgress
+        }
+        let target = max(1, model.dailyGoal * days)
+        return min(1, Double(model.rangeTotals.pomodoros) / Double(target))
+    }
+
+    private static func focusRingProgress(model: AnalyticsDashboardModel, dayCount days: Int) -> Double {
+        let minutes = model.range == .today ? model.totalMinutesToday : model.rangeTotals.minutes
+        let target = max(25, model.dailyGoal * 25 * days)
+        return min(1, Double(minutes) / Double(target))
     }
 
     static func summaryGrid(model: AnalyticsDashboardModel, colorScheme: ColorScheme) -> some View {

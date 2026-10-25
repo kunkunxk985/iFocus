@@ -8,20 +8,41 @@ struct ProfileInsightsCard: View {
     let peakHours: String
     let completionRate: String
     
+    private var completionProgress: Double {
+        let digits = completionRate.filter(\.isNumber)
+        guard let value = Int(digits), value > 0 else { return 0 }
+        return min(1, Double(value) / 100)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.16))
-                        .frame(width: 22, height: 22)
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(AppTheme.accent)
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        ZStack {
+                            Circle()
+                                .fill(AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.16))
+                                .frame(width: 22, height: 22)
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(AppTheme.accent)
+                        }
+                        Text("活动洞察")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                    }
                 }
-                Text("活动洞察")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                Spacer(minLength: 0)
+                AnalyticsProgressRing(
+                    progress: completionProgress,
+                    size: 64,
+                    lineWidth: 6,
+                    tint: Color(hex: "#10B981"),
+                    title: completionRate,
+                    subtitle: "完成率",
+                    celebrate: completionProgress >= 1
+                )
+                .frame(width: 72)
             }
             .padding(.bottom, 2)
             
