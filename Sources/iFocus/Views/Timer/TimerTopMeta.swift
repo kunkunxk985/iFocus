@@ -107,8 +107,12 @@ struct TimerTopMeta: View {
         HStack(spacing: 7) {
             ForEach(0..<cycleLength, id: \.self) { index in
                 Circle()
-                    .fill(index < filledCycleDots ? modeColor : modeColor.opacity(0.22))
-                    .frame(width: 7, height: 7)
+                    .fill(
+                        index < filledCycleDots
+                        ? modeColor
+                        : (colorScheme == .light ? Color.black.opacity(0.08) : Color.white.opacity(0.12))
+                    )
+                    .frame(width: 6, height: 6)
             }
         }
         .accessibilityElement(children: .ignore)

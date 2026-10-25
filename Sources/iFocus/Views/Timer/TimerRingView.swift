@@ -38,172 +38,57 @@ struct TimerRingView: View {
     }
 
     var body: some View {
-        let line = max(13, size * 0.062)
-        let glowBoost = isRunning ? (decorativeMotion ? 1.0 : 0.72) : 0.38
+        let line = max(11, size * 0.055)
         let isBreathing = decorativeMotion && isRunning && isWorkMode && ringBreath
 
         return ZStack {
-            // MARK: - 1. Organic Multi-Layer Radial Glow (Breathing in focus mode)
-            // Wide diffuse ambient bloom
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            modeColor.opacity((colorScheme == .light ? 0.12 : 0.18) * glowBoost),
-                            modeColor.opacity((colorScheme == .light ? 0.03 : 0.06) * glowBoost),
-                            .clear
-                        ],
-                        center: .center,
-                        startRadius: size * 0.16,
-                        endRadius: size * 0.62
+            // MARK: - 1. Organic Breathing Ambient (Quiet single layer in focus mode)
+            if decorativeMotion && isRunning && isWorkMode {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                modeColor.opacity((colorScheme == .light ? 0.07 : 0.12) * (ringBreath ? 1.0 : 0.6)),
+                                .clear
+                            ],
+                            center: .center,
+                            startRadius: size * 0.20,
+                            endRadius: size * 0.56
+                        )
                     )
-                )
-                .frame(width: size * 1.28, height: size * 1.28)
-                .scaleEffect(isBreathing ? 1.045 : 1.0)
-                .opacity(isBreathing ? 1.0 : (isRunning && isWorkMode ? 0.88 : 0.65))
+                    .frame(width: size * 1.15, height: size * 1.15)
+                    .scaleEffect(isBreathing ? 1.025 : 1.0)
+            }
 
-            // Radiant core glow
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            modeColor.opacity((colorScheme == .light ? 0.16 : 0.24) * glowBoost),
-                            modeColor.opacity((colorScheme == .light ? 0.05 : 0.09) * glowBoost),
-                            .clear
-                        ],
-                        center: .center,
-                        startRadius: size * 0.06,
-                        endRadius: size * 0.40
-                    )
-                )
-                .frame(width: size * 1.06, height: size * 1.06)
-                .scaleEffect(isBreathing ? 1.03 : 1.0)
-
-            // MARK: - 2. Multi-Layer Depth Tracks (Recessed Machined Channel)
-            // Outer subtle hairline guide
+            // MARK: - 2. Minimalist Base Track (Quiet, hairline-precise Apple craftsmanship)
             Circle()
                 .stroke(
                     colorScheme == .light
-                    ? Color.black.opacity(0.04)
-                    : Color.white.opacity(0.05),
-                    lineWidth: 1
-                )
-                .frame(width: size + line + 8, height: size + line + 8)
-
-            // Recessed groove track outer contact bevel
-            Circle()
-                .stroke(
-                    colorScheme == .light
-                    ? Color.black.opacity(0.06)
-                    : Color.black.opacity(0.35),
-                    style: StrokeStyle(lineWidth: line + 1.5, lineCap: .round)
-                )
-                .frame(width: size, height: size)
-
-            // Recessed groove track base plate
-            Circle()
-                .stroke(
-                    colorScheme == .light
-                    ? Color(hex: "#E8EAEF").opacity(0.85)
-                    : Color(hex: "#1F1F24").opacity(0.90),
+                    ? Color.black.opacity(0.065)
+                    : Color.white.opacity(0.08),
                     style: StrokeStyle(lineWidth: line, lineCap: .round)
                 )
                 .frame(width: size, height: size)
 
-            // Subtle mode ambient tint in groove
-            Circle()
-                .stroke(
-                    modeColor.opacity(colorScheme == .light ? 0.14 : 0.18),
-                    style: StrokeStyle(lineWidth: line, lineCap: .round)
-                )
-                .frame(width: size, height: size)
-
-            // Inner groove specular highlight bevel
-            Circle()
-                .stroke(
-                    colorScheme == .light
-                    ? Color.white.opacity(0.65)
-                    : Color.white.opacity(0.06),
-                    style: StrokeStyle(lineWidth: 1, lineCap: .round)
-                )
-                .frame(width: max(0, size - line + 1), height: max(0, size - line + 1))
-
-            // Center subtle inner plate
-            Circle()
-                .fill(
-                    colorScheme == .light
-                    ? Color.white.opacity(0.40)
-                    : Color.white.opacity(0.02)
-                )
-                .frame(width: max(0, size - line * 1.8), height: max(0, size - line * 1.8))
-
-            // MARK: - 3. Rich Gradient Progress Arc & Specular Bevel
-            // Main progress arc
+            // MARK: - 3. Clean Vibrant Progress Arc
             Circle()
                 .trim(from: 0, to: animatedProgress)
                 .stroke(
-                    decorativeMotion
-                    ? AnyShapeStyle(AngularGradient(
-                        gradient: Gradient(stops: [
-                            .init(color: modeColor.opacity(0.68), location: 0.0),
-                            .init(color: modeColor, location: 0.52),
-                            .init(color: modeColor.opacity(0.96), location: 1.0)
-                        ]),
-                        center: .center,
-                        startAngle: .degrees(-90),
-                        endAngle: .degrees(270)
-                    ))
-                    : AnyShapeStyle(modeColor),
-                    style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round)
+                    modeColor,
+                    style: StrokeStyle(lineWidth: line, lineCap: .round)
                 )
                 .frame(width: size, height: size)
                 .rotationEffect(.degrees(-90))
                 .shadow(
-                    color: modeColor.opacity(isRunning ? (decorativeMotion ? 0.32 : 0.16) : 0.08),
-                    radius: isRunning ? (decorativeMotion ? 12 : 6) : 3,
+                    color: modeColor.opacity(isRunning && decorativeMotion ? 0.22 : 0.0),
+                    radius: 8,
                     y: 0
                 )
 
-            // Delicate specular inner stroke / bevel along the arc
-            Circle()
-                .trim(from: 0, to: animatedProgress)
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(colorScheme == .light ? 0.45 : 0.30),
-                            Color.white.opacity(0.04)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    style: StrokeStyle(lineWidth: max(1.5, line * 0.18), lineCap: .round)
-                )
-                .frame(width: max(0, size - line * 0.38), height: max(0, size - line * 0.38))
-                .rotationEffect(.degrees(-90))
-
-            // Radiant leading cap dot for high-end optical precision
-            if animatedProgress > 0.012 {
-                let radius = size / 2
-                let angle = Angle.degrees(Double(animatedProgress) * 360.0 - 90.0)
-                let capX = radius * CGFloat(cos(angle.radians))
-                let capY = radius * CGFloat(sin(angle.radians))
-
-                ZStack {
-                    Circle()
-                        .fill(modeColor.opacity(0.35))
-                        .frame(width: line * 1.15, height: line * 1.15)
-                    Circle()
-                        .fill(Color.white.opacity(0.95))
-                        .frame(width: max(3.5, line * 0.38), height: max(3.5, line * 0.38))
-                        .shadow(color: Color.white.opacity(0.8), radius: 2)
-                }
-                .offset(x: capX, y: capY)
-            }
-
-            // MARK: - 4. Center Typography & Session Badge
-            VStack(spacing: 7) {
+            // MARK: - 4. Center Typography & Session Badge (The Single Primary Focus)
+            VStack(spacing: 8) {
                 Text(displayTime)
-                    .font(.system(size: max(50, size * 0.27), weight: .semibold, design: .rounded))
+                    .font(.system(size: max(52, size * 0.28), weight: .semibold, design: .rounded))
                     .tracking(TypeScale.trackingDisplay)
                     .monospacedDigit()
                     // Count-up past an hour reads h:mm:ss; shrink rather than clip.
@@ -219,7 +104,7 @@ struct TimerRingView: View {
                 )
             }
         }
-        .frame(width: size * 1.28, height: size * 1.28)
+        .frame(width: size, height: size)
         .onAppear {
             animatedProgress = clampedProgress
             lastModeTitle = modeTitle
