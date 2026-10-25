@@ -42,7 +42,7 @@ struct AnalyticsView: View {
             let m = page.model
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 20) {
                     header(model: m)
                     rangeChipsBar
 
@@ -51,7 +51,6 @@ struct AnalyticsView: View {
                     } else {
                         AnalyticsCards.achievementHero(
                             model: m,
-                            tasks: taskStore.tasks,
                             totalMinutesAllTime: page.totalMinutesAllTime,
                             displayName: displayName,
                             avatarPath: settings.avatarPath,
@@ -69,21 +68,13 @@ struct AnalyticsView: View {
                         monthLabels: page.heatmapMonthLabels
                     )
 
-                    HStack(alignment: .top, spacing: 20) {
-                        ProfileInsightsCard(
-                            maxSingleFocusSession: page.maxSingleFocusSession,
-                            averageDailyLabel: page.averageDailyLabel,
-                            peakHours: page.peakHours,
-                            completionRate: page.completionRate
-                        )
-                        .frame(maxWidth: .infinity)
-
-                        ProfileCategoriesCard(
-                            stats: page.categoryStats,
-                            isEmpty: taskStore.focusSessions.isEmpty
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
+                    ProfileInsightsCard(
+                        maxSingleFocusSession: page.maxSingleFocusSession,
+                        averageDailyLabel: page.averageDailyLabel,
+                        peakHours: page.peakHours,
+                        completionRate: page.completionRate
+                    )
+                    .frame(maxWidth: .infinity)
                 }
                 .frame(width: contentW, alignment: .topLeading)
                 .frame(maxWidth: .infinity)
@@ -162,7 +153,7 @@ struct AnalyticsView: View {
                     withAnimation(AppTheme.springInteractive) { range = r }
                 } label: {
                     Text(r.rawValue)
-                        .font(.system(size: 12, weight: selected ? .semibold : .medium))
+                        .font(.system(size: 12, weight: selected ? .semibold : .medium, design: .rounded))
                         .foregroundColor(
                             selected
                             ? AppTheme.primaryText(for: colorScheme)

@@ -55,7 +55,6 @@ enum AnalyticsCards {
 
     static func achievementHero(
         model: AnalyticsDashboardModel,
-        tasks: [FocusTask],
         totalMinutesAllTime: Int,
         displayName: String,
         avatarPath: String?,
@@ -66,7 +65,6 @@ enum AnalyticsCards {
         let days = dayCount(for: model)
         let pomodoroProgress = pomodoroRingProgress(model: model, dayCount: days)
         let focusProgress = focusRingProgress(model: model, dayCount: days)
-        let streakProgress = min(1.0, Double(model.streakCurrent) / 7.0)
         let focusMinutes = model.range == .today ? model.totalMinutesToday : model.rangeTotals.minutes
         let pomodoroCount = model.range == .today ? model.completedPomodoros : model.rangeTotals.pomodoros
         let goalDone = model.range == .today && model.goalRemaining == 0 && model.completedPomodoros > 0
@@ -105,7 +103,7 @@ enum AnalyticsCards {
                     Spacer(minLength: 0)
                 }
 
-                HStack(spacing: 10) {
+                HStack(spacing: 20) {
                     AnalyticsProgressRing(
                         progress: pomodoroProgress,
                         size: ringSize,
@@ -128,20 +126,11 @@ enum AnalyticsCards {
                         celebrate: focusProgress >= 0.999,
                         allowPulse: decorativeMotion && focusProgress >= 0.85
                     )
-                    AnalyticsProgressRing(
-                        progress: streakProgress,
-                        size: ringSize,
-                        lineWidth: line,
-                        tint: Color(hex: "#F97316"),
-                        title: "\(model.streakCurrent)",
-                        subtitle: "连续天数",
-                        celebrate: model.streakCurrent >= 7,
-                        allowPulse: decorativeMotion && model.streakCurrent >= 3
-                    )
                 }
+                .frame(maxWidth: .infinity)
 
                 if !model.recentSessions.isEmpty {
-                    recentFocusStrip(model: model, tasks: tasks, colorScheme: colorScheme)
+                    recentFocusStrip(model: model, colorScheme: colorScheme)
                 }
 
                 if model.range == .today {
@@ -169,7 +158,7 @@ enum AnalyticsCards {
                 }
             }
         }
-        .frame(height: goalDone || !model.recentSessions.isEmpty ? 318 : 278)
+        .frame(height: goalDone || !model.recentSessions.isEmpty ? 292 : 252)
     }
 
     @ViewBuilder
@@ -179,12 +168,12 @@ enum AnalyticsCards {
         colorScheme: ColorScheme
     ) -> some View {
         if goalDone {
-            Text("状态正好，要不要再存一段专注？")
-                .font(.system(size: 12, weight: .semibold))
+            Text("今日目标已完成")
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .foregroundColor(AppTheme.accent)
         } else if model.range == .today, model.goalRemaining > 0 {
-            Text("还差 \(model.goalRemaining) 个番茄 · 圆环会跟着亮起来")
-                .font(.system(size: 12, weight: .medium))
+            Text("还差 \(model.goalRemaining) 个番茄")
+                .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundColor(AppTheme.secondaryText(for: colorScheme))
         } else if let line = model.headlineInsight {
             Text(line)
@@ -196,7 +185,6 @@ enum AnalyticsCards {
 
     private static func recentFocusStrip(
         model: AnalyticsDashboardModel,
-        tasks: [FocusTask],
         colorScheme: ColorScheme
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -205,12 +193,10 @@ enum AnalyticsCards {
                 .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
             HStack(spacing: 8) {
                 ForEach(model.recentSessions.prefix(3)) { session in
-                    let cat = model.resolvedCategory(for: session, tasks: tasks)
-                    let tint = cat?.color ?? AppTheme.accent
                     HStack(spacing: 6) {
-                        Circle()
-                            .fill(tint)
-                            .frame(width: 6, height: 6)
+                        Image(systemName: "clock.fill")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(AppTheme.accent.opacity(0.85))
                         Text(session.taskTitle)
                             .lineLimit(1)
                         Text("\(session.durationMinutes)分")
@@ -242,8 +228,8 @@ enum AnalyticsCards {
             HStack(spacing: 8) {
                 Image(systemName: "play.fill")
                     .font(.system(size: 11, weight: .bold))
-                Text(goalDone ? "继续专注，积累更多记录" : "去专注钟，完成下一个番茄")
-                    .font(.system(size: 13, weight: .semibold))
+                Text(goalDone ? "继续专注" : "去专注钟")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
             }
             .foregroundColor(goalDone ? AppTheme.accent : .white)
             .frame(maxWidth: .infinity)

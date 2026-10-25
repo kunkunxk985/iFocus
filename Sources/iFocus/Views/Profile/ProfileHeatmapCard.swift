@@ -32,7 +32,7 @@ struct ProfileHeatmapCard: View {
                             .foregroundColor(AppTheme.accent)
                     }
                     Text("专注热力图")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundColor(AppTheme.primaryText(for: colorScheme))
                 }
 

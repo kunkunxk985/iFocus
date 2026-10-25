@@ -373,7 +373,7 @@ struct AnalyticsDashboardModel {
             todayMinutes: totalMinutesToday,
             streakCurrent: streakCurrent,
             freeFocusShare: freeShare,
-            categoryLines: categoryTop.map { ($0.name, $0.minutes) },
+            categoryLines: [],
             dayOverDayLabel: dayOverDayLabel
         )
     }

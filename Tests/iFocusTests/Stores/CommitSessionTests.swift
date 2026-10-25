@@ -202,13 +202,16 @@ final class CommitSessionTests: XCTestCase {
 
     // MARK: - Quick-add and upgrade guard
 
-    func testQuickAddDefaultIsAlwaysStudy() {
+    func testQuickAddIgnoresLegacyComposerMetadata() {
         let (_, tasks, _) = makeStores()
         tasks.newTaskCategory = .work
+        tasks.newTaskPriority = 4
+        tasks.newTaskPomodoros = 5
         tasks.newTaskTitle = "组会"
         tasks.addTask(for: .todayTask)
-        XCTAssertEqual(tasks.tasks.last?.category, .work)
-        XCTAssertEqual(tasks.newTaskCategory, .study)
+        XCTAssertEqual(tasks.tasks.last?.category, .other)
+        XCTAssertEqual(tasks.tasks.last?.priority, 1)
+        XCTAssertEqual(tasks.newTaskCategory, .work)
     }
 
     func testPreUpgradeCopyOnlyWhenVersionChanges() throws {

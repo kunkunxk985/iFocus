@@ -1,4 +1,5 @@
 import SwiftUI
+import iFocusCore
 
 /// Task picker strip above the focus ring.
 struct TimerTaskFocusBlock: View {
@@ -22,7 +23,7 @@ struct TimerTaskFocusBlock: View {
         Menu {
             menuContent
         } label: {
-            pickerLine(title: task.title, detail: task.category.name)
+            pickerLine(title: task.title, detail: timerTaskDetail(for: task))
         }
         .menuStyle(.borderlessButton)
         .fixedSize(horizontal: false, vertical: true)
@@ -42,6 +43,18 @@ struct TimerTaskFocusBlock: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func timerTaskDetail(for task: FocusTask) -> String {
+        if task.timeSpentMinutes > 0 {
+            return FocusStats.formatTotalMinutes(task.timeSpentMinutes)
+        }
+        if let due = task.dueDate {
+            let calendar = Calendar.current
+            if calendar.isDateInToday(due) { return "今天" }
+            if calendar.isDateInTomorrow(due) { return "明天" }
+        }
+        return "专注此任务"
     }
 
     private func pickerLine(title: String, detail: String) -> some View {
@@ -83,11 +96,7 @@ struct TimerTaskFocusBlock: View {
                     timerStore.selectTask(task.id)
                 } label: {
                     HStack {
-                        Label {
-                            Text("\(task.title)  ·  \(task.completedPomodoros)/\(task.estimatedPomodoros)")
-                        } icon: {
-                            Image(systemName: task.category.icon)
-                        }
+                        Text(task.title)
                         if taskStore.activeTaskId == task.id {
                             Image(systemName: "checkmark")
                         }

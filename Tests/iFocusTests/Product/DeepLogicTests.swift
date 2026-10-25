@@ -370,8 +370,8 @@ final class DeepLogicTests: XCTestCase {
         store.newTaskPomodoros = 99
         store.addTask(for: .inboxTask)
         
-        XCTAssertEqual(store.tasks[0].priority, 4)
-        XCTAssertEqual(store.tasks[0].estimatedPomodoros, 20)
+        XCTAssertEqual(store.tasks[0].priority, 1)
+        XCTAssertEqual(store.tasks[0].estimatedPomodoros, 1)
         
         store.updateTask(
             id: store.tasks[0].id,

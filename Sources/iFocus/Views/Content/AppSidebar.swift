@@ -16,6 +16,15 @@ struct AppSidebar: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.colorScheme) private var colorScheme
     @State private var dropTargetScreen: AppScreen?
+    @AppStorage("sidebarGroupFocusExpanded") private var focusGroupExpanded = true
+    @AppStorage("sidebarGroupListsExpanded") private var listsGroupExpanded = true
+    @AppStorage("sidebarGroupRecordsExpanded") private var recordsGroupExpanded = true
+
+    private enum SidebarNavGroup: String {
+        case focus
+        case lists
+        case records
+    }
 
     /// Four lists that do not contain each other: today, tomorrow, the days
     /// after that through day 7, and tasks with no date.
@@ -76,17 +85,27 @@ struct AppSidebar: View {
 
                 ScrollView {
                     let counts = taskStore.sidebarBadgeCounts()
-                    VStack(alignment: .leading, spacing: 1) {
-                        sidebarRow(
-                            title: "专注钟",
-                            screen: .timer,
-                            badge: nil,
-                            icon: "timer",
-                            accentColor: AppTheme.accent,
-                            emphasizeRunning: timerStore.isRunning
-                        )
+                    VStack(alignment: .leading, spacing: 6) {
+                        collapsibleGroup(
+                            title: "专注",
+                            group: .focus,
+                            isExpanded: $focusGroupExpanded
+                        ) {
+                            sidebarRow(
+                                title: "专注钟",
+                                screen: .timer,
+                                badge: nil,
+                                icon: "timer",
+                                accentColor: AppTheme.accent,
+                                emphasizeRunning: timerStore.isRunning
+                            )
+                        }
 
-                        sidebarSection("任务") {
+                        collapsibleGroup(
+                            title: "清单",
+                            group: .lists,
+                            isExpanded: $listsGroupExpanded
+                        ) {
                             ForEach(taskItems(counts)) { item in
                                 sidebarRow(
                                     title: item.title,
@@ -99,7 +118,11 @@ struct AppSidebar: View {
                             }
                         }
 
-                        sidebarSection("回顾") {
+                        collapsibleGroup(
+                            title: "记录",
+                            group: .records,
+                            isExpanded: $recordsGroupExpanded
+                        ) {
                             ForEach(reviewItems()) { item in
                                 sidebarRow(
                                     title: item.title,
@@ -112,10 +135,19 @@ struct AppSidebar: View {
                         }
                     }
                     .padding(.horizontal, 8)
-                    .padding(.top, 4)
+                    .padding(.top, 6)
                     .padding(.bottom, 16)
                 }
                 .softScroll()
+                .onChange(of: viewState.selectedScreen) { screen in
+                    guard let screen else { return }
+                    expandGroupContaining(screen)
+                }
+                .onAppear {
+                    if let screen = viewState.selectedScreen {
+                        expandGroupContaining(screen)
+                    }
+                }
 
                 bottomUserBar
             }
@@ -134,20 +166,55 @@ struct AppSidebar: View {
             .frame(height: AppTheme.topHeaderHeight)
     }
 
-    private func sidebarSection<Content: View>(
-        _ title: String,
+    private func expandGroupContaining(_ screen: AppScreen) {
+        switch screen {
+        case .timer:
+            focusGroupExpanded = true
+        case .todayTask, .tomorrowTask, .weekTask, .plannedTask, .inboxTask:
+            listsGroupExpanded = true
+        case .completedTask, .analytics, .profile:
+            recordsGroupExpanded = true
+        }
+    }
+
+    private func collapsibleGroup<Content: View>(
+        title: String,
+        group: SidebarNavGroup,
+        isExpanded: Binding<Bool>,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.7))
+        VStack(alignment: .leading, spacing: 2) {
+            Button {
+                withAnimation(AppTheme.springInteractive) {
+                    isExpanded.wrappedValue.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.55))
+                        .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
+                    Text(title)
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.82))
+                    Spacer(minLength: 0)
+                }
                 .padding(.horizontal, 8)
-                .padding(.top, 18)
-                .padding(.bottom, 4)
+                .padding(.vertical, 7)
+                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(title)分组")
+            .accessibilityValue(isExpanded.wrappedValue ? "已展开" : "已折叠")
 
-            content()
+            if isExpanded.wrappedValue {
+                VStack(alignment: .leading, spacing: 1) {
+                    content()
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
+        .padding(.top, group == .focus ? 2 : 10)
     }
 
     private func sidebarRow(
@@ -248,7 +315,7 @@ struct AppSidebar: View {
 
                 VStack(alignment: .leading, spacing: 1.5) {
                     Text(settings.username.isEmpty ? "小番茄" : settings.username)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundColor(AppTheme.primaryText(for: colorScheme))
                         .lineLimit(1)
                     SidebarAccountStatusLine()
@@ -329,11 +396,11 @@ private struct SidebarRowLabel: View {
             .frame(width: 20, height: 20)
 
             Text(title)
-                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .font(.system(size: 13.5, weight: isSelected ? .semibold : .regular, design: .rounded))
                 .foregroundColor(
                     isSelected
                     ? AppTheme.primaryText(for: colorScheme)
-                    : AppTheme.primaryText(for: colorScheme).opacity(0.86)
+                    : AppTheme.primaryText(for: colorScheme).opacity(0.84)
                 )
                 .lineLimit(1)
 
@@ -349,7 +416,7 @@ private struct SidebarRowLabel: View {
             }
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.vertical, 7)
         .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 

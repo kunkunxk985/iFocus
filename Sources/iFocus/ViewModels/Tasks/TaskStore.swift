@@ -56,8 +56,8 @@ class TaskStore: ObservableObject {
     }
 
     @Published var newTaskTitle: String = ""
-    @Published var newTaskCategory: TaskCategory = .study
-    @Published var newTaskPriority: Int = 2
+    @Published var newTaskCategory: TaskCategory = .other
+    @Published var newTaskPriority: Int = 1
     @Published var newTaskPomodoros: Int = 1
     /// Optional recurrence applied on next quick-add (reset after add).
     @Published var newTaskRecurrence: TaskRecurrence = .none
@@ -229,7 +229,6 @@ class TaskStore: ObservableObject {
         let trimmedTitle = newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return nil }
         
-        let category = newTaskCategory
         let today = Calendar.current.startOfDay(for: Date())
         let dayAfterTomorrow = Calendar.current.date(byAdding: .day, value: 2, to: today)
         
@@ -259,21 +258,18 @@ class TaskStore: ObservableObject {
         }
         
         let nextIndex = (tasks.map(\.sortIndex).max() ?? -1) + 1
-        let recurrence = newTaskRecurrence
         let task = FocusTask(
             title: trimmedTitle,
-            category: category,
-            priority: min(4, max(1, newTaskPriority)),
-            estimatedPomodoros: min(20, max(1, newTaskPomodoros)),
+            category: .other,
+            priority: 1,
+            estimatedPomodoros: 1,
             dueDate: dueDate,
             sortIndex: nextIndex,
-            recurrence: recurrence
+            recurrence: .none
         )
         tasks.append(task)
         newTaskTitle = ""
         newTaskRecurrence = .none
-        // Study is the default every time, not the last category used.
-        newTaskCategory = .study
         saveTasksImmediately()
         return task.id
     }
@@ -955,12 +951,14 @@ class TaskStore: ObservableObject {
     func updatePriority(for task: FocusTask, to priority: Int) {
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
             tasks[index].priority = min(4, max(1, priority))
+            saveTasksImmediately()
         }
     }
-    
+
     func updateCategory(for task: FocusTask, to category: TaskCategory) {
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
             tasks[index].category = category
+            saveTasksImmediately()
         }
     }
 
@@ -1051,7 +1049,7 @@ class TaskStore: ObservableObject {
         }
         if sessionsChanged { saveSessionsImmediately() }
 
-        if newTaskCategory.id == id { newTaskCategory = .study }
+        if newTaskCategory.id == id { newTaskCategory = .other }
         saveStateImmediately()
         return true
     }

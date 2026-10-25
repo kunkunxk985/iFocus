@@ -33,8 +33,10 @@ final class CategoryTests: XCTestCase {
         ))
 
         store.newTaskTitle = "读完一章"
-        store.newTaskCategory = category
         store.addTask(for: .todayTask)
+        if let task = store.tasks.first {
+            store.updateCategory(for: task, to: category)
+        }
 
         XCTAssertEqual(store.tasks.first?.category, category)
 
@@ -51,8 +53,10 @@ final class CategoryTests: XCTestCase {
         ))
 
         store.newTaskTitle = "读完一章"
-        store.newTaskCategory = category
         let taskID = try XCTUnwrap(store.addTask(for: .todayTask))
+        if let task = store.tasks.first(where: { $0.id == taskID }) {
+            store.updateCategory(for: task, to: category)
+        }
         store.logFocusSession(
             taskId: taskID,
             taskTitle: "读完一章",
@@ -84,8 +88,10 @@ final class CategoryTests: XCTestCase {
             store.addCustomCategory(name: "副业", colorHex: "#F59E0B", icon: "lightbulb.fill")
         ))
         store.newTaskTitle = "写产品文档"
-        store.newTaskCategory = category
         let taskID = try XCTUnwrap(store.addTask(for: .todayTask))
+        if let task = store.tasks.first(where: { $0.id == taskID }) {
+            store.updateCategory(for: task, to: category)
+        }
         store.logFocusSession(
             taskId: taskID,
             taskTitle: "写产品文档",
@@ -97,7 +103,7 @@ final class CategoryTests: XCTestCase {
         XCTAssertTrue(store.customCategories.isEmpty)
         XCTAssertEqual(store.tasks.first?.category, .other)
         XCTAssertEqual(store.focusSessions.first?.taskCategory, .other)
-        XCTAssertEqual(store.newTaskCategory, .study)
+        XCTAssertEqual(store.newTaskCategory, .other)
 
         let reloaded = TaskStore(storageDirectory: tempDir)
         XCTAssertTrue(reloaded.customCategories.isEmpty)
@@ -159,8 +165,10 @@ final class CategoryTests: XCTestCase {
             store.addCustomCategory(name: "健身", colorHex: "#10B981", icon: "figure.run")
         ))
         store.newTaskTitle = "跑步 5 公里"
-        store.newTaskCategory = category
         store.addTask(for: .todayTask)
+        if let task = store.tasks.first {
+            store.updateCategory(for: task, to: category)
+        }
 
         try FileManager.default.removeItem(at: tempDir.appendingPathComponent("app_state.json"))
 

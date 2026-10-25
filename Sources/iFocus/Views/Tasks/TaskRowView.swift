@@ -166,33 +166,12 @@ struct TaskRowView: View {
         isHovering || task.isPinned || isActive
     }
     
-    /// Restrained priority color mapping.
-    private var priorityRailColor: Color {
-        switch task.priority {
-        case 1: return Color.clear
-        case 2: return AppTheme.warning
-        case 3: return AppTheme.danger
-        default: return AppTheme.violet
-        }
-    }
-    
     var body: some View {
         let density = settings.uiDensity
         let completedFade = task.isCompleted || isGraceCompleted
         
         VStack(alignment: .leading, spacing: 0) {
         HStack(alignment: .center, spacing: 0) {
-            // Restrained Luminous Priority Accent (replaces harsh 3pt colored bar)
-            if !completedFade && !isSelecting && task.priority >= 2 {
-                Capsule()
-                    .fill(priorityRailColor)
-                    .frame(width: 2.5, height: density == .compact ? 16 : 20)
-                    .padding(.trailing, 6)
-                    .help("优先级：\(FocusTask.priorityLabel(for: task.priority))")
-            } else {
-                Color.clear.frame(width: 2.5).padding(.trailing, 6)
-            }
-
             // Drag Handle (comfortable tactile grip for task reordering with hover feedback)
             if !completedFade && !isSelecting {
                 Image(systemName: "line.3.horizontal")
@@ -272,27 +251,7 @@ struct TaskRowView: View {
                     
                     // Secondary metadata row
                     HStack(spacing: 8) {
-                        pomodoroProgress
                         focusDurationMeta
-
-                        HStack(spacing: 5) {
-                            Circle()
-                                .fill(task.category.color)
-                                .frame(width: 6, height: 6)
-                            Text(task.category.name)
-                        }
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-
-                        if task.recurrence != .none {
-                            HStack(spacing: 3) {
-                                Image(systemName: "repeat")
-                                    .font(.system(size: 11, weight: .semibold))
-                                Text(task.recurrence.rawValue)
-                            }
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                        }
                         
                         if hasNotes {
                             Image(systemName: "text.alignleft")
@@ -439,17 +398,6 @@ struct TaskRowView: View {
                     Button("稍后") { taskStore.moveTask(id: task.id, to: .weekTask) }
                     Button("收集箱") { taskStore.moveTask(id: task.id, to: .inboxTask) }
                 }
-                Menu("优先级") {
-                    ForEach(1...4, id: \.self) { priority in
-                        Button {
-                            taskStore.updatePriority(for: task, to: priority)
-                        } label: {
-                            Text(FocusTask.priorityLabel(for: priority))
-                            if task.priority == priority { Image(systemName: "checkmark") }
-                        }
-                    }
-                }
-                Divider()
                 Button("删除任务", role: .destructive) {
                     taskStore.deleteTask(task)
                 }
@@ -496,23 +444,6 @@ struct TaskRowView: View {
         return (sameYear ? dueFormatter : dueFormatterWithYear).string(from: due)
     }
     
-    private var pomodoroProgress: some View {
-        HStack(spacing: 3) {
-            Image(systemName: "timer")
-                .font(.system(size: AppTheme.iconMeta, weight: .semibold))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.55))
-            if task.completedPomodoros > task.estimatedPomodoros {
-                Text("+\(task.completedPomodoros - task.estimatedPomodoros)")
-                    .font(TypeScale.meta.monospacedDigit())
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.7))
-            } else if task.estimatedPomodoros > 0 {
-                Text("\(task.completedPomodoros)/\(task.estimatedPomodoros)")
-                    .font(TypeScale.meta.monospacedDigit())
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.65))
-            }
-        }
-    }
-
     @ViewBuilder
     private var focusDurationMeta: some View {
         if task.isCompleted {
@@ -618,32 +549,6 @@ struct TaskRowView: View {
                 taskStore.togglePin(for: task)
             } label: {
                 Label(task.isPinned ? "取消置顶" : "置顶", systemImage: task.isPinned ? "pin.slash" : "pin")
-            }
-        }
-        
-        Menu("修改优先级") {
-            ForEach(1...4, id: \.self) { priority in
-                Button {
-                    taskStore.updatePriority(for: task, to: priority)
-                } label: {
-                    HStack {
-                        Text(FocusTask.priorityLabel(for: priority))
-                        if task.priority == priority { Image(systemName: "checkmark") }
-                    }
-                }
-            }
-        }
-        
-        Menu("修改分类") {
-            ForEach(taskStore.allCategories) { category in
-                Button {
-                    taskStore.updateCategory(for: task, to: category)
-                } label: {
-                    HStack {
-                        Label(category.name, systemImage: category.icon)
-                        if task.category.id == category.id { Image(systemName: "checkmark") }
-                    }
-                }
             }
         }
         

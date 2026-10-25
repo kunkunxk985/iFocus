@@ -48,12 +48,8 @@ struct EditTaskView: View {
     ) -> Void
     
     @State private var title: String
-    @State private var category: TaskCategory
-    @State private var priority: Int
-    @State private var estimatedPomodoros: Int
     @State private var dueDate: Date
     @State private var hasDueDate: Bool
-    @State private var recurrence: TaskRecurrence
     @State private var notes: String
     @State private var linkURL: String
     
@@ -65,19 +61,9 @@ struct EditTaskView: View {
         ) -> Void
     ) {
         self.session = session
-        var availableCategories = categories
-        if !availableCategories.contains(where: { $0.id == session.category.id }) {
-            availableCategories.insert(session.category, at: 0)
-        }
-        self.categories = availableCategories
+        self.categories = categories
         self.onSave = onSave
         _title = State(initialValue: session.title)
-        _category = State(initialValue:
-            availableCategories.first(where: { $0.id == session.category.id }) ?? session.category
-        )
-        _priority = State(initialValue: session.priority)
-        _estimatedPomodoros = State(initialValue: session.estimatedPomodoros)
-        _recurrence = State(initialValue: session.recurrence)
         _notes = State(initialValue: session.notes)
         _linkURL = State(initialValue: session.linkURL)
         if let due = session.dueDate {
@@ -112,63 +98,6 @@ struct EditTaskView: View {
                         TextField("输入名称", text: $title)
                             .textFieldStyle(.plain)
                             .multilineTextAlignment(.trailing)
-                    }
-                    
-                    Divider().opacity(0.5)
-                    
-                    fieldRow("分类") {
-                        Picker("", selection: $category) {
-                            ForEach(categories) { cat in
-                                Label(cat.name, systemImage: cat.icon).tag(cat)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(width: 160)
-                    }
-                    
-                    Divider().opacity(0.5)
-                    
-                    fieldRow("优先级") {
-                        Picker("", selection: $priority) {
-                            ForEach(1...4, id: \.self) { p in
-                                Text(FocusTask.priorityLabel(for: p)).tag(p)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(width: 100)
-                    }
-                    
-                    Divider().opacity(0.5)
-                    
-                    fieldRow("预计番茄") {
-                        Stepper(value: $estimatedPomodoros, in: 1...20) {
-                            Text("\(estimatedPomodoros)")
-                                .font(.body.monospacedDigit().weight(.semibold))
-                                .frame(minWidth: 28, alignment: .trailing)
-                        }
-                    }
-                    
-                    Divider().opacity(0.5)
-                    
-                    fieldRow("重复") {
-                        Picker("", selection: $recurrence) {
-                            ForEach(TaskRecurrence.allCases) { r in
-                                Text(r.rawValue).tag(r)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(width: 120)
-                    }
-                    
-                    if recurrence != .none {
-                        Text(recurrence == .daily
-                             ? "完成后会生成下一天的同名任务"
-                             : "完成后会生成一周后的同名任务")
-                            .font(.caption2)
-                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                            .padding(.horizontal, 14)
-                            .padding(.bottom, 6)
                     }
                     
                     Divider().opacity(0.5)
@@ -287,11 +216,11 @@ struct EditTaskView: View {
                 Button("保存") {
                     onSave(
                         title,
-                        category,
-                        priority,
-                        estimatedPomodoros,
+                        session.category,
+                        session.priority,
+                        session.estimatedPomodoros,
                         hasDueDate ? Calendar.current.startOfDay(for: dueDate) : nil,
-                        recurrence,
+                        session.recurrence,
                         notes,
                         linkURL
                     )

@@ -144,8 +144,8 @@ struct MenuBarPanelView: View {
                                 onClose()
                             } label: {
                                 Label(
-                                    "\(task.title)  ·  \(task.completedPomodoros)/\(task.estimatedPomodoros)",
-                                    systemImage: taskStore.activeTaskId == task.id ? "checkmark" : task.category.icon
+                                    task.title,
+                                    systemImage: taskStore.activeTaskId == task.id ? "checkmark" : "circle"
                                 )
                             }
                         }

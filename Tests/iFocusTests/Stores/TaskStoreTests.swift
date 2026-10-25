@@ -31,9 +31,9 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertEqual(store.tasks.count, 1)
         let task = store.tasks[0]
         XCTAssertEqual(task.title, "写单元测试")
-        XCTAssertEqual(task.category, .study)
-        XCTAssertEqual(task.priority, 3)
-        XCTAssertEqual(task.estimatedPomodoros, 2)
+        XCTAssertEqual(task.category, .other)
+        XCTAssertEqual(task.priority, 1)
+        XCTAssertEqual(task.estimatedPomodoros, 1)
         XCTAssertFalse(task.isCompleted)
         XCTAssertEqual(store.newTaskTitle, "")
         XCTAssertNotNil(task.dueDate)
@@ -56,8 +56,7 @@ final class TaskStoreTests: XCTestCase {
         let task = store.tasks[0]
         XCTAssertNotNil(task.dueDate)
         XCTAssertTrue(Calendar.current.isDateInTomorrow(task.dueDate!))
-        XCTAssertEqual(task.recurrence, .daily)
-        // Composer recurrence resets after add.
+        XCTAssertEqual(task.recurrence, .none)
         XCTAssertEqual(store.newTaskRecurrence, .none)
     }
     
@@ -275,7 +274,7 @@ final class TaskStoreTests: XCTestCase {
         let reloaded = TaskStore(storageDirectory: tempDir)
         XCTAssertEqual(reloaded.tasks.count, 1)
         XCTAssertEqual(reloaded.tasks[0].title, "持久化任务")
-        XCTAssertEqual(reloaded.tasks[0].category, .work)
+        XCTAssertEqual(reloaded.tasks[0].category, .other)
     }
 
     func testSaveAndLoadActiveTask() {

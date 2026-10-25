@@ -4,31 +4,25 @@ import iFocusCore
 /// In-list refinement chips (orthogonal to sidebar smart lists).
 private enum TaskListChip: Hashable, Identifiable {
     case all
-    case highPriority
     case pinned
     case hasNotes
     case hasLink
-    case category(TaskCategory)
     
     var id: String {
         switch self {
         case .all: return "all"
-        case .highPriority: return "high"
         case .pinned: return "pinned"
         case .hasNotes: return "notes"
         case .hasLink: return "link"
-        case .category(let c): return "cat-\(c.id)"
         }
     }
     
     var title: String {
         switch self {
         case .all: return "全部"
-        case .highPriority: return "高优"
         case .pinned: return "置顶"
         case .hasNotes: return "有备注"
         case .hasLink: return "有链接"
-        case .category(let c): return c.name
         }
     }
 }
@@ -42,12 +36,10 @@ struct TaskListView: View {
     /// One sheet per screen; edit sessions keep a stable snapshot identity.
     private enum TaskListSheet: Identifiable {
         case edit(EditTaskSession)
-        case categories
 
         var id: String {
             switch self {
             case .edit(let session): return "edit-\(session.id)"
-            case .categories: return "categories"
             }
         }
     }
@@ -180,24 +172,20 @@ struct TaskListView: View {
     
     private struct ListChipCounts {
         var total = 0
-        var highPriority = 0
         var pinned = 0
         var hasNotes = 0
         var hasLink = 0
-        var byCategoryID: [String: Int] = [:]
     }
 
     private var baseListChipCounts: ListChipCounts {
         var counts = ListChipCounts()
         for task in baseTasks {
             counts.total += 1
-            if task.priority >= 3 { counts.highPriority += 1 }
             if task.isPinned { counts.pinned += 1 }
             if !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 counts.hasNotes += 1
             }
             if task.hasLink { counts.hasLink += 1 }
-            counts.byCategoryID[task.category.id, default: 0] += 1
         }
         return counts
     }
@@ -206,13 +194,9 @@ struct TaskListView: View {
         // Only chips that match something — hide empty filters (less chrome).
         let counts = baseListChipCounts
         var chips: [TaskListChip] = [.all]
-        let candidates: [TaskListChip] = [.highPriority, .pinned, .hasNotes, .hasLink]
+        let candidates: [TaskListChip] = [.pinned, .hasNotes, .hasLink]
         for chip in candidates where chipCount(chip, counts: counts) > 0 {
             chips.append(chip)
-        }
-        // Categories appear only when the current list actually contains one.
-        for cat in taskStore.allCategories where (counts.byCategoryID[cat.id] ?? 0) > 0 {
-            chips.append(.category(cat))
         }
         return chips
     }
@@ -221,17 +205,12 @@ struct TaskListView: View {
         switch activeChip {
         case .all:
             return true
-        case .highPriority:
-            // Higher number = higher urgency (matches sort + priorityColor).
-            return task.priority >= 3
         case .pinned:
             return task.isPinned
         case .hasNotes:
             return !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .hasLink:
             return task.hasLink
-        case .category(let cat):
-            return task.category.id == cat.id
         }
     }
     
@@ -239,11 +218,9 @@ struct TaskListView: View {
         let c = counts ?? baseListChipCounts
         switch chip {
         case .all: return c.total
-        case .highPriority: return c.highPriority
         case .pinned: return c.pinned
         case .hasNotes: return c.hasNotes
         case .hasLink: return c.hasLink
-        case .category(let cat): return c.byCategoryID[cat.id] ?? 0
         }
     }
     
@@ -316,13 +293,6 @@ struct TaskListView: View {
             selectedIDs = selectedIDs.intersection(Set(currentTasks.map(\.id)))
         }
         .onChange(of: baseTasks.map(\.id)) { _ in
-            // Category chip may disappear when no tasks left in that category.
-            if !availableChips.contains(where: { $0.id == activeChip.id }) {
-                activeChip = .all
-            }
-        }
-        .onChange(of: taskStore.allCategories) { _ in
-            // A renamed category keeps working by id; a deleted one falls back to 全部.
             if !availableChips.contains(where: { $0.id == activeChip.id }) {
                 activeChip = .all
             }
@@ -346,10 +316,7 @@ struct TaskListView: View {
                     )
                 }
                 // Force full re-init of @State when reopening the same task after save.
-                .id("\(session.id)-\(session.notes)-\(session.linkURL)-\(session.title)-\(session.priority)")
-            case .categories:
-                CategoryManagementView()
-                    .environmentObject(taskStore)
+                .id("\(session.id)-\(session.notes)-\(session.linkURL)-\(session.title)")
             }
         }
         .onExitCommand {
@@ -440,7 +407,7 @@ struct TaskListView: View {
             Capsule().strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.75)
         )
         .frame(maxWidth: 360, alignment: .leading)
-        .help("搜索当前列表中的标题、备注、分类或链接（⌘F）")
+        .help("搜索当前列表中的标题、备注或链接（⌘F）")
     }
     
     /// Quiet actions beside the title. Filters live in one menu so they don't
@@ -460,10 +427,6 @@ struct TaskListView: View {
                                 Text("\(chip.title)  \(chipCount(chip, counts: filterCounts))")
                             }
                         }
-                    }
-                    Divider()
-                    Button("管理分类…") {
-                        activeSheet = .categories
                     }
                 } label: {
                     Text(activeChip.id == TaskListChip.all.id ? "筛选" : activeChip.title)
@@ -640,8 +603,6 @@ struct TaskListView: View {
                     .onSubmit { addTask(openEditor: false) }
                 
                 HStack(spacing: 7) {
-                    taskOptionsMenu
-                    
                     Button(action: { addTask(openEditor: false) }) {
                         HStack(spacing: 3.5) {
                             Image(systemName: "plus.circle.fill")
@@ -728,89 +689,6 @@ struct TaskListView: View {
                 .strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 1)
         )
         .multiLayerShadow(elevation: .card, colorScheme: colorScheme)
-    }
-
-    private var taskOptionsMenu: some View {
-        Menu {
-            Section("任务属性") {
-                Menu("分类") {
-                    ForEach(taskStore.allCategories) { category in
-                        newTaskCategoryButton(category)
-                    }
-                    Divider()
-                    Button {
-                        activeSheet = .categories
-                    } label: {
-                        Label("管理分类…", systemImage: "slider.horizontal.3")
-                    }
-                }
-                Picker("优先级", selection: $taskStore.newTaskPriority) {
-                    ForEach(1...4, id: \.self) { priority in
-                        Text(FocusTask.priorityLabel(for: priority)).tag(priority)
-                    }
-                }
-            }
-            Section("计划") {
-                Picker("预估番茄", selection: $taskStore.newTaskPomodoros) {
-                    ForEach(1...8, id: \.self) { count in
-                        Text("\(count) 番茄").tag(count)
-                    }
-                }
-                Picker("重复", selection: $taskStore.newTaskRecurrence) {
-                    ForEach(TaskRecurrence.allCases) { recurrence in
-                        Text(recurrence.rawValue).tag(recurrence)
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                Image(systemName: taskStore.newTaskCategory.icon)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(taskStore.newTaskCategory.color)
-                Text(taskStore.newTaskCategory.name)
-                    .lineLimit(1)
-                Image(systemName: "timer")
-                    .font(.system(size: 9.5, weight: .semibold))
-                    .foregroundColor(AppTheme.accent)
-                Text("\(taskStore.newTaskPomodoros)")
-                    .monospacedDigit()
-            }
-            .font(.system(size: 11.5, weight: .medium))
-            .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.86))
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5.5)
-            .background(
-                Capsule().fill(AppTheme.elevatedBackground(for: colorScheme).opacity(0.78))
-            )
-            .overlay(
-                Capsule().strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.75)
-            )
-            .overlay(
-                Capsule().strokeBorder(AppTheme.cardInnerHighlight(for: colorScheme), lineWidth: 0.5)
-            )
-        }
-        .menuStyle(.borderlessButton)
-        .buttonStyle(SpringScaleButtonStyle(pressedScale: 0.96))
-        .help("设置新任务的分类、优先级、预估番茄数和重复周期")
-        .accessibilityLabel(
-            "任务属性设置：\(taskStore.newTaskCategory.name)，\(taskStore.newTaskPriority) 级优先级，\(taskStore.newTaskPomodoros) 个番茄，\(taskStore.newTaskRecurrence.rawValue)"
-        )
-    }
-    
-    /// Menu row that picks the quick-add category (checkmark on the current one).
-    private func newTaskCategoryButton(_ category: TaskCategory) -> some View {
-        Button {
-            taskStore.newTaskCategory = category
-        } label: {
-            if taskStore.newTaskCategory.id == category.id {
-                Label(category.name, systemImage: "checkmark")
-            } else {
-                Label(category.name, systemImage: category.icon)
-            }
-        }
     }
 
     private func dueChip(title: String, target: TaskStore.DueOverride) -> some View {
