@@ -143,3 +143,105 @@ struct EmptyStateView: View {
     }
 }
 
+/// Compact stat ring for analytics (Pomodoro Todo–style progress at a glance).
+struct AnalyticsProgressRing: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let progress: Double
+    let size: CGFloat
+    let lineWidth: CGFloat
+    let tint: Color
+    let title: String
+    let subtitle: String
+    var celebrate: Bool = false
+    var allowPulse: Bool = false
+
+    @State private var breathe = false
+
+    private var clamped: CGFloat {
+        CGFloat(min(max(progress, 0), 1))
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                if celebrate {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    tint.opacity(colorScheme == .light ? 0.22 : 0.32),
+                                    tint.opacity(0.04),
+                                    .clear
+                                ],
+                                center: .center,
+                                startRadius: size * 0.2,
+                                endRadius: size * 0.62
+                            )
+                        )
+                        .frame(width: size * 1.15, height: size * 1.15)
+                        .scaleEffect(breathe ? 1.06 : 1.0)
+                        .opacity(breathe ? 1.0 : 0.88)
+                }
+
+                Circle()
+                    .stroke(
+                        colorScheme == .light
+                        ? AppTheme.separatorLow(for: colorScheme).opacity(0.9)
+                        : Color.white.opacity(0.08),
+                        lineWidth: lineWidth
+                    )
+
+                Circle()
+                    .trim(from: 0, to: max(clamped, clamped > 0 ? 0.02 : 0))
+                    .stroke(
+                        AngularGradient(
+                            colors: [
+                                tint.opacity(0.75),
+                                tint,
+                                tint.opacity(0.9)
+                            ],
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+                    .shadow(color: tint.opacity(celebrate ? 0.45 : 0.25), radius: celebrate ? 6 : 3)
+
+                VStack(spacing: 2) {
+                    Text(title)
+                        .font(.system(size: size * 0.22, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                        .minimumScaleFactor(0.65)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(.system(size: max(10, size * 0.11), weight: .medium))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        .lineLimit(1)
+                }
+                .frame(width: size * 0.72)
+            }
+            .frame(width: size, height: size)
+            .scaleEffect(celebrate && breathe ? 1.02 : 1.0)
+            .animation(AppTheme.springInteractive, value: clamped)
+        }
+        .frame(maxWidth: .infinity)
+        .onAppear { updateBreathing(active: celebrate && allowPulse) }
+        .onChange(of: celebrate) { _ in
+            updateBreathing(active: celebrate && allowPulse)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(subtitle)，\(title)")
+    }
+
+    private func updateBreathing(active: Bool) {
+        guard active else {
+            breathe = false
+            return
+        }
+        withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+            breathe = true
+        }
+    }
+}
+

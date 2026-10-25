@@ -273,7 +273,8 @@ struct TaskRowView: View {
                     // Secondary metadata row
                     HStack(spacing: 8) {
                         pomodoroProgress
-                        
+                        focusDurationMeta
+
                         HStack(spacing: 5) {
                             Circle()
                                 .fill(task.category.color)
@@ -510,6 +511,41 @@ struct TaskRowView: View {
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.65))
             }
         }
+    }
+
+    @ViewBuilder
+    private var focusDurationMeta: some View {
+        if task.isCompleted {
+            if task.timeSpentMinutes > 0 {
+                focusDurationLabel(
+                    FocusStats.formatTotalMinutes(task.timeSpentMinutes)
+                        .replacingOccurrences(of: "分钟", with: "分"),
+                    help: "累计专注时长"
+                )
+            } else {
+                Text("未专注")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.45))
+                    .help("完成时未记录绑定的专注时长")
+            }
+        } else if task.timeSpentMinutes > 0 {
+            focusDurationLabel(
+                FocusStats.formatTotalMinutes(task.timeSpentMinutes)
+                    .replacingOccurrences(of: "分钟", with: "分"),
+                help: "已累计专注时长"
+            )
+        }
+    }
+
+    private func focusDurationLabel(_ text: String, help: String) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: "clock")
+                .font(.system(size: AppTheme.iconMeta, weight: .semibold))
+            Text(text)
+                .font(TypeScale.meta.monospacedDigit())
+        }
+        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.65))
+        .help(help)
     }
     
     private var rowBackground: some View {

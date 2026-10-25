@@ -41,11 +41,22 @@ struct ProfileCategoriesCard: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.top, 24)
                 } else {
-                    ForEach(stats.prefix(4)) { item in
+                    ForEach(Array(stats.prefix(4).enumerated()), id: \.element.id) { index, item in
                         let pct = CGFloat(item.minutes) / CGFloat(totalMinutes)
                         let pctInt = Int((Double(item.minutes) / Double(totalMinutes) * 100).rounded())
                         VStack(alignment: .leading, spacing: 5) {
-                            HStack(alignment: .center) {
+                            HStack(alignment: .center, spacing: 10) {
+                                if index == 0, pctInt > 0 {
+                                    AnalyticsProgressRing(
+                                        progress: Double(pct),
+                                        size: 44,
+                                        lineWidth: 5,
+                                        tint: item.category.color,
+                                        title: "\(pctInt)%",
+                                        subtitle: "占比"
+                                    )
+                                    .frame(width: 48)
+                                }
                                 Label(item.category.name, systemImage: item.category.icon)
                                     .font(.system(size: 12.5, weight: .semibold))
                                     .foregroundColor(item.category.color)
