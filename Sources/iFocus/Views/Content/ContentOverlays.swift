@@ -974,10 +974,20 @@ struct AccountMenuRowButtonStyle: ButtonStyle {
 
 struct AccountMenuPopover: View {
     @EnvironmentObject var settings: SettingsStore
+    @EnvironmentObject var timerStore: TimerStore
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openWindow) private var openWindow
     @ObservedObject private var updates = AppUpdateCenter.shared
     var onSettings: () -> Void
+
+    private var isUpdateAvailable: Bool {
+        if case .available = updates.phase { return true }
+        return false
+    }
+
+    private var timerActive: Bool {
+        timerStore.isRunning || timerStore.isSessionInProgress
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -999,21 +1009,25 @@ struct AccountMenuPopover: View {
             Divider().opacity(0.7)
 
             Button {
-                updates.checkAndInstall()
+                updates.checkOrInstall()
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "arrow.down.circle")
+                    Image(systemName: isUpdateAvailable ? "arrow.down.circle.fill" : "arrow.down.circle")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        .foregroundColor(isUpdateAvailable ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme))
                         .frame(width: 22)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(updateTitle)
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                            .foregroundColor(isUpdateAvailable ? AppTheme.accent : AppTheme.primaryText(for: colorScheme))
                         if let updateCaption {
                             Text(updateCaption)
                                 .font(.system(size: 11))
-                                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                                .foregroundColor(
+                                    isUpdateAvailable && timerActive
+                                        ? AppTheme.warning
+                                        : AppTheme.secondaryText(for: colorScheme)
+                                )
                         }
                     }
                     Spacer(minLength: 0)
@@ -1039,6 +1053,9 @@ struct AccountMenuPopover: View {
                 )
                 .shadow(color: Color.black.opacity(colorScheme == .light ? 0.10 : 0.35), radius: 20, y: 8)
         )
+        .onDisappear {
+            updates.resetTransientStatusIfNeeded()
+        }
     }
 
     private func menuButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
@@ -1068,6 +1085,7 @@ struct AccountMenuPopover: View {
     private var updateTitle: String {
         switch updates.phase {
         case .checking: return "正在检查…"
+        case .available(let version, _): return "更新到 \(version) 并重启"
         case .downloading: return "正在下载…"
         case .installing: return "正在安装…"
         case .idle, .upToDate, .noRelease, .failed: return "检查新版本"
@@ -1076,6 +1094,8 @@ struct AccountMenuPopover: View {
 
     private var updateCaption: String? {
         switch updates.phase {
+        case .available:
+            return timerActive ? "正在计时，更新会中断当前段" : "点击立即下载并替换当前版本"
         case .upToDate: return "已是最新版本"
         case .noRelease: return "还没有发布的新版本"
         case .downloading: return "正在下载新版本"

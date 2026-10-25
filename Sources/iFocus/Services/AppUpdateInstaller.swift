@@ -9,6 +9,7 @@ final class AppUpdateCenter: ObservableObject {
     enum Phase: Equatable {
         case idle
         case checking
+        case available(version: String, package: URL)
         case downloading
         case installing
         case upToDate
@@ -18,43 +19,77 @@ final class AppUpdateCenter: ObservableObject {
 
     @Published private(set) var phase: Phase = .idle
     private var job: Task<Void, Never>?
+    private var resetTask: Task<Void, Never>?
 
     var isBusy: Bool {
         switch phase {
         case .checking, .downloading, .installing:
             return true
-        case .idle, .upToDate, .noRelease, .failed:
+        case .idle, .available, .upToDate, .noRelease, .failed:
             return false
         }
     }
 
-    func checkAndInstall() {
+    func checkOrInstall() {
         guard !isBusy else { return }
-        job = Task { await perform() }
+        resetTask?.cancel()
+        if case .available(_, let package) = phase {
+            job = Task { await performInstall(package: package) }
+        } else {
+            job = Task { await performCheck() }
+        }
     }
 
-    private func perform() async {
+    func resetTransientStatusIfNeeded() {
+        resetTask?.cancel()
+        switch phase {
+        case .upToDate, .noRelease, .failed:
+            phase = .idle
+        case .idle, .checking, .available, .downloading, .installing:
+            break
+        }
+    }
+
+    private func scheduleAutoReset() {
+        resetTask?.cancel()
+        resetTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled else { return }
+            resetTransientStatusIfNeeded()
+        }
+    }
+
+    private func performCheck() async {
         phase = .checking
         let status = await AppUpdateChecker.check(currentVersion: AppVersion.short)
         switch status {
         case .upToDate:
             phase = .upToDate
+            scheduleAutoReset()
         case .noRelease:
             phase = .noRelease
+            scheduleAutoReset()
         case .missingPackage(let version):
             phase = .failed("新版本 \(version) 还没有安装包")
+            scheduleAutoReset()
         case .failed:
             phase = .failed("暂时连不上，稍后再试")
-        case .available(_, let package):
-            phase = .downloading
-            do {
-                let installed = try await AppUpdateInstaller.prepare(package: package)
-                phase = .installing
-                try AppUpdateInstaller.swapInAfterQuit(preparedApp: installed.app, workDirectory: installed.work)
-                NSApp.terminate(nil)
-            } catch {
-                phase = .failed(error.localizedDescription)
-            }
+            scheduleAutoReset()
+        case .available(let version, let package):
+            phase = .available(version: version, package: package)
+        }
+    }
+
+    private func performInstall(package: URL) async {
+        phase = .downloading
+        do {
+            let installed = try await AppUpdateInstaller.prepare(package: package)
+            phase = .installing
+            try AppUpdateInstaller.swapInAfterQuit(preparedApp: installed.app, workDirectory: installed.work)
+            NSApp.terminate(nil)
+        } catch {
+            phase = .failed(error.localizedDescription)
+            scheduleAutoReset()
         }
     }
 }
