@@ -192,18 +192,11 @@ struct AnalyticsProgressRing: View {
                 Circle()
                     .trim(from: 0, to: max(clamped, clamped > 0 ? 0.02 : 0))
                     .stroke(
-                        AngularGradient(
-                            colors: [
-                                tint.opacity(0.75),
-                                tint,
-                                tint.opacity(0.9)
-                            ],
-                            center: .center
-                        ),
+                        tint,
                         style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                     )
                     .rotationEffect(.degrees(-90))
-                    .shadow(color: tint.opacity(celebrate ? 0.45 : 0.25), radius: celebrate ? 6 : 3)
+                    .shadow(color: tint.opacity(celebrate ? 0.35 : 0.15), radius: celebrate ? 5 : 2)
 
                 VStack(spacing: 2) {
                     Text(title)

@@ -143,18 +143,7 @@ enum AnalyticsCards {
             .overlay {
                 if goalDone {
                     RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [
-                                    AppTheme.accent.opacity(0.55),
-                                    AppTheme.accent.opacity(0.15),
-                                    AppTheme.accent.opacity(0.35)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.2
-                        )
+                        .strokeBorder(AppTheme.accent.opacity(0.35), lineWidth: 1.2)
                 }
             }
         }
@@ -326,23 +315,15 @@ enum AnalyticsCards {
                                 lineWidth: 13
                             )
 
-                        // Active progress arc with luminous gradient and soft ambient glow
+                        // Active progress arc with soft ambient glow
                         Circle()
                             .trim(from: 0, to: clampedProg)
                             .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        AppTheme.accent.opacity(0.85),
-                                        AppTheme.accent,
-                                        AppTheme.accent
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
+                                AppTheme.accent,
                                 style: StrokeStyle(lineWidth: 13, lineCap: .round)
                             )
                             .rotationEffect(.degrees(-90))
-                            .shadow(color: AppTheme.accent.opacity(colorScheme == .light ? 0.35 : 0.45), radius: 5, x: 0, y: 1)
+                            .shadow(color: AppTheme.accent.opacity(colorScheme == .light ? 0.25 : 0.35), radius: 4, x: 0, y: 1)
                             .animation(AppTheme.springInteractive, value: model.goalProgress)
 
                         VStack(spacing: 3) {

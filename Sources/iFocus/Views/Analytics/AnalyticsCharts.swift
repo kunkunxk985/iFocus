@@ -30,14 +30,7 @@ struct TodayTimelineView: View {
                         let width = max(10, (prog.end - prog.start) * w)
                         VStack(spacing: 2) {
                             RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [AppTheme.accent, AppTheme.accent.opacity(0.85)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .shadow(color: AppTheme.accent.opacity(0.25), radius: 2, x: 0, y: 1)
+                                .fill(AppTheme.accent)
                                 .frame(width: width, height: h * 0.72)
                                 .overlay(
                                     Text(block.title)
@@ -94,13 +87,7 @@ struct TodayHourChart: View {
                 x: .value("时", item.id),
                 y: .value("分钟", item.minutes)
             )
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [AppTheme.accent, AppTheme.accent.opacity(0.68)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
+            .foregroundStyle(AppTheme.accent)
             .cornerRadius(3, style: .continuous)
         }
         .chartXScale(domain: 0...23)
@@ -188,13 +175,7 @@ struct WeeklyFocusChart: View {
                     x: .value("日期", item.date, unit: .day),
                     y: .value("分钟", item.minutes)
                 )
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [AppTheme.accent, AppTheme.accent.opacity(0.72)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
+                .foregroundStyle(AppTheme.accent)
                 .cornerRadius(4, style: .continuous)
             }
         }
