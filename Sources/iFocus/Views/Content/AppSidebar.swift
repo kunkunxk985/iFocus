@@ -191,16 +191,16 @@ struct AppSidebar: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.55))
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.60))
                         .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
                     Text(title)
-                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.82))
+                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.88))
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 8)
-                .padding(.vertical, 7)
+                .padding(.vertical, 6)
                 .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -214,7 +214,7 @@ struct AppSidebar: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.top, group == .focus ? 2 : 10)
+        .padding(.top, group == .focus ? 2 : 12)
     }
 
     private func sidebarRow(
@@ -254,7 +254,7 @@ struct AppSidebar: View {
         }
         .overlay {
             if dropTargetScreen == screen {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .strokeBorder(AppTheme.accent.opacity(0.8), lineWidth: 1.5)
             }
         }
@@ -306,7 +306,7 @@ struct AppSidebar: View {
                     path: settings.avatarPath,
                     colorIndex: settings.avatarColorIndex,
                     username: settings.username.isEmpty ? "小番茄" : settings.username,
-                    size: 32
+                    size: 34
                 )
                 .overlay(
                     Circle()
@@ -315,7 +315,7 @@ struct AppSidebar: View {
 
                 VStack(alignment: .leading, spacing: 1.5) {
                     Text(settings.username.isEmpty ? "小番茄" : settings.username)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.system(size: 13.5, weight: .semibold, design: .rounded))
                         .foregroundColor(AppTheme.primaryText(for: colorScheme))
                         .lineLimit(1)
                     SidebarAccountStatusLine()
@@ -375,10 +375,10 @@ private struct SidebarRowLabel: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 10) {
             ZStack {
                 Image(systemName: icon)
-                    .font(.system(size: 13.5, weight: isSelected ? .semibold : .regular))
+                    .font(.system(size: 15, weight: isSelected ? .semibold : .medium))
                     // Grey until selected, so the rail does not compete with the stage.
                     .foregroundColor(
                         isSelected
@@ -390,17 +390,17 @@ private struct SidebarRowLabel: View {
                     Circle()
                         .fill(AppTheme.accent)
                         .frame(width: 5, height: 5)
-                        .offset(x: 8, y: -7)
+                        .offset(x: 9, y: -8)
                 }
             }
-            .frame(width: 20, height: 20)
+            .frame(width: 22, height: 22)
 
             Text(title)
-                .font(.system(size: 13.5, weight: isSelected ? .semibold : .regular, design: .rounded))
+                .font(.system(size: 14.5, weight: isSelected ? .semibold : .medium, design: .rounded))
                 .foregroundColor(
                     isSelected
                     ? AppTheme.primaryText(for: colorScheme)
-                    : AppTheme.primaryText(for: colorScheme).opacity(0.84)
+                    : AppTheme.primaryText(for: colorScheme).opacity(0.88)
                 )
                 .lineLimit(1)
 
@@ -410,14 +410,14 @@ private struct SidebarRowLabel: View {
                 // Plain count, the way Mail prints "94 封邮件" — a pill reads as a badge,
                 // not as part of a source list.
                 Text(badge)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundColor(badgeForeground)
             }
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .padding(.vertical, 8)
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var badgeForeground: Color {
@@ -436,7 +436,7 @@ private struct SidebarRowButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(backgroundFill(isPressed: configuration.isPressed))
             )
             .scaleEffect(configuration.isPressed ? 0.99 : 1.0)
