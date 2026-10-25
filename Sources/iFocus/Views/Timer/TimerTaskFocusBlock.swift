@@ -23,12 +23,12 @@ struct TimerTaskFocusBlock: View {
         Menu {
             menuContent
         } label: {
-            pickerLine(title: task.title, detail: timerTaskDetail(for: task))
+            pickerLine(title: task.title, detail: timerTaskDetail(for: task), isTaskSelected: true)
         }
         .menuStyle(.borderlessButton)
         .fixedSize(horizontal: false, vertical: true)
         .disabled(timerStore.isRunning)
-        .opacity(timerStore.isRunning ? 0.85 : 1)
+        .opacity(timerStore.isRunning ? 0.90 : 1)
     }
 
     private var emptyPicker: some View {
@@ -38,7 +38,8 @@ struct TimerTaskFocusBlock: View {
         } label: {
             pickerLine(
                 title: items.isEmpty ? "自由专注" : "选择任务",
-                detail: items.isEmpty ? "空格开始" : "\(items.count) 个未完成"
+                detail: items.isEmpty ? "空格开始" : "\(items.count) 个待办",
+                isTaskSelected: false
             )
         }
         .menuStyle(.borderlessButton)
@@ -54,26 +55,53 @@ struct TimerTaskFocusBlock: View {
             if calendar.isDateInToday(due) { return "今天" }
             if calendar.isDateInTomorrow(due) { return "明天" }
         }
-        return "专注此任务"
+        return ""
     }
 
-    private func pickerLine(title: String, detail: String) -> some View {
-        HStack(spacing: 8) {
+    private func pickerLine(title: String, detail: String, isTaskSelected: Bool) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: isTaskSelected ? "target" : "sparkles")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(isTaskSelected ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme).opacity(0.8))
+
             Text(title)
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(AppTheme.primaryText(for: colorScheme))
                 .lineLimit(1)
-            Text(detail)
-                .font(.system(size: 12))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                .lineLimit(1)
-            Spacer(minLength: 8)
+
+            if !detail.isEmpty {
+                Text("·")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.35))
+
+                Text(detail)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.80))
+                    .lineLimit(1)
+            }
+
             Image(systemName: "chevron.up.chevron.down")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                .font(.system(size: 8.5, weight: .bold))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.55))
+                .padding(.leading, 1)
         }
-        .padding(.vertical, 2)
-        .contentShape(Rectangle())
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.95 : 0.85))
+        )
+        .overlay(
+            Capsule()
+                .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.75)
+        )
+        .shadow(
+            color: Color.black.opacity(colorScheme == .light ? 0.03 : 0.12),
+            radius: 8,
+            x: 0,
+            y: 2
+        )
+        .contentShape(Capsule())
     }
 
     @ViewBuilder

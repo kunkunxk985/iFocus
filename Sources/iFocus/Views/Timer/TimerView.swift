@@ -58,20 +58,25 @@ struct TimerView: View {
                     immersiveMode.toggle()
                 }
             } label: {
-                Text(immersiveMode ? "恢复视窗" : "精简视窗")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.9))
-                    )
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                    )
-                    .contentShape(Capsule())
+                HStack(spacing: 5) {
+                    Image(systemName: immersiveMode ? "arrow.down.right.and.arrow.up.left" : "macwindow")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text(immersiveMode ? "恢复视窗" : "精简视窗")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.9))
+                )
+                .overlay(
+                    Capsule()
+                        .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(colorScheme == .light ? 0.025 : 0.12), radius: 6, y: 2)
+                .contentShape(Capsule())
             }
             .buttonStyle(SoftScaleButtonStyle())
             .help(immersiveMode ? "恢复完整视窗" : "精简视窗：只保留计时环与控制")
@@ -80,20 +85,25 @@ struct TimerView: View {
             Button {
                 NotificationCenter.default.post(name: AppNavigation.toggleFocusMode, object: nil)
             } label: {
-                Text("全屏沉浸")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.9))
-                    )
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                    )
-                    .contentShape(Capsule())
+                HStack(spacing: 5) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text("全屏沉浸")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.9))
+                )
+                .overlay(
+                    Capsule()
+                        .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(colorScheme == .light ? 0.025 : 0.12), radius: 6, y: 2)
+                .contentShape(Capsule())
             }
             .buttonStyle(SoftScaleButtonStyle())
             .help("全屏沉浸模式 (⌥⌘F)")
@@ -156,20 +166,25 @@ struct TimerView: View {
                             Button {
                                 FocusModeController.shared.exit()
                             } label: {
-                                Text("退出全屏")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        Capsule()
-                                            .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.9))
-                                    )
-                                    .overlay(
-                                        Capsule()
-                                            .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                                    )
-                                    .contentShape(Capsule())
+                                HStack(spacing: 5) {
+                                    Image(systemName: "arrow.down.right.and.arrow.up.left")
+                                        .font(.system(size: 10, weight: .semibold))
+                                    Text("退出全屏")
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule()
+                                        .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.9))
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                                )
+                                .shadow(color: Color.black.opacity(colorScheme == .light ? 0.025 : 0.12), radius: 6, y: 2)
+                                .contentShape(Capsule())
                             }
                             .buttonStyle(SoftScaleButtonStyle())
                             .help("退出全屏沉浸 (Esc)")

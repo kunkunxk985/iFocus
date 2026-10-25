@@ -189,18 +189,19 @@ struct AppSidebar: View {
                     isExpanded.wrappedValue.toggle()
                 }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.60))
+                        .font(.system(size: 8.5, weight: .bold))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.50))
                         .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
                     Text(title)
-                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.88))
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .tracking(0.3)
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.70))
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 8)
-                .padding(.vertical, 6)
+                .padding(.vertical, 5)
                 .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
             .buttonStyle(.plain)

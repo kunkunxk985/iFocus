@@ -48,6 +48,15 @@ struct TimerModeSwitcher: View {
             Capsule(style: .continuous)
                 .fill(AppTheme.elevatedBackground(for: colorScheme).opacity(colorScheme == .light ? 0.85 : 0.55))
         )
+        .overlay(
+            Capsule(style: .continuous)
+                .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.75)
+        )
+        .shadow(
+            color: Color.black.opacity(colorScheme == .light ? 0.025 : 0.08),
+            radius: 6,
+            y: 2
+        )
         .opacity(timerStore.isRunning ? 0.55 : 1)
         .animation(AppTheme.springInteractive, value: timerStore.mode)
     }
@@ -123,6 +132,11 @@ struct TimerControlsBar: View {
                     Circle()
                         .fill(modeColor)
                         .frame(width: main, height: main)
+                        .shadow(
+                            color: modeColor.opacity(colorScheme == .light ? 0.32 : 0.44),
+                            radius: timerStore.isRunning ? 14 : 10,
+                            y: timerStore.isRunning ? 6 : 4
+                        )
 
                     Image(systemName: timerStore.isRunning ? "pause.fill" : "play.fill")
                         .font(.system(size: main * 0.35, weight: .bold))
@@ -216,6 +230,15 @@ struct EmbossedControlButton: View {
                     Circle()
                         .fill(AppTheme.elevatedBackground(for: colorScheme))
                         .frame(width: size, height: size)
+                        .overlay(
+                            Circle()
+                                .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.75)
+                        )
+                        .shadow(
+                            color: Color.black.opacity(colorScheme == .light ? 0.025 : 0.10),
+                            radius: isHovering ? 6 : 3,
+                            y: isHovering ? 2 : 1
+                        )
 
                     Image(systemName: systemName)
                         .font(.system(size: size * 0.32, weight: .semibold))

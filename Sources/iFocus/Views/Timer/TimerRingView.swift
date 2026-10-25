@@ -85,11 +85,23 @@ struct TimerRingView: View {
                     y: 0
                 )
 
+            // Radiant leading cap node (Apple Watch luxury sweep feel)
+            if isRunning && decorativeMotion && animatedProgress > 0.015 && animatedProgress < 0.995 {
+                let angle = -90.0 + Double(animatedProgress) * 360.0
+                let radius = size / 2.0
+                let rad = angle * .pi / 180.0
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: line * 0.70, height: line * 0.70)
+                    .shadow(color: modeColor.opacity(0.9), radius: 5, x: 0, y: 0)
+                    .offset(x: radius * cos(rad), y: radius * sin(rad))
+            }
+
             // MARK: - 4. Center Typography & Session Badge (The Single Primary Focus)
             VStack(spacing: 8) {
                 Text(displayTime)
-                    .font(.system(size: max(52, size * 0.28), weight: .semibold, design: .rounded))
-                    .tracking(TypeScale.trackingDisplay)
+                    .font(.system(size: max(54, size * 0.29), weight: .medium, design: .rounded))
+                    .tracking(-0.5)
                     .monospacedDigit()
                     // Count-up past an hour reads h:mm:ss; shrink rather than clip.
                     .lineLimit(1)
