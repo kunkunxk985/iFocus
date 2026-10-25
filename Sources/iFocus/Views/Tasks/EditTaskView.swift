@@ -29,7 +29,8 @@ struct EditTaskSession: Identifiable, Equatable {
 }
 
 /// Self-contained editor — no EnvironmentObject observation during editing.
-/// Parent applies changes only on Save via `onSave`.
+/// Things 3-like quiet, focused task editor: Title, Due Date, Notes, Link.
+/// Preserves existing category, priority, pomodoros, and recurrence without exposing cognitive clutter.
 struct EditTaskView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -48,10 +49,6 @@ struct EditTaskView: View {
     ) -> Void
     
     @State private var title: String
-    @State private var selectedCategory: TaskCategory
-    @State private var estimatedPomodoros: Int
-    @State private var priority: Int
-    @State private var recurrence: TaskRecurrence
     @State private var dueDate: Date
     @State private var hasDueDate: Bool
     @State private var notes: String
@@ -59,7 +56,7 @@ struct EditTaskView: View {
     
     init(
         session: EditTaskSession,
-        categories: [TaskCategory],
+        categories: [TaskCategory] = [],
         onSave: @escaping (
             String, TaskCategory, Int, Int, Date?, TaskRecurrence, String, String
         ) -> Void
@@ -68,10 +65,6 @@ struct EditTaskView: View {
         self.categories = categories
         self.onSave = onSave
         _title = State(initialValue: session.title)
-        _selectedCategory = State(initialValue: session.category)
-        _estimatedPomodoros = State(initialValue: session.estimatedPomodoros)
-        _priority = State(initialValue: session.priority)
-        _recurrence = State(initialValue: session.recurrence)
         _notes = State(initialValue: session.notes)
         _linkURL = State(initialValue: session.linkURL)
         if let due = session.dueDate {
@@ -100,181 +93,121 @@ struct EditTaskView: View {
                 .padding(.top, 18)
                 .padding(.bottom, 14)
             
-            ScrollView {
-                VStack(spacing: 0) {
-                    fieldRow("任务名称") {
-                        TextField("输入名称", text: $title)
-                            .textFieldStyle(.plain)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    
-                    Divider().opacity(0.5)
-
-                    fieldRow("分类") {
-                        Picker("", selection: $selectedCategory) {
-                            ForEach(categories) { cat in
-                                Label(cat.name, systemImage: cat.icon).tag(cat)
-                            }
-                        }
+            VStack(spacing: 0) {
+                fieldRow("任务名称") {
+                    TextField("输入名称", text: $title)
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.trailing)
+                }
+                
+                Divider().opacity(0.5)
+                
+                fieldRow("截止日期") {
+                    Toggle("", isOn: $hasDueDate)
                         .labelsHidden()
+                        .toggleStyle(.switch)
+                        .onChange(of: hasDueDate) { _ in
+                            AppHaptics.selectionChanged()
+                        }
+                }
+                
+                if hasDueDate {
+                    Divider().opacity(0.5)
+                    fieldRow("日期") {
+                        DatePicker(
+                            "",
+                            selection: $dueDate,
+                            displayedComponents: .date
+                        )
+                        .labelsHidden()
+                        .datePickerStyle(.compact)
                         .frame(maxWidth: 160)
-                        .onChange(of: selectedCategory) { _ in
+                        .onChange(of: dueDate) { _ in
                             AppHaptics.selectionChanged()
                         }
                     }
-
-                    Divider().opacity(0.5)
-
-                    fieldRow("预计番茄") {
-                        HStack(spacing: 6) {
-                            Text("\(estimatedPomodoros) 个")
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                            Stepper("", value: $estimatedPomodoros, in: 1...20, step: 1)
-                                .labelsHidden()
-                                .controlSize(.small)
-                                .onChange(of: estimatedPomodoros) { _ in
-                                    AppHaptics.selectionChanged()
-                                }
-                        }
-                    }
-
-                    Divider().opacity(0.5)
-
-                    fieldRow("优先级") {
-                        Picker("", selection: $priority) {
-                            Text("普通").tag(1)
-                            Text("中").tag(2)
-                            Text("高").tag(3)
-                            Text("紧急").tag(4)
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 160)
-                        .onChange(of: priority) { _ in
-                            AppHaptics.selectionChanged()
-                        }
-                    }
-
-                    Divider().opacity(0.5)
-
-                    fieldRow("重复") {
-                        Picker("", selection: $recurrence) {
-                            ForEach(TaskRecurrence.allCases) { rec in
-                                Text(rec.rawValue).tag(rec)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 160)
-                        .onChange(of: recurrence) { _ in
-                            AppHaptics.selectionChanged()
-                        }
-                    }
-
-                    Divider().opacity(0.5)
-                    
-                    fieldRow("截止日期") {
-                        Toggle("", isOn: $hasDueDate)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                    }
-                    
-                    if hasDueDate {
-                        Divider().opacity(0.5)
-                        fieldRow("日期") {
-                            DatePicker(
-                                "",
-                                selection: $dueDate,
-                                displayedComponents: .date
-                            )
-                            .labelsHidden()
-                            .datePickerStyle(.compact)
-                            .frame(maxWidth: 160)
-                        }
-                    }
-                    
-                    Divider().opacity(0.5)
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("备注")
+                }
+                
+                Divider().opacity(0.5)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("备注")
+                        .font(.subheadline)
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                    TextEditor(text: $notes)
+                        .font(.body)
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 70, maxHeight: 110)
+                        .padding(8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(AppTheme.elevatedBackground(for: colorScheme))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                        )
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                
+                Divider().opacity(0.5)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("链接")
                             .font(.subheadline)
                             .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                        TextEditor(text: $notes)
-                            .font(.body)
-                            .scrollContentBackground(.hidden)
-                            .frame(minHeight: 72, maxHeight: 120)
-                            .padding(8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(AppTheme.elevatedBackground(for: colorScheme))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                            )
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
-                    
-                    Divider().opacity(0.5)
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("链接")
-                                .font(.subheadline)
-                                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                            Spacer()
-                            if linkLooksValid {
-                                Button("打开") {
-                                    if let url = URL(string: normalizedLink) {
-                                        NSWorkspace.shared.open(url)
-                                    }
+                        Spacer()
+                        if linkLooksValid {
+                            Button("打开") {
+                                if let url = URL(string: normalizedLink) {
+                                    NSWorkspace.shared.open(url)
                                 }
-                                .buttonStyle(.borderless)
-                                .font(.caption.weight(.semibold))
-                                .foregroundColor(AppTheme.accent)
                             }
-                        }
-                        TextField("https://…", text: $linkURL)
-                            .textFieldStyle(.plain)
-                            .font(.body)
-                            .padding(8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(AppTheme.elevatedBackground(for: colorScheme))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(
-                                        normalizedLink.isEmpty
-                                        ? AppTheme.separatorLow(for: colorScheme)
-                                        : (linkLooksValid
-                                           ? AppTheme.accent.opacity(0.35)
-                                           : Color.red.opacity(0.35)),
-                                        lineWidth: 1
-                                    )
-                            )
-                        if !normalizedLink.isEmpty && !linkLooksValid {
-                            Text("请输入 http:// 或 https:// 开头的链接")
-                                .font(.caption2)
-                                .foregroundColor(Color.red.opacity(0.85))
+                            .buttonStyle(.borderless)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(AppTheme.accent)
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
+                    TextField("https://…", text: $linkURL)
+                        .textFieldStyle(.plain)
+                        .font(.body)
+                        .padding(8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(AppTheme.elevatedBackground(for: colorScheme))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(
+                                    normalizedLink.isEmpty
+                                    ? AppTheme.separatorLow(for: colorScheme)
+                                    : (linkLooksValid
+                                       ? AppTheme.accent.opacity(0.35)
+                                       : Color.red.opacity(0.35)),
+                                    lineWidth: 1
+                                )
+                        )
+                    if !normalizedLink.isEmpty && !linkLooksValid {
+                        Text("请输入 http:// 或 https:// 开头的链接")
+                            .font(.caption2)
+                            .foregroundColor(Color.red.opacity(0.85))
+                    }
                 }
-                .padding(.horizontal, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(AppTheme.cardBackground(for: colorScheme))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-                )
-                .shadow(color: Color.black.opacity(colorScheme == .light ? 0.04 : 0.16), radius: 8, x: 0, y: 2)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
             }
-            .frame(maxHeight: 420)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(AppTheme.cardBackground(for: colorScheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(colorScheme == .light ? 0.04 : 0.16), radius: 8, x: 0, y: 2)
+            .padding(.horizontal, 20)
             
             HStack(spacing: 12) {
                 Button("取消") {
@@ -289,11 +222,11 @@ struct EditTaskView: View {
                     AppHaptics.buttonClick()
                     onSave(
                         title,
-                        selectedCategory,
-                        priority,
-                        estimatedPomodoros,
+                        session.category,
+                        session.priority,
+                        session.estimatedPomodoros,
                         hasDueDate ? Calendar.current.startOfDay(for: dueDate) : nil,
-                        recurrence,
+                        session.recurrence,
                         notes,
                         linkURL
                     )
@@ -308,7 +241,7 @@ struct EditTaskView: View {
             .padding(.top, 18)
             .padding(.bottom, 16)
         }
-        .frame(width: 480)
+        .frame(width: 440)
         .background(AppTheme.contentBackground(for: colorScheme))
     }
 

@@ -57,7 +57,7 @@ private struct AnimatedTaskCheckbox: View {
                 Circle()
                     .strokeBorder(
                         isCompleted
-                        ? AppTheme.success
+                        ? AppTheme.accent
                         : AppTheme.secondaryText(for: colorScheme).opacity(0.40),
                         lineWidth: isCompleted ? 1.5 : 1.25
                     )
@@ -65,7 +65,7 @@ private struct AnimatedTaskCheckbox: View {
                         Circle()
                             .fill(
                                 isCompleted
-                                ? AppTheme.success
+                                ? AppTheme.accent
                                 : (isPressed ? AppTheme.accent.opacity(0.08) : Color.clear)
                             )
                     )
@@ -176,13 +176,10 @@ struct TaskRowView: View {
             if !completedFade && !isSelecting {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: AppTheme.iconAction, weight: .medium))
-                    .foregroundColor(
-                        isHovering
-                        ? AppTheme.secondaryText(for: colorScheme).opacity(0.65)
-                        : AppTheme.secondaryText(for: colorScheme).opacity(0.16)
-                    )
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.60))
                     .frame(width: 16, height: 24)
                     .contentShape(Rectangle())
+                    .opacity(isHovering ? 1.0 : 0.0)
                     .animation(AppTheme.springSnappy, value: isHovering)
                     .help("拖到侧栏改期 · 列表内拖动排序")
                     .accessibilityLabel("拖动任务到侧栏改期，或在列表内排序")

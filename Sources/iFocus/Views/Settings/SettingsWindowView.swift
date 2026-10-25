@@ -54,7 +54,6 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
 struct SettingsWindowView: View {
     @State private var selectedPanel: SettingsWindowPanel = .general
     @State private var pendingRestorePreview: DataBackupService.RestorePreview?
-    @State private var isManagingCategories = false
     @ObservedObject private var search = SettingsSearchModel.shared
     @FocusState private var focusedPanel: SettingsWindowPanel?
     @EnvironmentObject var settings: SettingsStore
@@ -157,10 +156,6 @@ struct SettingsWindowView: View {
                 },
                 secondaryButton: .cancel(Text("取消"))
             )
-        }
-        .sheet(isPresented: $isManagingCategories) {
-            CategoryManagementView()
-                .environmentObject(taskStore)
         }
     }
 
@@ -387,21 +382,6 @@ struct SettingsWindowView: View {
                     .labelsHidden()
                     .frame(width: 140)
                     .accessibilityLabel("开始 / 暂停快捷键")
-                }
-            }
-
-            SettingsGroup(title: "任务与分类") {
-                SettingsRow(
-                    title: "分类管理",
-                    subtitle: "自定义任务分类名称、颜色与图标",
-                    keywords: "分类 标签 自定义 颜色 图标 管理"
-                ) {
-                    Button("管理分类…") {
-                        AppHaptics.buttonClick()
-                        isManagingCategories = true
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                 }
             }
 

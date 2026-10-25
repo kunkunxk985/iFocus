@@ -663,6 +663,13 @@ struct TaskListView: View {
                 dueChip(title: "稍后", target: .later)
                 dueChip(title: "收集箱", target: .inbox)
                 Spacer(minLength: 0)
+
+                if isQuickAddFocused {
+                    Text("↵ 保存 · ⌥↵ 详情")
+                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.60))
+                        .transition(.opacity)
+                }
             }
             .padding(.leading, 3)
             .padding(.top, 2)
@@ -675,9 +682,21 @@ struct TaskListView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                .strokeBorder(
+                    isQuickAddFocused
+                    ? AppTheme.accent.opacity(colorScheme == .light ? 0.35 : 0.45)
+                    : AppTheme.separatorLow(for: colorScheme),
+                    lineWidth: isQuickAddFocused ? 1.5 : 1
+                )
         )
-        .shadow(color: AppTheme.softShadow(for: colorScheme), radius: 4, y: 1)
+        .shadow(
+            color: isQuickAddFocused
+            ? AppTheme.accent.opacity(colorScheme == .light ? 0.08 : 0.16)
+            : AppTheme.softShadow(for: colorScheme),
+            radius: isQuickAddFocused ? 6 : 4,
+            y: isQuickAddFocused ? 2 : 1
+        )
+        .animation(AppTheme.springInteractive, value: isQuickAddFocused)
     }
 
     private func dueChip(title: String, target: TaskStore.DueOverride) -> some View {
@@ -876,6 +895,7 @@ struct TaskListView: View {
                 AppEmptyState(
                     systemImage: "checkmark.circle",
                     title: "还没有完成记录",
+                    subtitle: "今日专注与完成的任务将沉淀在此处",
                     actionTitle: "去今天",
                     action: { viewState.selectedScreen = .todayTask }
                 )
@@ -885,7 +905,8 @@ struct TaskListView: View {
         return AnyView(
             AppEmptyState(
                 systemImage: isToday ? "sun.max" : (isLater ? "clock" : "tray"),
-                title: isToday ? "今天还没有任务" : (isLater ? "稍后还没有任务" : "还没有任务"),
+                title: isToday ? "今天没有待办任务" : (isLater ? "稍后清单为空" : "收集箱暂无待办"),
+                subtitle: isToday ? "尽情专注于当下，或在上方添加新的计划" : (isLater ? "安排未来的事项，保持今天从容清爽" : "随手记录闪现的灵感，稍后再行整理"),
                 actionTitle: "添加任务",
                 action: { DispatchQueue.main.async { isQuickAddFocused = true } },
                 secondaryActionTitle: "开始专注",
