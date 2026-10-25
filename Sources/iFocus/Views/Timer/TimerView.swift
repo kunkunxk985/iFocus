@@ -50,54 +50,55 @@ struct TimerView: View {
         return timerStore.isRunning ? "\(base)中" : base
     }
 
-    /// One control: the label enters full-screen focus; the chevron holds the
-    /// quieter alternatives so the stage corner is not three similar icons.
+    /// Direct entry points for stage presentation modes: compact window and full-screen immersion.
     private var focusEntry: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    immersiveMode.toggle()
+                }
+            } label: {
+                Text(immersiveMode ? "恢复视窗" : "精简视窗")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.9))
+                    )
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                    )
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(SoftScaleButtonStyle())
+            .help(immersiveMode ? "恢复完整视窗" : "精简视窗：只保留计时环与控制")
+            .accessibilityLabel(immersiveMode ? "恢复视窗" : "精简视窗")
+
             Button {
                 NotificationCenter.default.post(name: AppNavigation.toggleFocusMode, object: nil)
             } label: {
                 Text("全屏沉浸")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                    .padding(.leading, 12)
-                    .padding(.trailing, 6)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.9))
+                    )
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                    )
+                    .contentShape(Capsule())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SoftScaleButtonStyle())
             .help("全屏沉浸模式 (⌥⌘F)")
             .accessibilityLabel("全屏沉浸")
-
-            Menu {
-                Button("迷你小窗") {
-                    NotificationCenter.default.post(name: AppNavigation.toggleMiniTimer, object: nil)
-                }
-                Button(immersiveMode ? "恢复完整视图" : "精简视图") {
-                    withAnimation(.easeInOut(duration: 0.22)) {
-                        immersiveMode.toggle()
-                    }
-                }
-            } label: {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                    .frame(width: 22, height: 26)
-                    .contentShape(Rectangle())
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("迷你小窗或精简视图")
-            .accessibilityLabel("更多视图方式")
         }
-        .background(
-            Capsule()
-                .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.9))
-        )
-        .overlay(
-            Capsule()
-                .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
-        )
     }
 
     /// Shown after a count-up stopped at the cap: the time is logged, one click continues.
@@ -168,8 +169,9 @@ struct TimerView: View {
                                         Capsule()
                                             .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
                                     )
+                                    .contentShape(Capsule())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(SoftScaleButtonStyle())
                             .help("退出全屏沉浸 (Esc)")
                             .accessibilityLabel("退出全屏沉浸")
                         } else {

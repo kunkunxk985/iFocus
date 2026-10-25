@@ -116,6 +116,21 @@ final class WindowStateTests: XCTestCase {
         NotificationCenter.default.removeObserver(sub)
     }
 
+    func testAppNavigationToggleFocusModeNotification() {
+        let exp = expectation(description: "Toggle focus mode notification received")
+        let sub = NotificationCenter.default.addObserver(
+            forName: AppNavigation.toggleFocusMode,
+            object: nil,
+            queue: .main
+        ) { _ in
+            exp.fulfill()
+        }
+
+        NotificationCenter.default.post(name: AppNavigation.toggleFocusMode, object: nil)
+        wait(for: [exp], timeout: 1.0)
+        NotificationCenter.default.removeObserver(sub)
+    }
+
     func testAppThemeHeaderHeight() {
         XCTAssertEqual(AppTheme.topHeaderHeight, 48)
     }
