@@ -48,6 +48,7 @@ struct TaskListView: View {
     @State private var isSelecting = false
     @State private var selectedIDs: Set<UUID> = []
     @State private var activeChip: TaskListChip = .all
+    @State private var isTodayCompletedExpanded = false
     @FocusState private var isQuickAddFocused: Bool
     @FocusState private var isSearchFocused: Bool
     @State private var searchText = ""
@@ -168,6 +169,11 @@ struct TaskListView: View {
     private var dueTodayTasks: [FocusTask] {
         guard viewState.selectedScreen == .todayTask else { return incompleteFiltered }
         return incompleteFiltered.filter { !$0.isOverdue }
+    }
+    
+    private var completedTodayTasks: [FocusTask] {
+        guard viewState.selectedScreen == .todayTask else { return [] }
+        return taskStore.completedTodayTasks.filter { matchesChip($0) && matchesSearch($0) }
     }
     
     private struct ListChipCounts {
@@ -570,173 +576,139 @@ struct TaskListView: View {
     }
     
     private var addTaskSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            ? AppTheme.elevatedBackground(for: colorScheme)
-                            : AppTheme.accent.opacity(colorScheme == .light ? 0.12 : 0.20)
-                        )
-                        .frame(width: 26, height: 26)
-                    Image(systemName: "plus")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(
-                            taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            ? AppTheme.secondaryText(for: colorScheme).opacity(0.60)
-                            : AppTheme.accent
-                        )
-                }
-                .animation(AppTheme.springInteractive, value: taskStore.newTaskTitle.isEmpty)
-                
+                Image(systemName: "plus")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(
+                        isQuickAddFocused || !taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? AppTheme.accent
+                        : AppTheme.secondaryText(for: colorScheme).opacity(0.55)
+                    )
+                    .frame(width: 20, height: 20)
+
                 TextField(placeholderText, text: $taskStore.newTaskTitle)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13.5, weight: .regular))
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
                     .focused($isQuickAddFocused)
                     .onExitCommand {
                         isQuickAddFocused = false
                     }
-                    .onSubmit { addTask(openEditor: false) }
-                
-                HStack(spacing: 7) {
-                    Button(action: { addTask(openEditor: false) }) {
-                        HStack(spacing: 3.5) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 11, weight: .bold))
+                    .onSubmit {
+                        let openDetails = NSEvent.modifierFlags.contains(.option)
+                        addTask(openEditor: openDetails)
+                    }
+
+                if !taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    HStack(spacing: 6) {
+                        Button(action: { addTask(openEditor: false) }) {
                             Text("添加")
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .font(.system(size: 11.5, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(AppTheme.accent))
                         }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 5.5)
-                        .background(
-                            Capsule()
-                                .fill(
-                                    taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                    ? AppTheme.accent.opacity(0.35)
-                                    : AppTheme.accent
+                        .buttonStyle(SpringScaleButtonStyle())
+                        .help("回车添加任务 (↵)")
+
+                        Button(action: { addTask(openEditor: true) }) {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                                .frame(width: 24, height: 24)
+                                .background(
+                                    Circle()
+                                        .fill(AppTheme.elevatedBackground(for: colorScheme).opacity(0.5))
                                 )
-                        )
+                        }
+                        .buttonStyle(SpringScaleButtonStyle())
+                        .keyboardShortcut(.return, modifiers: [.option])
+                        .help("添加并打开详情编辑 (⌥↵)")
                     }
-                    .buttonStyle(SpringScaleButtonStyle())
-                    .disabled(taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .help("回车添加任务")
-                    
-                    Button(action: { addTask(openEditor: true) }) {
-                        Image(systemName: "square.and.pencil")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(
-                                taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                ? AppTheme.secondaryText(for: colorScheme).opacity(0.35)
-                                : AppTheme.accent
-                            )
-                            .frame(width: 26, height: 26)
-                            .background(
-                                Circle()
-                                    .fill(AppTheme.elevatedBackground(for: colorScheme).opacity(0.75))
-                            )
-                            .overlay(
-                                Circle()
-                                    .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.75)
-                            )
-                    }
-                    .buttonStyle(SpringScaleButtonStyle())
-                    .disabled(taskStore.newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .help("添加并打开详情编辑 (备注/链接)")
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
             }
-            
-            // Due date shortcuts — integrated secondary shelf
-            HStack(spacing: 6) {
-                HStack(spacing: 3.5) {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 9.5, weight: .medium))
-                    Text("日期")
-                        .font(.system(size: 11, weight: .medium))
-                }
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.70))
-                .padding(.trailing, 2)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                        isQuickAddFocused
+                        ? AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.95 : 0.88)
+                        : Color.primary.opacity(colorScheme == .light ? 0.025 : 0.04)
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(
+                        isQuickAddFocused
+                        ? AppTheme.accent.opacity(colorScheme == .light ? 0.45 : 0.55)
+                        : Color.clear,
+                        lineWidth: 1
+                    )
+            )
+            .shadow(
+                color: isQuickAddFocused
+                ? AppTheme.accent.opacity(colorScheme == .light ? 0.12 : 0.22)
+                : Color.clear,
+                radius: isQuickAddFocused ? 8 : 0,
+                y: isQuickAddFocused ? 2 : 0
+            )
 
+            // Due date shortcuts — minimal borderless shelf
+            HStack(spacing: 6) {
                 dueChip(title: "今天", target: .today)
                 dueChip(title: "明天", target: .tomorrow)
                 dueChip(title: "稍后", target: .later)
                 dueChip(title: "收集箱", target: .inbox)
+
                 Spacer(minLength: 0)
 
                 if isQuickAddFocused {
                     Text("↵ 保存 · ⌥↵ 详情")
-                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.60))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.50))
                         .transition(.opacity)
                 }
             }
-            .padding(.leading, 3)
-            .padding(.top, 2)
+            .padding(.horizontal, 4)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(AppTheme.cardBackground(for: colorScheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(
-                    isQuickAddFocused
-                    ? AppTheme.accent.opacity(colorScheme == .light ? 0.35 : 0.45)
-                    : AppTheme.separatorLow(for: colorScheme),
-                    lineWidth: isQuickAddFocused ? 1.5 : 1
-                )
-        )
-        .shadow(
-            color: isQuickAddFocused
-            ? AppTheme.accent.opacity(colorScheme == .light ? 0.08 : 0.16)
-            : AppTheme.softShadow(for: colorScheme),
-            radius: isQuickAddFocused ? 6 : 4,
-            y: isQuickAddFocused ? 2 : 1
-        )
         .animation(AppTheme.springInteractive, value: isQuickAddFocused)
+        .animation(AppTheme.springInteractive, value: taskStore.newTaskTitle.isEmpty)
     }
 
     private func dueChip(title: String, target: TaskStore.DueOverride) -> some View {
         let selected = activeDueTarget == target
         return Button {
             withAnimation(AppTheme.springInteractive) {
-                dueOverride = (target == defaultDueTarget) ? nil : target
+                dueOverride = (target == defaultDueTarget || dueOverride == target) ? nil : target
             }
         } label: {
-            HStack(spacing: 3) {
+            HStack(spacing: 3.5) {
                 if selected {
                     Circle()
                         .fill(AppTheme.accent)
                         .frame(width: 4, height: 4)
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
                 }
                 Text(title)
-                    .font(.system(size: 11, weight: selected ? .semibold : .medium))
+                    .font(.system(size: 11, weight: selected ? .semibold : .regular))
                     .foregroundColor(
                         selected
                         ? AppTheme.accent
-                        : AppTheme.secondaryText(for: colorScheme).opacity(0.85)
+                        : AppTheme.secondaryText(for: colorScheme).opacity(colorScheme == .light ? 0.65 : 0.60)
                     )
             }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 3.5)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
             .background(
                 Capsule()
                     .fill(
                         selected
-                        ? AppTheme.accent.opacity(colorScheme == .light ? 0.12 : 0.20)
-                        : AppTheme.elevatedBackground(for: colorScheme).opacity(0.6)
-                    )
-            )
-            .overlay(
-                Capsule()
-                    .strokeBorder(
-                        selected
-                        ? AppTheme.accent.opacity(0.25)
-                        : AppTheme.separatorLow(for: colorScheme),
-                        lineWidth: 0.75
+                        ? AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.18)
+                        : Color.clear
                     )
             )
         }
@@ -760,20 +732,11 @@ struct TaskListView: View {
 
     private var taskListSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if currentTasks.isEmpty {
+            if viewState.selectedScreen == .todayTask {
+                todayTaskList
+            } else if currentTasks.isEmpty {
                 emptyState
                     .frame(maxWidth: .infinity, minHeight: emptyStateMinHeight, alignment: .center)
-            } else if viewState.selectedScreen == .todayTask {
-                if !overdueTasks.isEmpty {
-                    taskSection(title: "已逾期", tint: AppTheme.danger, tasks: overdueTasks)
-                }
-                if !dueTodayTasks.isEmpty {
-                    taskSection(
-                        title: overdueTasks.isEmpty ? "今日待办" : "今天",
-                        tint: AppTheme.warning,
-                        tasks: dueTodayTasks
-                    )
-                }
             } else if viewState.selectedScreen == .completedTask {
                 ForEach(currentTasks) { task in
                     taskRow(task)
@@ -781,6 +744,116 @@ struct TaskListView: View {
             } else {
                 reorderableTaskStack(tasks: incompleteFiltered + completedFiltered)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var todayTaskList: some View {
+        let isSearching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let isFilteredEmpty = !baseTasks.isEmpty && currentTasks.isEmpty
+
+        if isSearching && currentTasks.isEmpty {
+            emptyState
+                .frame(maxWidth: .infinity, minHeight: emptyStateMinHeight, alignment: .center)
+        } else if isFilteredEmpty {
+            emptyState
+                .frame(maxWidth: .infinity, minHeight: emptyStateMinHeight, alignment: .center)
+        } else if overdueTasks.isEmpty && dueTodayTasks.isEmpty {
+            if !taskStore.completedTodayTasks.isEmpty {
+                todayEmptyHero(
+                    title: "今日待办已悉数达成",
+                    subtitle: "享受从容当下"
+                )
+                todayCompletedSection
+            } else {
+                todayEmptyHero(
+                    title: "享受从容当下",
+                    subtitle: "在上方添加今天的第一项任务，或开启一段专注",
+                    minHeight: emptyStateMinHeight
+                )
+            }
+        } else {
+            if !overdueTasks.isEmpty {
+                taskSection(title: "已逾期", tint: AppTheme.danger, tasks: overdueTasks)
+            }
+            if !dueTodayTasks.isEmpty {
+                taskSection(
+                    title: overdueTasks.isEmpty ? "今日待办" : "今天",
+                    tint: AppTheme.warning,
+                    tasks: dueTodayTasks
+                )
+            }
+            todayCompletedSection
+        }
+    }
+
+    private func todayEmptyHero(
+        title: String,
+        subtitle: String,
+        minHeight: CGFloat? = nil
+    ) -> some View {
+        VStack(spacing: 5) {
+            Image(systemName: "sun.max")
+                .font(.system(size: 38, weight: .ultraLight))
+                .foregroundColor(AppTheme.warning.opacity(0.85))
+                .padding(.bottom, 6)
+            
+            Text(title)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(AppTheme.primaryText(for: colorScheme).opacity(0.92))
+            
+            Text(subtitle)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.70))
+        }
+        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .center)
+        .padding(.top, minHeight == nil ? 40 : 0)
+        .padding(.bottom, minHeight == nil ? 24 : 0)
+        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+    }
+
+    @ViewBuilder
+    private var todayCompletedSection: some View {
+        let completed = completedTodayTasks
+        if !completed.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Button {
+                    AppHaptics.buttonClick()
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+                        isTodayCompletedExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("今天已完成")
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        Text("(\(completed.count))")
+                            .font(.system(size: 11.5, weight: .medium, design: .rounded).monospacedDigit())
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.75))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9.5, weight: .semibold))
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.6))
+                            .rotationEffect(.degrees(isTodayCompletedExpanded ? -180 : 0))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 2)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isTodayCompletedExpanded ? "折叠今天已完成任务，共\(completed.count)项" : "展开今天已完成任务，共\(completed.count)项")
+                .accessibilityAddTraits(.isButton)
+
+                if isTodayCompletedExpanded {
+                    VStack(spacing: 8) {
+                        ForEach(completed) { task in
+                            taskRow(task)
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+            .padding(.top, (overdueTasks.isEmpty && dueTodayTasks.isEmpty) ? 0 : 8)
         }
     }
     

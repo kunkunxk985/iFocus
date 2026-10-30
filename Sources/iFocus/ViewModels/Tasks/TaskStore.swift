@@ -187,6 +187,24 @@ class TaskStore: ObservableObject {
         tasks.filter { $0.isCompleted }
     }
     
+    /// Tasks completed on the current calendar day that belong to the Today view
+    /// (completed today with due date or start date on or before today).
+    var completedTodayTasks: [FocusTask] {
+        completedTodayTasks(relativeTo: Date(), calendar: .current)
+    }
+
+    /// Deterministic query relative to a reference date and calendar.
+    func completedTodayTasks(relativeTo now: Date = Date(), calendar: Calendar = .current) -> [FocusTask] {
+        let today = calendar.startOfDay(for: now)
+        return tasks.filter { task in
+            guard task.isCompleted else { return false }
+            let completedToday = task.completedAt.map { calendar.isDate($0, inSameDayAs: now) } ?? false
+            let dueForToday = (task.dueDate.map { calendar.startOfDay(for: $0) <= today } ?? false)
+                || (task.startDate.map { calendar.startOfDay(for: $0) <= today } ?? false)
+            return completedToday && dueForToday
+        }
+    }
+    
     var totalCompletedPomodoros: Int {
         tasks.reduce(0) { $0 + $1.completedPomodoros }
     }
