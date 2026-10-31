@@ -69,85 +69,124 @@ enum AnalyticsCards {
         let pomodoroCount = model.range == .today ? model.completedPomodoros : model.rangeTotals.pomodoros
         let goalDone = model.range == .today && model.goalRemaining == 0 && model.completedPomodoros > 0
 
-        return GeometryReader { geo in
-            let ringSize = min(104, max(84, (geo.size.width - 48) / 3.2))
-            let line = max(8, ringSize * 0.095)
-
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top, spacing: 12) {
-                    UnifiedAvatarView(
-                        path: avatarPath,
-                        colorIndex: avatarColorIndex,
-                        username: displayName,
-                        size: 52
-                    )
-                    .overlay(alignment: .bottomTrailing) {
-                        if goalDone {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(AppTheme.accent)
-                                .background(Circle().fill(AppTheme.cardBackground(for: colorScheme)).padding(-2))
-                                .offset(x: 4, y: 4)
-                        }
+        return VStack(alignment: .leading, spacing: 18) {
+            // Top Header: Integrated Avatar, Username & Goal Status Badge
+            HStack(alignment: .center, spacing: 12) {
+                UnifiedAvatarView(
+                    path: avatarPath,
+                    colorIndex: avatarColorIndex,
+                    username: displayName,
+                    size: 46
+                )
+                .overlay(alignment: .bottomTrailing) {
+                    if goalDone {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(AppTheme.accent)
+                            .background(Circle().fill(AppTheme.cardBackground(for: colorScheme)).padding(-2))
+                            .offset(x: 3, y: 3)
                     }
+                }
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(displayName)
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                        Text("累计 \(FocusStats.formatTotalMinutes(totalMinutesAllTime)) · 连续 \(model.streakCurrent) 天")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(displayName)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                    Text("累计 \(FocusStats.formatTotalMinutes(totalMinutesAllTime)) · 连续 \(model.streakCurrent) 天")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                }
+
+                Spacer(minLength: 0)
+
+                let hasMotivation = goalDone || (model.range == .today && model.goalRemaining > 0) || model.headlineInsight != nil
+                if hasMotivation {
+                    HStack(spacing: 5) {
+                        if goalDone {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(AppTheme.accent)
+                        }
                         motivationalLine(model: model, goalDone: goalDone, colorScheme: colorScheme)
                     }
-                    Spacer(minLength: 0)
-                }
-
-                HStack(spacing: 20) {
-                    AnalyticsProgressRing(
-                        progress: pomodoroProgress,
-                        size: ringSize,
-                        lineWidth: line,
-                        tint: AppTheme.accent,
-                        title: "\(pomodoroCount)",
-                        subtitle: model.range == .today ? "今日番茄" : "\(model.range.rawValue)番茄",
-                        celebrate: goalDone,
-                        allowPulse: decorativeMotion
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(
+                                goalDone
+                                ? AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.18)
+                                : AppTheme.secondaryText(for: colorScheme).opacity(colorScheme == .light ? 0.08 : 0.12)
+                            )
                     )
-                    AnalyticsProgressRing(
-                        progress: focusProgress,
-                        size: ringSize,
-                        lineWidth: line,
-                        tint: Color(hex: "#14B8A6"),
-                        title: FocusStats.formatTotalMinutes(focusMinutes)
-                            .replacingOccurrences(of: "分钟", with: "分")
-                            .replacingOccurrences(of: "小时", with: "时"),
-                        subtitle: model.range == .today ? "今日专注" : "专注时长",
-                        celebrate: focusProgress >= 0.999,
-                        allowPulse: decorativeMotion && focusProgress >= 0.85
-                    )
-                }
-                .frame(maxWidth: .infinity)
-
-                if !model.recentSessions.isEmpty {
-                    recentFocusStrip(model: model, colorScheme: colorScheme)
-                }
-
-                if model.range == .today {
-                    focusCallToAction(goalDone: goalDone, colorScheme: colorScheme)
                 }
             }
-            .padding(18)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
-            .overlay {
-                if goalDone {
-                    RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
-                        .strokeBorder(AppTheme.accent.opacity(0.35), lineWidth: 1.2)
+
+            // Apple Fitness Core Board: Left Concentric Dual Rings + Right 3 Monospaced Metrics
+            HStack(alignment: .center, spacing: 22) {
+                ConcentricDualRingView(
+                    pomodoroProgress: pomodoroProgress,
+                    durationProgress: focusProgress,
+                    accentColor: AppTheme.accent,
+                    ringSize: 106,
+                    lineWidth: 6.5,
+                    ringSpacing: 3.5,
+                    decorativeMotion: decorativeMotion,
+                    celebrate: goalDone
+                )
+
+                Rectangle()
+                    .fill(AppTheme.separatorLow(for: colorScheme))
+                    .frame(width: 1, height: 60)
+                    .opacity(0.5)
+
+                HStack(spacing: 16) {
+                    HeroMetricColumn(
+                        label: "专注时长",
+                        value: FocusStats.formatTotalMinutes(focusMinutes),
+                        icon: "clock.fill",
+                        tint: AppTheme.accent.opacity(0.85),
+                        sublabel: model.range == .today ? "今日累计" : "\(model.range.rawValue)累计"
+                    )
+
+                    HeroMetricColumn(
+                        label: "达成番茄",
+                        value: "\(pomodoroCount) 个",
+                        icon: "timer",
+                        tint: AppTheme.accent,
+                        sublabel: model.range == .today
+                            ? (model.goalRemaining > 0 ? "目标 \(model.dailyGoal) 个 · 还差 \(model.goalRemaining) 个" : "今日目标已达成")
+                            : "\(model.range.rawValue)完成"
+                    )
+
+                    HeroMetricColumn(
+                        label: "连续天数",
+                        value: "\(model.streakCurrent) 天",
+                        icon: "flame.fill",
+                        tint: AppTheme.accent.opacity(0.70),
+                        sublabel: model.streakCurrent > 0 ? "保持专注势头" : "今天开启新纪录"
+                    )
                 }
+            }
+            .padding(.vertical, 4)
+
+            if !model.recentSessions.isEmpty {
+                recentFocusStrip(model: model, colorScheme: colorScheme)
+            }
+
+            if model.range == .today {
+                focusCallToAction(goalDone: goalDone, colorScheme: colorScheme)
             }
         }
-        .frame(height: goalDone || !model.recentSessions.isEmpty ? 292 : 252)
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(SoftCardBackground(cornerRadius: AppTheme.cornerRadiusCard))
+        .overlay {
+            if goalDone {
+                RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard, style: .continuous)
+                    .strokeBorder(AppTheme.accent.opacity(0.35), lineWidth: 1.2)
+            }
+        }
     }
 
     @ViewBuilder
@@ -199,10 +238,6 @@ enum AnalyticsCards {
                         Capsule()
                             .fill(AppTheme.elevatedBackground(for: colorScheme).opacity(0.65))
                     )
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.8)
-                    )
                 }
                 Spacer(minLength: 0)
             }
@@ -230,12 +265,6 @@ enum AnalyticsCards {
                         ? AppTheme.accent.opacity(colorScheme == .light ? 0.10 : 0.18)
                         : AppTheme.accent
                     )
-            }
-            .overlay {
-                if goalDone {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(AppTheme.accent.opacity(0.35), lineWidth: 1)
-                }
             }
         }
         .buttonStyle(.plain)
@@ -363,6 +392,15 @@ enum AnalyticsCards {
         }
     }
 
+    private static func trendTitle(for range: AnalyticsTimeRange) -> String {
+        switch range {
+        case .today: return "今天趋势"
+        case .days7: return "7天趋势"
+        case .days30: return "30天趋势"
+        case .month: return "本月趋势"
+        }
+    }
+
     static func weeklyCard(model: AnalyticsDashboardModel, colorScheme: ColorScheme) -> some View {
         let dayCount: Int = {
             switch model.range {
@@ -378,7 +416,7 @@ enum AnalyticsCards {
                 return max(1, days + 1)
             }
         }()
-        return AnalyticsCard(title: "\(model.range.rawValue)趋势", icon: "calendar") {
+        return AnalyticsCard(title: trendTitle(for: model.range), icon: "calendar") {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 16) {
                     weekMeta("番茄", "\(model.rangeTotals.pomodoros)", colorScheme)
@@ -607,3 +645,116 @@ let sessionDateFormatter: DateFormatter = {
     f.locale = Locale(identifier: "zh_CN")
     return f
 }()
+
+// MARK: - ConcentricDualRingView
+
+/// Apple Fitness style concentric dual progress ring with calm breathing animation.
+struct ConcentricDualRingView: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let pomodoroProgress: Double
+    let durationProgress: Double
+    var accentColor: Color = AppTheme.accent
+    var ringSize: CGFloat = 106
+    var lineWidth: CGFloat = 6.5
+    var ringSpacing: CGFloat = 3.5
+    var decorativeMotion: Bool = true
+    var celebrate: Bool = false
+    @State private var isBreathing = false
+
+    private var clampedPomodoro: CGFloat { CGFloat(min(max(pomodoroProgress, 0), 1.0)) }
+    private var clampedDuration: CGFloat { CGFloat(min(max(durationProgress, 0), 1.0)) }
+    private var innerRingSize: CGFloat { max(10, ringSize - (lineWidth + ringSpacing) * 2) }
+
+    var body: some View {
+        ZStack {
+            if celebrate {
+                Circle()
+                    .fill(RadialGradient(colors: [accentColor.opacity(colorScheme == .light ? 0.20 : 0.30), accentColor.opacity(0.04), .clear], center: .center, startRadius: ringSize * 0.15, endRadius: ringSize * 0.65))
+                    .frame(width: ringSize * 1.25, height: ringSize * 1.25)
+            }
+            // Outer Ring: Pomodoro Goal
+            Circle()
+                .stroke(accentColor.opacity(0.12), lineWidth: lineWidth)
+                .frame(width: ringSize, height: ringSize)
+            if clampedPomodoro > 0 {
+                Circle()
+                    .trim(from: 0, to: clampedPomodoro)
+                    .stroke(LinearGradient(colors: [accentColor.opacity(0.85), accentColor], startPoint: .topLeading, endPoint: .bottomTrailing), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: ringSize, height: ringSize)
+                    .shadow(color: accentColor.opacity(celebrate ? 0.35 : 0.18), radius: celebrate ? 5 : 2.5, x: 0, y: 1)
+            }
+            // Inner Ring: Focus Duration Goal
+            Circle()
+                .stroke(accentColor.opacity(0.12), lineWidth: lineWidth)
+                .frame(width: innerRingSize, height: innerRingSize)
+            if clampedDuration > 0 {
+                Circle()
+                    .trim(from: 0, to: clampedDuration)
+                    .stroke(LinearGradient(colors: [accentColor.opacity(0.65), accentColor.opacity(0.95)], startPoint: .topTrailing, endPoint: .bottomLeading), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: innerRingSize, height: innerRingSize)
+                    .shadow(color: accentColor.opacity(celebrate ? 0.25 : 0.12), radius: celebrate ? 4 : 2, x: 0, y: 1)
+            }
+            // Center Glyph
+            Image(systemName: celebrate ? "checkmark.seal.fill" : "flame.fill")
+                .font(.system(size: max(12, ringSize * (celebrate ? 0.16 : 0.13)), weight: celebrate ? .bold : .semibold))
+                .foregroundColor(celebrate ? accentColor : accentColor.opacity(0.55))
+        }
+        .frame(width: ringSize, height: ringSize)
+        .scaleEffect(decorativeMotion && isBreathing ? 1.025 : 1.0)
+        .opacity(decorativeMotion && isBreathing ? 1.0 : 0.94)
+        .animation(AppTheme.springInteractive, value: clampedPomodoro)
+        .animation(AppTheme.springInteractive, value: clampedDuration)
+        .onAppear { updateBreathing() }
+        .onChange(of: decorativeMotion) { _ in updateBreathing() }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("专注进度双圆环：番茄达成率 \(Int(clampedPomodoro * 100))%，时长达成率 \(Int(clampedDuration * 100))%")
+    }
+
+    private func updateBreathing() {
+        guard decorativeMotion else { isBreathing = false; return }
+        withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
+            isBreathing = true
+        }
+    }
+}
+
+// MARK: - HeroMetricColumn
+
+/// Individual metric column for the top Apple Fitness dashboard.
+struct HeroMetricColumn: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let label: String
+    let value: String
+    let icon: String
+    var tint: Color = AppTheme.accent
+    var sublabel: String? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(tint)
+                Text(label)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            }
+            Text(value)
+                .font(.system(size: 24, weight: .bold, design: .rounded).monospacedDigit())
+                .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            if let sublabel {
+                Text(sublabel)
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+

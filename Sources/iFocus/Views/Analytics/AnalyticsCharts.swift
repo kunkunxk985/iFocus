@@ -88,9 +88,10 @@ struct TodayHourChart: View {
                 y: .value("分钟", item.minutes)
             )
             .foregroundStyle(AppTheme.accent)
-            .cornerRadius(3, style: .continuous)
+            .cornerRadius(4, style: .continuous)
         }
         .chartXScale(domain: 0...23)
+        .chartYScale(domain: 0...max(60, hourMinutes.max() ?? 0))
         .chartXAxis {
             AxisMarks(values: [0, 6, 12, 18, 23]) { value in
                 AxisValueLabel {
@@ -104,8 +105,8 @@ struct TodayHourChart: View {
         }
         .chartYAxis {
             AxisMarks(position: .leading) { value in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-                    .foregroundStyle(AppTheme.separatorLow(for: colorScheme))
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+                    .foregroundStyle(AppTheme.separatorLow(for: colorScheme).opacity(0.4))
                 AxisValueLabel {
                     if let m = value.as(Int.self) {
                         Text("\(m)")
@@ -124,12 +125,14 @@ struct WeeklyFocusChart: View {
     let sessions: [FocusSession]
     var dayCount: Int = 7
     @Environment(\.colorScheme) private var colorScheme
+    @State private var hoveredDay: DayFocus? = nil
 
     struct DayFocus: Identifiable {
         var id: Date { date }
         let date: Date
         let label: String
         let minutes: Int
+        let pomodoros: Int
     }
 
     private var strideDays: Int {
@@ -151,7 +154,7 @@ struct WeeklyFocusChart: View {
         return formatter
     }
 
-    private var chartData: [DayFocus] {
+    private var weeklyFocusData: [DayFocus] {
         let calendar = Calendar.current
         var data: [DayFocus] = []
         let today = calendar.startOfDay(for: Date())
@@ -161,15 +164,23 @@ struct WeeklyFocusChart: View {
         for i in (0..<days).reversed() {
             guard let day = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
             let daySessions = sessions.filter { calendar.isDate($0.timestamp, inSameDayAs: day) }
-            let mins = daySessions.reduce(0) { $0 + $1.durationMinutes }
-            data.append(DayFocus(date: day, label: formatter.string(from: day), minutes: mins))
+            let mins = daySessions.reduce(0) { $0 + max(0, $1.durationMinutes) }
+            let pomos = daySessions.count
+            data.append(DayFocus(date: day, label: formatter.string(from: day), minutes: mins, pomodoros: pomos))
         }
         return data
     }
 
+    private var chartData: [DayFocus] { weeklyFocusData }
+
     var body: some View {
         let formatter = dateFormatter
         Chart {
+            if let hovered = hoveredDay {
+                RuleMark(x: .value("选中日期", hovered.date, unit: .day))
+                    .foregroundStyle(AppTheme.accent.opacity(0.16))
+                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
+            }
             ForEach(chartData) { item in
                 BarMark(
                     x: .value("日期", item.date, unit: .day),
@@ -177,12 +188,13 @@ struct WeeklyFocusChart: View {
                 )
                 .foregroundStyle(AppTheme.accent)
                 .cornerRadius(4, style: .continuous)
+                .opacity(hoveredDay == nil || hoveredDay?.id == item.id ? 1.0 : 0.45)
             }
         }
         .chartYAxis {
             AxisMarks(position: .leading) { value in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-                    .foregroundStyle(AppTheme.separatorLow(for: colorScheme))
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+                    .foregroundStyle(AppTheme.separatorLow(for: colorScheme).opacity(0.4))
                 AxisValueLabel {
                     if let m = value.as(Int.self) {
                         Text("\(m)")
@@ -203,5 +215,131 @@ struct WeeklyFocusChart: View {
                 }
             }
         }
+        .chartOverlay { proxy in
+            GeometryReader { geo in
+                ZStack(alignment: .topLeading) {
+                    Rectangle()
+                        .fill(Color.clear)
+                        .contentShape(Rectangle())
+                        .onContinuousHover { phase in
+                            handleHover(phase: phase, proxy: proxy, geo: geo)
+                        }
+
+                    if let hovered = hoveredDay {
+                        let pt = tooltipPosition(for: hovered, proxy: proxy, geo: geo)
+                        tooltipView(for: hovered)
+                            .position(pt)
+                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                            .allowsHitTesting(false)
+                    }
+                }
+            }
+        }
+    }
+
+    private func handleHover(phase: HoverPhase, proxy: ChartProxy, geo: GeometryProxy) {
+        switch phase {
+        case .active(let location):
+            let plot = resolvePlotArea(proxy: proxy, geo: geo)
+            guard plot.contains(location) else {
+                if hoveredDay != nil {
+                    withAnimation(AppTheme.springInteractive) { hoveredDay = nil }
+                }
+                return
+            }
+            let relX = location.x - plot.origin.x
+            guard let date = proxy.value(atX: relX, as: Date.self) else { return }
+            let cal = Calendar.current
+            let matched = chartData.first { cal.isDate($0.date, inSameDayAs: date) }
+                ?? chartData.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
+            if let newDay = matched, hoveredDay?.id != newDay.id {
+                withAnimation(AppTheme.springInteractive) {
+                    hoveredDay = newDay
+                }
+            }
+        case .ended:
+            if hoveredDay != nil {
+                withAnimation(AppTheme.springInteractive) {
+                    hoveredDay = nil
+                }
+            }
+        }
+    }
+
+    private func tooltipView(for item: DayFocus) -> some View {
+        Text(Self.formatTooltip(date: item.date, minutes: item.minutes, pomodoros: item.pomodoros))
+            .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
+            .foregroundColor(AppTheme.primaryText(for: colorScheme))
+            .padding(.horizontal, 11)
+            .padding(.vertical, 5)
+            .background(
+                Capsule()
+                    .fill(AppTheme.cardBackground(for: colorScheme))
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(AppTheme.separatorLow(for: colorScheme).opacity(colorScheme == .light ? 0.8 : 0.4), lineWidth: 0.8)
+            )
+            .shadow(
+                color: Color.black.opacity(colorScheme == .light ? 0.08 : 0.38),
+                radius: 5,
+                x: 0,
+                y: 2
+            )
+    }
+
+    private func tooltipPosition(for item: DayFocus, proxy: ChartProxy, geo: GeometryProxy) -> CGPoint {
+        let plot = resolvePlotArea(proxy: proxy, geo: geo)
+        let barX = proxy.position(forX: item.date) ?? (plot.width / 2)
+        let rawCenterX = plot.origin.x + barX
+        let minMargin: CGFloat = 105
+        let clampedX: CGFloat
+        if geo.size.width > minMargin * 2 {
+            clampedX = min(max(rawCenterX, minMargin), geo.size.width - minMargin)
+        } else {
+            clampedX = geo.size.width / 2
+        }
+        let topY: CGFloat = plot.origin.y + 14
+        return CGPoint(x: clampedX, y: topY)
+    }
+
+    private func resolvePlotArea(proxy: ChartProxy, geo: GeometryProxy) -> CGRect {
+        #if compiler(>=5.9)
+        if #available(macOS 14.0, *) {
+            if let anchor = proxy.plotFrame {
+                return geo[anchor]
+            }
+        }
+        #endif
+        return geo[proxy.plotAreaFrame]
+    }
+
+    static func formatTooltip(
+        date: Date,
+        minutes: Int,
+        pomodoros: Int,
+        calendar: Calendar = .current
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "M月d日"
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        let datePart = formatter.string(from: date)
+
+        let safeMinutes = max(0, minutes)
+        let timePart: String
+        if safeMinutes < 60 {
+            timePart = "\(safeMinutes)分"
+        } else {
+            let h = safeMinutes / 60
+            let m = safeMinutes % 60
+            if m == 0 {
+                timePart = "\(h)小时"
+            } else {
+                timePart = "\(h)小时\(m)分"
+            }
+        }
+        return "\(datePart) · \(timePart) · \(max(0, pomodoros))个番茄"
     }
 }

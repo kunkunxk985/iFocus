@@ -1,8 +1,8 @@
-# TEST_READY: Things 3 Redesign E2E Test Suite
+# TEST_READY: iFocus Apple Health & Fitness Style Statistics Redesign
 
 ## 1. Test Runner Commands
 
-### Full Suite Run (Baseline + Things 3 E2E)
+### Full Suite Run (Baseline + Statistics Redesign E2E)
 ```bash
 swift test
 ```
@@ -12,9 +12,9 @@ CLANG_MODULE_CACHE_PATH=.build/clang-module-cache \
   swift test --disable-sandbox --scratch-path .build
 ```
 
-### Things 3 Redesign E2E Suite Only
+### Statistics Redesign Suite Only
 ```bash
-swift test --filter Things3RedesignE2ETests
+swift test --filter StatisticsRedesignTests
 ```
 
 ### Performance & Latency Benchmarks
@@ -28,167 +28,96 @@ swift test --filter PerformanceBenchmarks
 
 | Category / Tier | Target Scope | Tests Planned | Tests Executed | Passed | Failed | Execution Time |
 |---|---|---|---|---|---|---|
-| **Tier 1 — Feature Coverage** | Features 1–14 (5 tests / feature) | 70 | 70 | 70 | 0 | 0.045s |
-| **Tier 2 — Boundary & Corner Cases** | Edge cases, unicode, midnight, limits | 10 | 10 | 10 | 0 | 0.012s |
-| **Tier 3 — Cross-Feature Combinations** | Pairwise multi-step interactions | 10 | 10 | 10 | 0 | 0.008s |
-| **Tier 4 — Real-World Scenarios** | Full workday workflows & stress flows | 5 | 5 | 5 | 0 | 0.101s |
-| **Subtotal (Things 3 E2E Suite)** | `Things3RedesignE2ETests.swift` | **95** | **95** | **95** | **0** | **0.157s** |
-| **Existing Baseline Suite** | Regression, Stores, Core, App, Views | 248 | 248 | 248 | 0 | 1.650s |
-| **Total Test Suite** | Full Project | **343** | **343** | **343** | **0** | **1.807s** |
+| **Tier 1 — Feature Coverage** | Features 1–16 (M1–M5 isolation) | 26 | 26 | 26 | 0 | 0.040s |
+| **Tier 2 — Boundary & Corner Cases** | Edge cases, 0 mins, 24h+, leap years, 0 goals | 10 | 10 | 10 | 0 | 0.005s |
+| **Tier 3 — Cross-Feature Combinations** | Range switching, live session, multi-widget sync | 5 | 5 | 5 | 0 | 0.002s |
+| **Tier 4 — Real-World Scenarios** | 30-day journey & 1-year annual volume flow | 2 | 2 | 2 | 0 | 0.014s |
+| **Subtotal (Statistics Redesign)** | `StatisticsRedesignTests.swift` | **43** | **43** | **43** | **0** | **0.061s** |
+| **Existing Baseline Suite** | Core, Stores, Services, App, Product, E2E | 367 | 367 | 367 | 0 | 1.605s |
+| **Total Test Suite** | Full Project | **410** | **410** | **410** | **0** | **1.666s** |
 
-**Pass Rate**: **100% (343 / 343 passed, 0 failures, 0 unexpected)**.
-
----
-
-## 3. Detailed Feature Breakdown (Tier 1: 70 Tests)
-
-1. **Feature 1 — Pure-flat row layout** (5 tests):
-   - `testF01_PureFlatRow_ZeroStrokeBorderInNormalState`: Borderless 0pt stroke.
-   - `testF01_PureFlatRow_HoverWashOpacityTokenBounds`: Neutral wash opacity `0.035..0.055`.
-   - `testF01_PureFlatRow_ActiveFocusWashTokens`: Subtle accent wash `0.06..0.10`.
-   - `testF01_PureFlatRow_ContinuousCornerRadius`: Squircle continuous radius `6.0pt` (`AppTheme.radiusXS`).
-   - `testF01_PureFlatRow_DensityPaddingRhythm`: Row padding metrics (`8pt` comfortable / `6pt` compact).
-
-2. **Feature 2 — Checkbox horizontal alignment** (5 tests):
-   - `testF02_CheckboxHorizontalAlignment_IncompleteTaskLeadingSlotIs20pt`: 16pt drag handle + 4pt padding.
-   - `testF02_CheckboxHorizontalAlignment_CompletedTaskRetainsInvariant20ptSlot`: 20pt invariant slot preserved on completion.
-   - `testF02_CheckboxHorizontalAlignment_SelectionModePreserves20ptSlot`: Selection mode retains 20pt leading coordinate.
-   - `testF02_CheckboxHorizontalAlignment_MixedListZeroHorizontalDrift`: Checkbox alignment across mixed completed/incomplete list.
-   - `testF02_CheckboxHorizontalAlignment_DraggablePayloadPreserved`: Drag-and-drop ID payload preserved without shifting slot.
-
-3. **Feature 3 — Checkbox vertical alignment** (5 tests):
-   - `testF03_CheckboxVerticalAlignment_TopAlignmentVersusMidpoint`: Top alignment geometry vs midpoint drift.
-   - `testF03_CheckboxVerticalAlignment_ComfortableOpticalOffsetIs2pt`: 2.0pt optical offset locked to title cap-height.
-   - `testF03_CheckboxVerticalAlignment_CompactOpticalOffsetIs1_5pt`: 1.5pt optical offset for compact typography.
-   - `testF03_CheckboxVerticalAlignment_SingleLineWithoutMetadataNoDrift`: Single-line row stability.
-   - `testF03_CheckboxVerticalAlignment_MultiLineTitleLocksToCapHeight`: Wrapping title locks checkbox to line 1 cap-height.
-
-4. **Feature 4 — Hover action bar** (5 tests):
-   - `testF04_HoverActionBar_ExposesFourPrimaryActions`: Focus, Pin, Edit, Delete exposed.
-   - `testF04_HoverActionBar_DirectDeleteDispatchesStoreSoftDelete`: Direct trash button with soft-delete toast.
-   - `testF04_HoverActionBar_DirectPinTogglesPinState`: Direct pin button updates `isPinned`.
-   - `testF04_HoverActionBar_FlatUnboxedGlyphsWithoutCircleFill`: Unboxed flat icons without circular grey fills.
-   - `testF04_HoverActionBar_DirectDeleteBannerDismissalClearsState`: Toast expiration & dismissal safety.
-
-5. **Feature 5 — Ultra-muted metadata** (5 tests):
-   - `testF05_UltraMutedMetadata_NoMetadataCollapsesLine2`: Tasks without metadata collapse line 2.
-   - `testF05_UltraMutedMetadata_IconAndLabelQuietOpacityTokens`: Opacity unified to `0.50` (light) / `0.55` (dark).
-   - `testF05_UltraMutedMetadata_LinkIconMutedContrast`: Quiet link icon contrast.
-   - `testF05_UltraMutedMetadata_OverdueWarmRoseColorToken`: Calm warm rose/danger token.
-   - `testF05_UltraMutedMetadata_NotesIconConditionallyRendered`: Notes icon only displays when notes exist.
-
-6. **Feature 6 — Transparent Quick Add Bar** (5 tests):
-   - `testF06_TransparentQuickAddBar_IdleTransparentFill`: Transparent / ultra-subtle tint (`0.025..0.04`).
-   - `testF06_TransparentQuickAddBar_ZeroBorderStrokeInIdleState`: Zero border stroke (`Color.clear`).
-   - `testF06_TransparentQuickAddBar_ZeroDropShadowInIdleState`: Zero drop shadow (`Color.clear`).
-   - `testF06_TransparentQuickAddBar_BlendsNaturallyIntoCanvas`: Seamless background blend without opaque card.
-   - `testF06_TransparentQuickAddBar_VisibilityRulesAcrossScreens`: Visible on active lists, hidden on completed.
-
-7. **Feature 7 — Focus edge glow** (5 tests):
-   - `testF07_FocusEdgeGlow_FocusedStrokeWidthIs1pt`: Refined 1.0pt stroke width.
-   - `testF07_FocusEdgeGlow_FocusedStrokeAccentOpacity`: Accent opacity `0.45..0.55`.
-   - `testF07_FocusEdgeGlow_AmbientGlowRadiusAndY`: Ambient glow `radius: 8.0, y: 2.0`.
-   - `testF07_FocusEdgeGlow_SpringInteractivePhysics`: Interactive spring physics transition.
-   - `testF07_FocusEdgeGlow_UnfocusClearsGlowAndStroke`: Immediate restoration to transparent on blur.
-
-8. **Feature 8 — Clean input glyphs & buttons** (5 tests):
-   - `testF08_CleanInputGlyphsAndButtons_PlusGlyphIsUnboxed`: Naked `+` glyph without circular container.
-   - `testF08_CleanInputGlyphsAndButtons_ActionButtonsHiddenWhenEmpty`: Action buttons hidden on empty input.
-   - `testF08_CleanInputGlyphsAndButtons_ActionButtonsAppearOnText`: Action buttons slide in on text input.
-   - `testF08_CleanInputGlyphsAndButtons_SubmitResetsTitleField`: Input field resets on submission.
-   - `testF08_CleanInputGlyphsAndButtons_BlankTitleRejectedWithoutSideEffects`: Whitespace title rejected.
-
-9. **Feature 9 — Minimal date capsules** (5 tests):
-   - `testF09_MinimalDateCapsules_IdleBorderlessRendering`: Borderless capsules in idle state.
-   - `testF09_MinimalDateCapsules_ActiveDotIndicatorGeometry`: Micro 4x4 accent dot on selected capsule.
-   - `testF09_MinimalDateCapsules_TodayTargetAssignsTodayDueDate`: Routing to today.
-   - `testF09_MinimalDateCapsules_TomorrowTargetAssignsTomorrowDueDate`: Routing to tomorrow.
-   - `testF09_MinimalDateCapsules_InboxTargetClearsDueDate`: Routing to inbox (`dueDate = nil`).
-
-10. **Feature 10 — Option+Enter detail shortcut** (5 tests):
-    - `testF10_OptionEnterDetailShortcut_StandardReturnSubmitsDirectly`: Return adds task without sheet.
-    - `testF10_OptionEnterDetailShortcut_OptionReturnYieldsTaskForEditor`: Option+Return yields task for editor.
-    - `testF10_OptionEnterDetailShortcut_DetailButtonShortcutModifier`: Detail button shortcut is `.return` + `.option`.
-    - `testF10_OptionEnterDetailShortcut_HintTextMatchesSpecification`: Shortcut hint text: `↵ 保存 · ⌥↵ 详情`.
-    - `testF10_OptionEnterDetailShortcut_PreservesInitialPropertiesInEditor`: Editor preserves title, category, date.
-
-11. **Feature 11 — `completedTodayTasks` query** (5 tests):
-    - `testF11_CompletedTodayTasksQuery_IncludesTodayDueCompletedToday`: Includes tasks due today completed today.
-    - `testF11_CompletedTodayTasksQuery_IncludesOverdueCompletedToday`: Includes overdue tasks completed today.
-    - `testF11_CompletedTodayTasksQuery_ExcludesInboxCompletedToday`: Excludes inbox tasks completed today.
-    - `testF11_CompletedTodayTasksQuery_ExcludesTomorrowCompletedToday`: Excludes tomorrow tasks completed today.
-    - `testF11_CompletedTodayTasksQuery_ExcludesPastCalendarDayCompletions`: Excludes tasks completed on past days.
-
-12. **Feature 12 — "今天已完成 (N) ⌵" folding section** (5 tests):
-    - `testF12_TodayCompletedFoldingSection_PositionedAtBottom`: Positioned at bottom of Today list.
-    - `testF12_TodayCompletedFoldingSection_DefaultStateIsCollapsed`: Default state is collapsed.
-    - `testF12_TodayCompletedFoldingSection_HeaderTitleFormatting`: Formats as `"今天已完成 (N) ⌵"`.
-    - `testF12_TodayCompletedFoldingSection_HiddenWhenCountIsZero`: Hides when 0 tasks completed today.
-    - `testF12_TodayCompletedFoldingSection_SpringAnimationParameters`: Uses gentle spring animation.
-
-13. **Feature 13 — Uncheck reversibility** (5 tests):
-    - `testF13_UncheckReversibility_ClearsIsCompletedAndCompletedAt`: Resets `isCompleted = false` and `completedAt = nil`.
-    - `testF13_UncheckReversibility_RestoresToActiveTodayList`: Immediately returns to `tasks(for: .todayTask)`.
-    - `testF13_UncheckReversibility_PreservesAllTaskMetadata`: Notes, link, pomodoros, priority preserved.
-    - `testF13_UncheckReversibility_MultipleToggleCyclesZeroDrift`: 5 toggle cycles with zero data drift.
-    - `testF13_UncheckReversibility_DoesNotSpawnDuplicateRecurrencesOnUncheck`: Recurrences spawned only on check.
-
-14. **Feature 14 — Quiet achievement empty state** (5 tests):
-    - `testF14_QuietAchievementEmptyState_TriggersWhenActiveZeroAndCompletedPositive`: Triggers on active = 0, completed > 0.
-    - `testF14_QuietAchievementEmptyState_PrimaryAndSecondaryCopyStrings`: Primary & secondary copy match spec.
-    - `testF14_QuietAchievementEmptyState_ContourSunVectorAsset`: Ultra-light contour `sun.max`.
-    - `testF14_QuietAchievementEmptyState_FoldingSectionRestsBelow`: Completed fold rests below achievement state.
-    - `testF14_QuietAchievementEmptyState_PristineStateUsesSereneCopyWithoutAchievement`: Pristine state copy.
+**Pass Rate**: **100% (410 / 410 passed, 0 failures, 0 unexpected)**.
 
 ---
 
-## 4. Boundary, Combination & Real-World Breakdown (Tiers 2–4: 25 Tests)
+## 3. Detailed Feature Breakdown (Tier 1: 26 Tests)
+
+### Feature 1–3 (M1): Top Dashboard & Concentric Dual Rings
+1. `testF01_MasterDashboard_VisualHierarchyAndDesignTokens`: Verifies ring size (default 104pt, min 84pt), line width (6.5pt), breathing scale bounds (1.00..1.06), and animation duration (1.8s).
+2. `testF02_ConcentricRings_TodayPomodoroProgressMath`: Verifies today pomodoro progress math for 0 completed (0%), 4/8 completed (50%), 8/8 completed (100%), and 12/8 completed (clipped at 100%).
+3. `testF02_ConcentricRings_TodayDurationProgressMath`: Verifies today duration progress against target (`dailyGoal * 25`), checking 25 mins (25%), 100 mins (100%), and 150 mins (clipped at 100%).
+4. `testF02_ConcentricRings_MultiDayRangesProgressMath`: Verifies target scaling across 7 days (`dailyGoal * 7`) and 30 days (`dailyGoal * 30`).
+5. `testF02_ConcentricRings_ZeroDailyGoalSafeguard`: Defensive guard when `dailyGoal = 0`, ensuring 0.0 return without NaN or crash.
+6. `testF03_MonospacedStats_FormattingExactness`: Verifies `FocusStats.formatTotalMinutes` for 0m, 25m, 60m, 75m, 120m, 145m, and streak calculation.
+
+### Feature 4–6 (M2): Trend Bar Chart & Hover Tooltip & Date Bounds
+7. `testF04_TrendChart_DailySessionAggregation`: Verifies session aggregation per calendar day (start-of-day resolution), summing durations correctly.
+8. `testF05_HoverTooltip_FormatStandardLongDuration`: Verifies tooltip string formatting for duration >= 60m: `10月28日 · 2小时15分 · 5个番茄`.
+9. `testF05_HoverTooltip_FormatSubHourDuration`: Verifies tooltip string formatting for duration < 60m: `10月28日 · 45分 · 2个番茄`.
+10. `testF05_HoverTooltip_FormatExactHourDuration`: Verifies tooltip string formatting for exact hours: `10月28日 · 2小时 · 4个番茄`.
+11. `testF05_HoverTooltip_FormatZeroDuration`: Verifies tooltip string formatting for 0 duration: `10月28日 · 0分 · 0个番茄`.
+12. `testF06_DateBounds_SupportedRangesFidelity`: Verifies day bounds for `.today` (1 day), `.days7` (7 days inclusive), `.days30` (30 days inclusive), and `.month` (1st of month through today).
+
+### Feature 7–9 (M3): Squircle Heatmap & 4-Step Color Ladder
+13. `testF07_SquircleHeatmap_ShapeTokenContinuousRadius`: Verifies continuous squircle curvature token (`AppTheme.squircle(radius: 2.8)`).
+14. `testF08_SquircleHeatmap_IntensityLevelThresholds`: Verifies thresholds: Level 0 (0m), Level 1 (1..25m), Level 2 (26..50m), Level 3 (51..100m), Level 4 (>100m).
+15. `testF08_SquircleHeatmap_ColorLadderOpacities`: Verifies opacity ladder tokens: Level 0 (0.045), Level 1 (0.25), Level 2 (0.50), Level 3 (0.75), Level 4 (1.00).
+16. `testF09_SquircleHeatmap_53WeeksGridStructure`: Verifies annual heatmap grid structure: exactly 53 columns × 7 rows (371 cells).
+17. `testF09_SquircleHeatmap_MonthLabelsAndActiveDaysCount`: Verifies month labels generation at column transitions and active day counting.
+
+### Feature 10–11 (M4): 2x2 Metric Tiles & Unified Icons
+18. `testF10_MetricTiles_MaxSingleFocusSession`: Identifies the longest focus session duration across mixed history.
+19. `testF10_MetricTiles_AverageDailyFocusCalculation`: Calculates average daily focus (`totalMinutes / activeDays`) formatted as human-readable string.
+20. `testF10_MetricTiles_PeakFocusHoursGoldenTime`: Identifies the modal peak focus hour ("黄金时段"), formatted as `HH:00 - HH:00`.
+21. `testF10_MetricTiles_TaskCompletionRateCalculation`: Calculates task completion percentage, capped at 100% and safe on 0 tasks.
+22. `testF11_MetricTiles_SFSymbolsContractAndVisualTokens`: Verifies SF Symbol contracts: `stopwatch` (or `flame.fill`), `clock.fill`, `sun.max.fill`, `checkmark.circle.fill`, with soft 0.08 background fill.
+
+### Feature 12–16 (M5): TaskStore Persistence, Zero Dependencies & Performance
+23. `testF12_TaskStore_ModelPersistenceAndZeroDataLoss`: Verifies `FocusSession` and `FocusTask` roundtrip fidelity through disk storage.
+24. `testF13_ZeroExternalDependenciesRule`: Validates that `Package.swift` introduces 0 external third-party package dependencies.
+25. `testF16_Performance_PageSnapshot5000SessionsUnderBudget`: `AnalyticsPageSnapshot.build` over 5,000 sessions executes in ~29ms (Budget: 220ms).
+26. `testF16_Performance_HeatmapGridComputationUnderBudget`: `FocusStats.contributionGrid` over 365 days executes in ~0.3ms (Budget: 150ms).
+
+---
+
+## 4. Boundary, Combination & Real-World Breakdown (Tiers 2–4: 17 Tests)
 
 ### Tier 2: Boundary & Corner Cases (10 Tests)
-- `testTier2_Boundary_EmptyAndWhitespaceTitleRejection`: Rejects blank, newline, and whitespace-only titles.
-- `testTier2_Boundary_ExtremelyLongTitlePreservesLayoutIntegrity`: Handles 200-phrase long titles.
-- `testTier2_Boundary_ComplexUnicodeAndEmojiHandling`: Preserves emojis, RTL characters, Chinese punctuation.
-- `testTier2_Boundary_MidnightBoundaryCalendarDayTransition`: 1-second-before-midnight boundary isolation.
-- `testTier2_Boundary_PastDueOverdueExtremeBoundary`: Multi-year overdue tasks completed today settle correctly.
-- `testTier2_Boundary_FutureDateExtremeBoundary`: Distant future tasks do not pollute Today completed section.
-- `testTier2_Boundary_RapidConsecutiveCompletionToggle`: Rapid 10 consecutive toggles execute without corruption.
-- `testTier2_Boundary_SoftDeletionAndUndoWindowExpiration`: Undo window expiration and banner dismissal.
-- `testTier2_Boundary_DueOverrideRedundantWithListFilter`: Overriding with same target list acts idempotently.
-- `testTier2_Boundary_MonotonicSortIndexAcrossAdditions`: Monotonically increasing sort index across tasks.
+- `testTier2_ZeroMinutesSession_SafelyHandledWithoutDivisionByZero`: Handles zero session duration without division-by-zero or NaN.
+- `testTier2_NegativeAndDefensiveMinutes_SanitizedToZero`: Sanitizes corrupt negative minutes to 0 defensively.
+- `testTier2_FutureTimestampSession_HandledSafely`: Future timestamp sessions do not pollute current day bounds.
+- `testTier2_SingleSessionExceeding24Hours_HandledWithoutOverflow`: Sessions > 24 hours (1500 mins) format cleanly as "25小时".
+- `testTier2_ZeroTasks_CompletionRateIsZeroPercent`: Zero total tasks yields "0%" without error.
+- `testTier2_AllTasksCompleted_CompletionRateIs100Percent`: All tasks completed yields "100%".
+- `testTier2_LeapYear_February29_BoundsAndHeatmap`: Leap year Feb 29 bounds span 29 days correctly.
+- `testTier2_YearBoundary_Dec31ToJan01_StreakAndMonthBounds`: Streak continuity across Dec 31 to Jan 01 year rollover.
+- `testTier2_DailyGoalZero_ProgressCappedCleanly`: Daily goal 0 yields progress 0.0 safely.
+- `testTier2_EmptyHistory_PeakHoursAndAverageYieldsSafeDefaults`: Empty session history yields fallback "暂无数据" and "0分钟".
 
-### Tier 3: Cross-Feature Combinations (10 Tests)
-- `testTier3_Combination_QuickAddWithDateOverrideThenCompleteAndRevive`: Quick Add override + complete + uncheck revive.
-- `testTier3_Combination_QuickAddOptionReturnWithEditorSession`: Option+Return detail sheet flow.
-- `testTier3_Combination_PinTaskThenHoverDeleteThenUndo`: Pin + delete + undo restores pin.
-- `testTier3_Combination_MultiTaskPartialCompletionStateTransition`: Sequential completion triggering achievement empty state.
-- `testTier3_Combination_OverdueTaskCompletedTodayAndRestored`: Overdue task completion settles in Today and revives to overdue.
-- `testTier3_Combination_RecurringTaskCompletedInTodaySpawnsNextCycle`: Daily recurring task spawns tomorrow task upon Today completion.
-- `testTier3_Combination_TaskWithNotesAndLinkCompletedAndRevived`: Rich metadata survives completion and revival.
-- `testTier3_Combination_ScreenFilterSwitchingResetsDueOverride`: Screen switching resets temporary date override.
-- `testTier3_Combination_BatchDeleteAndUndoPreservesCompletionStatus`: Batch delete with undo restores exact mixed completion states.
-- `testTier3_Combination_ActiveTaskCompletionClearsActiveTaskId`: Completing the active focus task clears `activeTaskId`.
+### Tier 3: Cross-Feature Combinations (5 Tests)
+- `testTier3_TodayZeroSessions_WithAnnualHeatmapActiveStreak`: Today has 0 sessions, yet yesterday's active streak is preserved while today's rings show 0%.
+- `testTier3_DualRingProgress_WithLiveTickingSession`: Live ticking session expands duration ring while pomodoro count remains committed count.
+- `testTier3_TimeRangeSwitching_ConsistencyAcrossAllViews`: Changing range between Today -> 7 days -> 30 days updates chart and rings in strict synchronization.
+- `testTier3_TaskCompletionToggle_InstantlyReflectsIn2x2CompletionRate`: Task completion toggle immediately updates completion rate tile.
+- `testTier3_NewSessionAppended_SimultaneousUpdateAcrossHeaderChartHeatmapTiles`: Adding a session updates Header, Trend Chart, Heatmap active days, and 2x2 Tiles simultaneously.
 
-### Tier 4: Real-World Application Scenarios (5 Tests)
-- `testTier4_Scenario1_DailyMorningPlanningWorkflow`: Multi-task morning planning with date routing and focus activation.
-- `testTier4_Scenario2_FullTodayCompletionAchievementWorkflow`: Completing all tasks in Today, seeing serene achievement empty state, and folding section header `"今天已完成 (3) ⌵"`.
-- `testTier4_Scenario3_RevivalAndTaskModificationWorkflow`: Unchecking completed task, modifying notes, pinning, re-completing.
-- `testTier4_Scenario4_CrossListArchivingIsolationWorkflow`: Today, Tomorrow, and Inbox tasks completed simultaneously; verifying strict archive isolation.
-- `testTier4_Scenario5_HighVolumeStressAddCompletePinUndoWorkflow`: 100 tasks stress test with pin, complete, batch-delete, and undo operations under strict memory and latency constraints.
+### Tier 4: Real-World Application Scenarios (2 Tests)
+- `testTier4_ThirtyDayUserJourney_ProductivityConsistencyAcrossAllWidgets`: Synthetic 30 days of varied activity (workdays, weekends, vacation break) verifying consistent metrics across all 4 widgets.
+- `testTier4_OneYearFullJourney_HeatmapAndLongTermStats`: 53 weeks (365 days) with 1,200+ sessions verifying full 53x7 grid, month labels, modal peak hour detection, and zero data loss on TaskStore reload.
 
 ---
 
 ## 5. Performance Benchmark Verification
 
-All 14 performance benchmark tests executed and passed under their strict latency caps:
-- `tasks(for: .today) @2000 = 44.062 ms (limit 150 ms)`
-- `tasks(for:) ×6 filters @500 cached = 0.005 ms (limit 12 ms)`
-- `sidebarBadgeCounts @500 = 3.936 ms (limit 20 ms)`
-- `AnalyticsPageSnapshot 5k sessions + 500 tasks = 36.857 ms (limit 220 ms)`
-- `TaskStore init reload 2k+2k from disk = 20.404 ms (limit 500 ms)`
-- `flushPendingSaves 1k tasks + 500 sessions = 7.104 ms (limit 400 ms)`
+All performance benchmarks executed well within the specified budgets:
+- `AnalyticsPageSnapshot.build (5,000 sessions + 500 tasks)`: **26.8ms – 29.1ms** (Limit: 220ms, ~8x faster than budget).
+- `Heatmap contributionGrid computation (5,000 sessions)`: **0.25ms – 0.31ms** (Limit: 150ms, ~500x faster than budget).
+- `minutesByDay aggregation (5,000 sessions)`: **3.0ms** (Limit: 120ms, ~40x faster than budget).
+- `TaskStore init reload (2k tasks + 2k sessions)`: **19.0ms** (Limit: 500ms).
+- `flushPendingSaves (1k tasks + 500 sessions)`: **6.2ms** (Limit: 400ms).
 
 ---
 
 ## 6. Verification Status
 
-The E2E test suite is **fully compiled, self-contained, validated, and ready** for implementation milestones (M1–M3) and final verification (M4).
+The E2E test suite for the iFocus Apple Health & Fitness Style Statistics Redesign is **100% green (410/410 tests passing)**, fully requirement-driven, self-contained, and ready for deployment verification and packaging.

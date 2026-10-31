@@ -146,6 +146,15 @@ struct AnalyticsView: View {
         return name.isEmpty ? "小番茄" : name
     }
 
+    private func chipTitle(for r: AnalyticsTimeRange) -> String {
+        switch r {
+        case .today: return "今天"
+        case .days7: return "7天"
+        case .days30: return "30天"
+        case .month: return "本月"
+        }
+    }
+
     private var rangeChipsBar: some View {
         HStack(spacing: 6) {
             ForEach(AnalyticsTimeRange.allCases) { r in
@@ -153,7 +162,7 @@ struct AnalyticsView: View {
                 Button {
                     withAnimation(AppTheme.springInteractive) { range = r }
                 } label: {
-                    Text(r.rawValue)
+                    Text(chipTitle(for: r))
                         .font(.system(size: 12, weight: selected ? .semibold : .medium, design: .rounded))
                         .foregroundColor(
                             selected
