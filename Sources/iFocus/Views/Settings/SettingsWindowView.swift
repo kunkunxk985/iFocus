@@ -189,8 +189,9 @@ struct SettingsWindowView: View {
                 // Footer version mark
                 VStack(alignment: .leading, spacing: 3) {
                     Rectangle()
-                        .fill(AppTheme.separator(for: colorScheme).opacity(0.6))
+                        .fill(Color.primary.opacity(colorScheme == .light ? 0.06 : 0.10))
                         .frame(height: 0.5)
+                        .padding(.horizontal, 12)
                     HStack {
                         Text("iFocus \(AppVersion.short) (\(AppVersion.build))")
                             .font(.system(size: 11, design: .rounded).monospacedDigit())
@@ -206,7 +207,6 @@ struct SettingsWindowView: View {
         // Full-bleed, like the main window: the material runs under the titlebar so
         // the window buttons sit on it, and the window's own shape clips the corners.
         .adaptiveGlass(cornerRadius: 0, fallbackMaterial: .sidebar)
-        .padding(.trailing, 4)
     }
 
     private func settingsSidebarRow(_ panel: SettingsWindowPanel) -> some View {

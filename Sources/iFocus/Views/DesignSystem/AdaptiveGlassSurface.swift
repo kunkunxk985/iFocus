@@ -15,7 +15,22 @@ struct AdaptiveGlassSurface: ViewModifier {
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
+        if cornerRadius == 0 {
+            // Full-bleed sidebar: avoid 4-sided 3D glass bevels and thick borders;
+            // use native sidebar vibrancy + a single razor-thin 0.5pt trailing hairline.
+            content
+                .background(
+                    VisualEffectBackground(
+                        material: fallbackMaterial,
+                        blendingMode: .withinWindow
+                    )
+                )
+                .overlay(alignment: .trailing) {
+                    Rectangle()
+                        .fill(Color.primary.opacity(colorScheme == .light ? 0.07 : 0.11))
+                        .frame(width: 0.5)
+                }
+        } else if #available(macOS 26.0, *) {
             content.glassEffect(.regular, in: shape)
         } else {
             content
@@ -27,7 +42,7 @@ struct AdaptiveGlassSurface: ViewModifier {
                 )
                 .clipShape(shape)
                 .overlay(
-                    shape.strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.8)
+                    shape.strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.5)
                 )
         }
     }

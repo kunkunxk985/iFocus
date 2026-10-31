@@ -124,7 +124,6 @@ struct AppSidebar: View {
         // perched on its rounded corner with ~5pt of clearance, which read as cramped
         // and gave them no material to sit on.
         .adaptiveGlass(cornerRadius: 0, fallbackMaterial: .sidebar)
-        .padding(.trailing, 4)
     }
 
     /// Reserve the titlebar band; the toggle itself is a window-toolbar item.
@@ -286,9 +285,9 @@ struct AppSidebar: View {
         .padding(.vertical, 6)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(AppTheme.separator(for: colorScheme))
+                .fill(Color.primary.opacity(colorScheme == .light ? 0.06 : 0.10))
                 .frame(height: 0.5)
-                .opacity(0.4)
+                .padding(.horizontal, 12)
         }
     }
 }
