@@ -25,29 +25,25 @@ struct AppSidebar: View {
                 title: "今天",
                 screen: .todayTask,
                 badge: badgeIfPositive(counts.today),
-                icon: "sun.max.fill",
-                accentColor: Color(red: 0.96, green: 0.60, blue: 0.06)
+                icon: "sun.max"
             ),
             SidebarItem(
                 title: "明天",
                 screen: .tomorrowTask,
                 badge: badgeIfPositive(counts.tomorrow),
-                icon: "sunrise.fill",
-                accentColor: Color(red: 0.95, green: 0.39, blue: 0.36)
+                icon: "sunrise"
             ),
             SidebarItem(
                 title: "稍后",
                 screen: .weekTask,
                 badge: badgeIfPositive(counts.week),
-                icon: "clock.fill",
-                accentColor: Color(red: 0.44, green: 0.40, blue: 0.94)
+                icon: "clock"
             ),
             SidebarItem(
                 title: "收集箱",
                 screen: .inboxTask,
                 badge: badgeIfPositive(counts.inbox),
-                icon: "tray.fill",
-                accentColor: Color(red: 0.16, green: 0.58, blue: 0.96)
+                icon: "tray"
             )
         ]
     }
@@ -58,15 +54,13 @@ struct AppSidebar: View {
                 title: "已完成",
                 screen: .completedTask,
                 badge: nil,
-                icon: "checkmark.circle.fill",
-                accentColor: Color(red: 0.16, green: 0.72, blue: 0.45)
+                icon: "checkmark.circle"
             ),
             SidebarItem(
                 title: "我的记录",
                 screen: .analytics,
                 badge: nil,
-                icon: "chart.bar.fill",
-                accentColor: Color(red: 0.08, green: 0.66, blue: 0.74)
+                icon: "chart.bar"
             )
         ]
     }
@@ -82,39 +76,38 @@ struct AppSidebar: View {
 
                 ScrollView {
                     let counts = taskStore.sidebarBadgeCounts()
-                    VStack(alignment: .leading, spacing: 4) {
-                        sidebarRow(
-                            title: "专注钟",
-                            screen: .timer,
-                            badge: timerStore.isRunning ? "进行中" : nil,
-                            icon: "timer",
-                            accentColor: AppTheme.accent,
-                            emphasizeRunning: timerStore.isRunning
-                        )
-
-                        sidebarDivider
-
-                        ForEach(taskItems(counts)) { item in
+                    VStack(alignment: .leading, spacing: 14) {
+                        sidebarSection(title: "专注") {
                             sidebarRow(
-                                title: item.title,
-                                screen: item.screen,
-                                badge: item.badge,
-                                icon: item.icon,
-                                accentColor: item.accentColor ?? AppTheme.accent,
-                                showsOverdue: item.screen == .todayTask && counts.overdue > 0
+                                title: "专注钟",
+                                screen: .timer,
+                                badge: nil,
+                                icon: "timer",
+                                emphasizeRunning: timerStore.isRunning
                             )
                         }
 
-                        sidebarDivider
+                        sidebarSection(title: "清单") {
+                            ForEach(taskItems(counts)) { item in
+                                sidebarRow(
+                                    title: item.title,
+                                    screen: item.screen,
+                                    badge: item.badge,
+                                    icon: item.icon,
+                                    showsOverdue: item.screen == .todayTask && counts.overdue > 0
+                                )
+                            }
+                        }
 
-                        ForEach(reviewItems()) { item in
-                            sidebarRow(
-                                title: item.title,
-                                screen: item.screen,
-                                badge: item.badge,
-                                icon: item.icon,
-                                accentColor: item.accentColor ?? AppTheme.accent
-                            )
+                        sidebarSection(title: "记录") {
+                            ForEach(reviewItems()) { item in
+                                sidebarRow(
+                                    title: item.title,
+                                    screen: item.screen,
+                                    badge: item.badge,
+                                    icon: item.icon
+                                )
+                            }
                         }
                     }
                     .padding(.horizontal, 10)
@@ -140,12 +133,21 @@ struct AppSidebar: View {
             .frame(height: AppTheme.topHeaderHeight)
     }
 
-    private var sidebarDivider: some View {
-        Rectangle()
-            .fill(AppTheme.separatorLow(for: colorScheme))
-            .frame(height: 0.5)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+    private func sidebarSection<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.68))
+                .padding(.horizontal, 10)
+                .padding(.bottom, 2)
+
+            VStack(alignment: .leading, spacing: 2) {
+                content()
+            }
+        }
     }
 
     private func sidebarRow(
@@ -153,7 +155,6 @@ struct AppSidebar: View {
         screen: AppScreen,
         badge: String?,
         icon: String,
-        accentColor: Color,
         emphasizeRunning: Bool = false,
         showsOverdue: Bool = false
     ) -> some View {
@@ -166,13 +167,12 @@ struct AppSidebar: View {
                 title: title,
                 icon: icon,
                 badge: badge,
-                accentColor: accentColor,
                 isSelected: isSelected,
                 emphasizeRunning: emphasizeRunning,
                 showsOverdue: showsOverdue
             )
         }
-        .buttonStyle(SidebarRowButtonStyle(isSelected: isSelected, accentColor: accentColor))
+        .buttonStyle(SidebarRowButtonStyle(isSelected: isSelected))
         .dropDestination(for: String.self) { items, _ in
             handleTaskDrop(items, to: screen)
         } isTargeted: { targeted in
@@ -299,50 +299,37 @@ private struct SidebarRowLabel: View {
     let title: String
     let icon: String
     let badge: String?
-    let accentColor: Color
     let isSelected: Bool
     let emphasizeRunning: Bool
     let showsOverdue: Bool
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: 11) {
+        HStack(spacing: 10) {
             ZStack {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(
-                        isSelected
-                            ? accentColor
-                            : accentColor.opacity(colorScheme == .light ? 0.14 : 0.20)
-                    )
-                    .frame(width: 26, height: 26)
-                    .shadow(
-                        color: isSelected ? accentColor.opacity(0.32) : Color.clear,
-                        radius: 4,
-                        y: 1.5
-                    )
-
                 Image(systemName: icon)
-                    .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundColor(isSelected ? .white : accentColor)
+                    .font(.system(size: 15.5, weight: isSelected ? .semibold : .medium))
+                    .foregroundColor(
+                        isSelected
+                            ? AppTheme.accent
+                            : AppTheme.accent.opacity(colorScheme == .light ? 0.82 : 0.88)
+                    )
 
                 if emphasizeRunning {
                     Circle()
-                        .fill(Color.green)
-                        .frame(width: 6, height: 6)
-                        .overlay(
-                            Circle().stroke(Color.white, lineWidth: 1.2)
-                        )
-                        .offset(x: 9, y: -9)
+                        .fill(AppTheme.accent)
+                        .frame(width: 5.5, height: 5.5)
+                        .offset(x: 9, y: -8)
                 }
             }
-            .frame(width: 26, height: 26)
+            .frame(width: 22, height: 22)
 
             Text(title)
-                .font(.system(size: 15, weight: isSelected ? .bold : .medium, design: .rounded))
+                .font(.system(size: 15, weight: isSelected ? .semibold : .medium, design: .rounded))
                 .foregroundColor(
                     isSelected
                         ? AppTheme.primaryText(for: colorScheme)
-                        : AppTheme.primaryText(for: colorScheme).opacity(0.90)
+                        : AppTheme.primaryText(for: colorScheme).opacity(0.88)
                 )
                 .lineLimit(1)
 
@@ -350,94 +337,54 @@ private struct SidebarRowLabel: View {
 
             if let badge, !badge.isEmpty {
                 Text(badge)
-                    .font(.system(size: emphasizeRunning ? 10.5 : 11.5, weight: .bold, design: .rounded))
+                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundColor(badgeForeground)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2.5)
-                    .background(
-                        Capsule()
-                            .fill(badgeBackground)
-                    )
             }
         }
-        .padding(.leading, 10)
-        .padding(.trailing, 9)
-        .padding(.vertical, 7.5)
-        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var badgeForeground: Color {
-        if showsOverdue { return Color.red }
-        if emphasizeRunning { return accentColor }
+        if showsOverdue { return Color.red.opacity(0.9) }
         return isSelected
-            ? accentColor
-            : AppTheme.secondaryText(for: colorScheme)
-    }
-
-    private var badgeBackground: Color {
-        if showsOverdue {
-            return Color.red.opacity(colorScheme == .light ? 0.14 : 0.22)
-        }
-        if emphasizeRunning {
-            return accentColor.opacity(colorScheme == .light ? 0.15 : 0.24)
-        }
-        if isSelected {
-            return accentColor.opacity(colorScheme == .light ? 0.16 : 0.25)
-        }
-        return colorScheme == .light ? Color.black.opacity(0.055) : Color.white.opacity(0.09)
+            ? AppTheme.primaryText(for: colorScheme).opacity(0.82)
+            : AppTheme.secondaryText(for: colorScheme).opacity(0.78)
     }
 }
 
 private struct SidebarRowButtonStyle: ButtonStyle {
     let isSelected: Bool
-    let accentColor: Color
     @Environment(\.colorScheme) private var colorScheme
     @State private var isHovering = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(backgroundFill(isPressed: configuration.isPressed))
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(
-                        isSelected
-                            ? accentColor.opacity(colorScheme == .light ? 0.28 : 0.38)
-                            : Color.clear,
-                        lineWidth: 0.75
-                    )
-            )
-            .overlay(alignment: .leading) {
-                if isSelected {
-                    Capsule()
-                        .fill(accentColor)
-                        .frame(width: 3.5, height: 16)
-                        .padding(.leading, 2)
-                        .transition(.scale.combined(with: .opacity))
-                }
-            }
-            .scaleEffect(configuration.isPressed ? 0.985 : (isHovering && !isSelected ? 1.008 : 1.0))
+            .scaleEffect(configuration.isPressed ? 0.99 : 1.0)
             .animation(.easeOut(duration: 0.10), value: configuration.isPressed)
-            .animation(.easeOut(duration: 0.14), value: isHovering)
-            .animation(.spring(response: 0.26, dampingFraction: 0.80), value: isSelected)
+            .animation(.easeOut(duration: 0.12), value: isHovering)
+            .animation(.easeOut(duration: 0.16), value: isSelected)
             .onHover { isHovering = $0 }
     }
 
     private func backgroundFill(isPressed: Bool) -> Color {
         if isSelected {
             if colorScheme == .light {
-                return accentColor.opacity(isPressed ? 0.16 : 0.11)
+                return Color.black.opacity(isPressed ? 0.10 : 0.075)
             }
-            return accentColor.opacity(isPressed ? 0.24 : 0.18)
+            return Color.white.opacity(isPressed ? 0.17 : 0.13)
         }
         if isPressed {
             return colorScheme == .light ? Color.black.opacity(0.06) : Color.white.opacity(0.10)
         }
         if isHovering {
-            return colorScheme == .light ? Color.black.opacity(0.04) : Color.white.opacity(0.07)
+            return colorScheme == .light ? Color.black.opacity(0.035) : Color.white.opacity(0.06)
         }
         return Color.clear
     }

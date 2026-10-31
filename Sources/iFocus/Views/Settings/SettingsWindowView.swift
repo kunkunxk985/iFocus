@@ -217,27 +217,17 @@ struct SettingsWindowView: View {
             }
         } label: {
             HStack(spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(
-                            isSelected
-                                ? AppTheme.accent
-                                : (colorScheme == .light ? Color.black.opacity(0.05) : Color.white.opacity(0.08))
-                        )
-                        .frame(width: 22, height: 22)
-                        .shadow(
-                            color: isSelected ? AppTheme.accent.opacity(0.28) : Color.clear,
-                            radius: 3,
-                            y: 1
-                        )
-
-                    Image(systemName: panel.icon)
-                        .font(.system(size: 11.5, weight: isSelected ? .semibold : .medium))
-                        .foregroundColor(isSelected ? .white : AppTheme.secondaryText(for: colorScheme))
-                }
+                Image(systemName: panel.icon)
+                    .font(.system(size: 14.5, weight: isSelected ? .semibold : .medium))
+                    .foregroundColor(
+                        isSelected
+                            ? AppTheme.accent
+                            : AppTheme.accent.opacity(colorScheme == .light ? 0.80 : 0.86)
+                    )
+                    .frame(width: 20, height: 20)
 
                 Text(panel.rawValue)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .font(.system(size: 13.5, weight: isSelected ? .semibold : .medium, design: .rounded))
                     .foregroundColor(isSelected
                                      ? AppTheme.primaryText(for: colorScheme)
                                      : AppTheme.primaryText(for: colorScheme).opacity(0.86))
