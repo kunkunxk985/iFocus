@@ -102,13 +102,24 @@ struct TaskListView: View {
     
     private var listIcon: String {
         switch viewState.selectedScreen {
-        case .todayTask: return "sun.max"
-        case .tomorrowTask: return "sunrise"
-        case .weekTask: return "clock"
+        case .todayTask: return "sun.max.fill"
+        case .tomorrowTask: return "sunrise.fill"
+        case .weekTask: return "clock.fill"
         case .plannedTask: return "calendar.badge.clock"
-        case .completedTask: return "checkmark.circle"
-        case .inboxTask: return "tray"
+        case .completedTask: return "checkmark.circle.fill"
+        case .inboxTask: return "tray.fill"
         default: return "list.bullet"
+        }
+    }
+
+    private var listTint: Color {
+        switch viewState.selectedScreen {
+        case .todayTask: return Color(red: 0.96, green: 0.60, blue: 0.06)
+        case .tomorrowTask: return Color(red: 0.95, green: 0.39, blue: 0.36)
+        case .weekTask: return Color(red: 0.44, green: 0.40, blue: 0.94)
+        case .inboxTask: return Color(red: 0.16, green: 0.58, blue: 0.96)
+        case .completedTask: return Color(red: 0.16, green: 0.72, blue: 0.45)
+        default: return AppTheme.accent
         }
     }
     
@@ -239,7 +250,7 @@ struct TaskListView: View {
                         title: listTitle,
                         subtitle: listSubtitle,
                         systemImage: listIcon,
-                        tint: AppTheme.accent
+                        tint: listTint
                     )
                     .overlay(alignment: .trailing) {
                         listTools
