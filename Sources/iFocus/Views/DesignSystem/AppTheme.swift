@@ -732,31 +732,82 @@ struct PageTitle: View {
         // Continuous: density preference × window fluid (never stuck “compact forever”).
         let titleSize = max(20, min(30, windowLayout.pageTitleSize))
         let iconBox = 30 * density.scale + windowLayout.eased * 6
-        HStack(alignment: .firstTextBaseline, spacing: 10 * density.scale + windowLayout.eased * 4) {
+        HStack(alignment: .center, spacing: 10 * density.scale + windowLayout.eased * 4) {
             if let systemImage {
                 Image(systemName: systemImage)
-                    .font(.system(size: iconBox * 0.46, weight: .semibold))
-                    .foregroundColor(tint.opacity(0.9))
+                    .font(.system(size: iconBox * 0.50, weight: .semibold))
+                    .foregroundColor(tint.opacity(0.92))
                     .frame(width: iconBox * 0.9, height: iconBox * 0.9)
-                    .alignmentGuide(.firstTextBaseline) { d in
-                        // Lock icon center to title font firstTextBaseline
-                        d[.bottom] * 0.82
-                    }
             }
-            VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(title)
                     .font(.system(size: titleSize, weight: .bold, design: .rounded))
                     .tracking(TypeScale.trackingTitle)
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                    .alignmentGuide(.firstTextBaseline) { d in d[.firstTextBaseline] }
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(TypeScale.caption)
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.9))
+                        .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.82))
+                        .lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
         }
         .animation(.easeInOut(duration: 0.16), value: windowLayout.scale)
+    }
+}
+
+/// Quiet capsule pill styling for top-right page header actions (Search, Filter, Batch, Edit Profile, Export).
+struct PageHeaderActionPillLabel: View {
+    let title: String
+    var systemImage: String? = nil
+    var isActive: Bool = false
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: isActive ? .semibold : .medium))
+            }
+            Text(title)
+                .font(.system(size: 12, weight: isActive ? .semibold : .medium, design: .rounded))
+        }
+        .foregroundColor(
+            isActive
+                ? AppTheme.accent
+                : (isHovering
+                    ? AppTheme.primaryText(for: colorScheme)
+                    : AppTheme.secondaryText(for: colorScheme))
+        )
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            Capsule()
+                .fill(
+                    isActive
+                        ? AppTheme.accent.opacity(colorScheme == .light ? 0.12 : 0.20)
+                        : (isHovering
+                            ? (colorScheme == .light ? Color.black.opacity(0.05) : Color.white.opacity(0.08))
+                            : AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.75 : 0.55))
+                )
+        )
+        .overlay(
+            Capsule()
+                .strokeBorder(
+                    isActive
+                        ? AppTheme.accent.opacity(0.35)
+                        : AppTheme.separatorLow(for: colorScheme),
+                    lineWidth: 0.5
+                )
+        )
+        .contentShape(Capsule())
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) {
+                isHovering = hovering
+            }
+        }
     }
 }

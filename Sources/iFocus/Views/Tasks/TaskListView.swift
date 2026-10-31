@@ -49,6 +49,7 @@ struct TaskListView: View {
     @State private var selectedIDs: Set<UUID> = []
     @State private var activeChip: TaskListChip = .all
     @State private var isTodayCompletedExpanded = false
+    @State private var isSearchBarExpanded = false
     @FocusState private var isQuickAddFocused: Bool
     @FocusState private var isSearchFocused: Bool
     @State private var searchText = ""
@@ -243,10 +244,12 @@ struct TaskListView: View {
                     .overlay(alignment: .trailing) {
                         listTools
                     }
+                    .padding(.bottom, 14)
 
-                    if !baseTasks.isEmpty || !searchText.isEmpty || isSearchFocused {
+                    if isSearchBarExpanded || !searchText.isEmpty || isSearchFocused {
                         taskSearchField
-                            .padding(.top, 12)
+                            .padding(.bottom, 12)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                     }
 
                     if isSelecting {
@@ -293,6 +296,7 @@ struct TaskListView: View {
             dueOverride = nil
             searchText = ""
             isSearchFocused = false
+            isSearchBarExpanded = false
         }
         .onChange(of: activeChip) { _ in
             // Avoid deleting off-screen tasks that were selected under another chip.
@@ -331,8 +335,13 @@ struct TaskListView: View {
                     isSelecting = false
                     selectedIDs.removeAll()
                 }
-            } else if isSearchFocused {
+            } else if isSearchFocused || isSearchBarExpanded {
                 isSearchFocused = false
+                if searchText.isEmpty {
+                    withAnimation(AppTheme.springInteractive) {
+                        isSearchBarExpanded = false
+                    }
+                }
             } else if isQuickAddFocused {
                 isQuickAddFocused = false
             }
@@ -361,6 +370,7 @@ struct TaskListView: View {
         .onAppear {
             if viewState.shouldFocusSearch {
                 viewState.shouldFocusSearch = false
+                isSearchBarExpanded = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     isSearchFocused = true
                 }
@@ -369,6 +379,9 @@ struct TaskListView: View {
         .onChange(of: viewState.shouldFocusSearch) { shouldFocus in
             if shouldFocus {
                 viewState.shouldFocusSearch = false
+                withAnimation(AppTheme.springInteractive) {
+                    isSearchBarExpanded = true
+                }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     isSearchFocused = true
                 }
@@ -387,19 +400,24 @@ struct TaskListView: View {
                 .focused($isSearchFocused)
                 .accessibilityLabel("搜索当前任务列表")
                 .accessibilityHint("搜索任务标题、备注、分类、链接和重复周期")
-            if !searchText.isEmpty {
-                Button {
+            Button {
+                if !searchText.isEmpty {
                     searchText = ""
                     isSearchFocused = true
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.72))
+                } else {
+                    isSearchFocused = false
+                    withAnimation(AppTheme.springInteractive) {
+                        isSearchBarExpanded = false
+                    }
                 }
-                .buttonStyle(.plain)
-                .help("清除搜索")
-                .accessibilityLabel("清除搜索")
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.72))
             }
+            .buttonStyle(.plain)
+            .help(searchText.isEmpty ? "收起搜索" : "清除搜索")
+            .accessibilityLabel(searchText.isEmpty ? "收起搜索" : "清除搜索")
         }
         .padding(.horizontal, 12)
         .frame(height: 34)
@@ -416,9 +434,36 @@ struct TaskListView: View {
     /// Quiet actions beside the title. Filters live in one menu so they don't
     /// become a second row of navigation under the sidebar.
     private var listTools: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 8) {
+            if !baseTasks.isEmpty || isSearchBarExpanded || !searchText.isEmpty {
+                let searchActive = isSearchBarExpanded || !searchText.isEmpty || isSearchFocused
+                Button {
+                    withAnimation(AppTheme.springInteractive) {
+                        if searchActive && searchText.isEmpty {
+                            isSearchFocused = false
+                            isSearchBarExpanded = false
+                        } else {
+                            isSearchBarExpanded = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) {
+                                isSearchFocused = true
+                            }
+                        }
+                    }
+                } label: {
+                    PageHeaderActionPillLabel(
+                        title: "搜索",
+                        systemImage: "magnifyingglass",
+                        isActive: searchActive
+                    )
+                }
+                .buttonStyle(.plain)
+                .help("搜索当前列表（⌘F）")
+                .accessibilityLabel("搜索当前列表")
+            }
+
             if availableChips.count > 1 {
                 let filterCounts = baseListChipCounts
+                let isFiltered = activeChip.id != TaskListChip.all.id
                 Menu {
                     ForEach(availableChips) { chip in
                         Button {
@@ -432,13 +477,11 @@ struct TaskListView: View {
                         }
                     }
                 } label: {
-                    Text(activeChip.id == TaskListChip.all.id ? "筛选" : activeChip.title)
-                        .font(.system(size: 12, weight: activeChip.id == TaskListChip.all.id ? .medium : .semibold))
-                        .foregroundColor(
-                            activeChip.id == TaskListChip.all.id
-                            ? AppTheme.secondaryText(for: colorScheme)
-                            : AppTheme.accent
-                        )
+                    PageHeaderActionPillLabel(
+                        title: isFiltered ? activeChip.title : "筛选",
+                        systemImage: "line.3.horizontal.decrease",
+                        isActive: isFiltered
+                    )
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
@@ -446,15 +489,19 @@ struct TaskListView: View {
             }
 
             if !currentTasks.isEmpty || isSelecting {
-                Button(isSelecting ? "完成" : "批量") {
+                Button {
                     withAnimation(AppTheme.springInteractive) {
                         isSelecting.toggle()
                         if !isSelecting { selectedIDs.removeAll() }
                     }
+                } label: {
+                    PageHeaderActionPillLabel(
+                        title: isSelecting ? "完成" : "批量",
+                        systemImage: isSelecting ? "checkmark" : "checkmark.circle",
+                        isActive: isSelecting
+                    )
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
             }
         }
     }

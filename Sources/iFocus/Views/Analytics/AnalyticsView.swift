@@ -121,21 +121,28 @@ struct AnalyticsView: View {
             systemImage: "chart.bar"
         )
         .overlay(alignment: .trailing) {
-            HStack(spacing: 14) {
-                Button("编辑资料") {
+            HStack(spacing: 8) {
+                Button {
                     tempUsername = displayName
                     isEditingProfile = true
+                } label: {
+                    PageHeaderActionPillLabel(
+                        title: "编辑资料",
+                        systemImage: "person.crop.circle"
+                    )
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+
                 if model.hasAnyHistory {
-                    Button("导出摘要", action: shareReport)
-                        .buttonStyle(.plain)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                        .help("导出摘要（邮件或剪贴板）")
-                        .accessibilityLabel("导出摘要")
+                    Button(action: shareReport) {
+                        PageHeaderActionPillLabel(
+                            title: "导出摘要",
+                            systemImage: "square.and.arrow.up"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .help("导出摘要（邮件或剪贴板）")
+                    .accessibilityLabel("导出摘要")
                 }
             }
         }
@@ -156,30 +163,42 @@ struct AnalyticsView: View {
     }
 
     private var rangeChipsBar: some View {
-        HStack(spacing: 6) {
-            ForEach(AnalyticsTimeRange.allCases) { r in
-                let selected = range == r
-                Button {
-                    withAnimation(AppTheme.springInteractive) { range = r }
-                } label: {
-                    Text(chipTitle(for: r))
-                        .font(.system(size: 12, weight: selected ? .semibold : .medium, design: .rounded))
-                        .foregroundColor(
-                            selected
-                            ? AppTheme.primaryText(for: colorScheme)
-                            : AppTheme.secondaryText(for: colorScheme).opacity(0.85)
-                        )
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background {
-                            if selected {
-                                Capsule()
-                                    .fill(AppTheme.accent.opacity(colorScheme == .light ? 0.12 : 0.22))
+        HStack(spacing: 0) {
+            HStack(spacing: 2) {
+                ForEach(AnalyticsTimeRange.allCases) { r in
+                    let selected = range == r
+                    Button {
+                        withAnimation(AppTheme.springInteractive) { range = r }
+                    } label: {
+                        Text(chipTitle(for: r))
+                            .font(.system(size: 12, weight: selected ? .semibold : .medium, design: .rounded))
+                            .foregroundColor(
+                                selected
+                                    ? .white
+                                    : AppTheme.secondaryText(for: colorScheme).opacity(0.88)
+                            )
+                            .padding(.horizontal, 13)
+                            .padding(.vertical, 5.5)
+                            .background {
+                                if selected {
+                                    Capsule()
+                                        .fill(AppTheme.accent)
+                                        .shadow(color: AppTheme.accent.opacity(0.28), radius: 3, y: 1)
+                                }
                             }
-                        }
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
+            .padding(3)
+            .background(
+                Capsule()
+                    .fill(AppTheme.cardBackground(for: colorScheme))
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.5)
+            )
             Spacer(minLength: 0)
         }
         .padding(.vertical, 2)

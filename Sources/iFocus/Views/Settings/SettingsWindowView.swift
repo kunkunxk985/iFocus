@@ -166,15 +166,18 @@ struct SettingsWindowView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Clear the 52pt titlebar band, then a little breathing room.
                 Color.clear
-                    .frame(height: AppTheme.detailTopInset + 4)
+                    .frame(height: AppTheme.detailTopInset + 8)
 
-                Text(isSearching ? "搜索结果" : "设置")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
+                if isSearching {
+                    Text("搜索结果")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .tracking(0.3)
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.75))
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                }
 
-                VStack(spacing: 3) {
+                VStack(spacing: 4) {
                     ForEach(visiblePanels) { panel in
                         settingsSidebarRow(panel)
                     }
@@ -213,11 +216,25 @@ struct SettingsWindowView: View {
                 selectedPanel = panel
             }
         } label: {
-            HStack(spacing: 9) {
-                Image(systemName: panel.icon)
-                    .font(.system(size: 13.5, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(isSelected ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme))
-                    .frame(width: 20, height: 20)
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(
+                            isSelected
+                                ? AppTheme.accent
+                                : (colorScheme == .light ? Color.black.opacity(0.05) : Color.white.opacity(0.08))
+                        )
+                        .frame(width: 22, height: 22)
+                        .shadow(
+                            color: isSelected ? AppTheme.accent.opacity(0.28) : Color.clear,
+                            radius: 3,
+                            y: 1
+                        )
+
+                    Image(systemName: panel.icon)
+                        .font(.system(size: 11.5, weight: isSelected ? .semibold : .medium))
+                        .foregroundColor(isSelected ? .white : AppTheme.secondaryText(for: colorScheme))
+                }
 
                 Text(panel.rawValue)
                     .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
@@ -271,10 +288,14 @@ struct SettingsWindowView: View {
     }
 
     private var panelHeader: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(activePanel.rawValue)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundColor(AppTheme.primaryText(for: colorScheme))
+            Text(activePanel.subtitle)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
+                .lineLimit(1)
             Spacer()
             if isSearching {
                 Button("清除搜索") {
@@ -586,28 +607,37 @@ struct SettingsWindowView: View {
                     title: "强调色",
                     keywords: "颜色 主题色"
                 ) {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 8) {
                         ForEach(AccentPreset.allCases) { preset in
                             let selected = settings.accentPreset == preset
                             Button {
-                                settings.accentPreset = preset
+                                withAnimation(.spring(response: 0.24, dampingFraction: 0.78)) {
+                                    settings.accentPreset = preset
+                                }
                                 AppHaptics.selectionChanged()
                             } label: {
                                 ZStack {
                                     Circle()
                                         .fill(preset.color)
-                                        .frame(width: 22, height: 22)
+                                        .frame(width: 20, height: 20)
+                                        .overlay(
+                                            Circle()
+                                                .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5)
+                                        )
+                                        .shadow(
+                                            color: selected ? preset.color.opacity(0.45) : Color.clear,
+                                            radius: 4,
+                                            y: 1
+                                        )
                                     if selected {
                                         Circle()
-                                            .stroke(Color.white, lineWidth: 2)
-                                            .frame(width: 14, height: 14)
+                                            .fill(Color.white)
+                                            .frame(width: 6.5, height: 6.5)
+                                            .shadow(color: Color.black.opacity(0.18), radius: 1, y: 0.5)
                                     }
                                 }
-                                .padding(3)
-                                .background(
-                                    Circle()
-                                        .stroke(selected ? preset.color : Color.clear, lineWidth: 2)
-                                )
+                                .frame(width: 24, height: 24)
+                                .scaleEffect(selected ? 1.06 : 1.0)
                             }
                             .buttonStyle(.plain)
                             .help(preset.label)
@@ -1065,45 +1095,61 @@ private struct DurationSettingRow: View {
             }
             Spacer(minLength: 12)
 
-            // Quick preset pills
-            HStack(spacing: 4) {
-                ForEach(quickPills, id: \.self) { pill in
-                    Button {
-                        minutes = pill
-                        onCommit()
-                        AppHaptics.buttonClick()
-                    } label: {
-                        Text("\(pill)′")
-                            .font(.system(size: 11, weight: minutes == pill ? .bold : .medium, design: .rounded))
-                            .foregroundColor(minutes == pill ? AppTheme.accent : AppTheme.secondaryText(for: colorScheme))
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(
-                                Capsule()
-                                    .fill(minutes == pill
-                                          ? AppTheme.accent.opacity(colorScheme == .light ? 0.14 : 0.22)
-                                          : (colorScheme == .light ? Color.black.opacity(0.04) : Color.white.opacity(0.06)))
-                            )
+            // Unified preset segmented capsule + digital stepper
+            HStack(spacing: 8) {
+                HStack(spacing: 2) {
+                    ForEach(quickPills, id: \.self) { pill in
+                        let isSelected = minutes == pill
+                        Button {
+                            withAnimation(.easeOut(duration: 0.14)) {
+                                minutes = pill
+                            }
+                            onCommit()
+                            AppHaptics.buttonClick()
+                        } label: {
+                            Text("\(pill)′")
+                                .font(.system(size: 11, weight: isSelected ? .semibold : .medium, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundColor(
+                                    isSelected
+                                        ? .white
+                                        : AppTheme.secondaryText(for: colorScheme)
+                                )
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(isSelected ? AppTheme.accent : Color.clear)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(title)：\(pill) 分钟")
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(title)：\(pill) 分钟")
-                    .accessibilityAddTraits(minutes == pill ? .isSelected : [])
                 }
-            }
+                .padding(2)
+                .background(
+                    Capsule()
+                        .fill(colorScheme == .light ? Color.black.opacity(0.04) : Color.white.opacity(0.06))
+                )
+                .overlay(
+                    Capsule()
+                        .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.5)
+                )
 
-            // Stepper with digital display
-            HStack(spacing: 6) {
-                Text("\(minutes) 分钟")
-                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(AppTheme.primaryText(for: colorScheme))
-                    .frame(minWidth: 48, alignment: .trailing)
+                HStack(spacing: 5) {
+                    Text("\(minutes) 分钟")
+                        .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                        .frame(minWidth: 46, alignment: .trailing)
 
-                Stepper("", value: $minutes, in: range, step: step)
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .onChange(of: minutes) { _ in onCommit() }
-                    .accessibilityLabel("\(title)：\(minutes) 分钟")
+                    Stepper("", value: $minutes, in: range, step: step)
+                        .labelsHidden()
+                        .controlSize(.small)
+                        .onChange(of: minutes) { _ in onCommit() }
+                        .accessibilityLabel("\(title)：\(minutes) 分钟")
+                }
             }
         }
         .padding(.horizontal, 14)
