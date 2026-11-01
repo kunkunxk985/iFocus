@@ -65,16 +65,18 @@ struct PendingResumeBanner: View {
                 .controlSize(.small)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 11)
+        .frame(maxWidth: 520)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(AppTheme.cardBackground(for: colorScheme).opacity(0.97))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(AppTheme.accent.opacity(0.28), lineWidth: 1)
-                )
-                .shadow(color: AppTheme.softShadow(for: colorScheme), radius: 16, y: 6)
+                .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.84 : 0.55))
         )
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(AppTheme.accent.opacity(0.28), lineWidth: 0.75)
+        )
+        .multiLayerShadow(elevation: .floating, colorScheme: colorScheme)
         .padding(.horizontal, 28)
         .padding(.top, 10)
         .padding(.bottom, 4)
@@ -91,30 +93,30 @@ struct DailyGoalCelebrationOverlay: View {
     
     var body: some View {
         ZStack {
-            Color.black.opacity(colorScheme == .light ? 0.32 : 0.5)
+            Color.black.opacity(colorScheme == .light ? 0.28 : 0.48)
                 .ignoresSafeArea()
                 .onTapGesture(perform: onDismiss)
             
-            VStack(spacing: 18) {
+            VStack(spacing: 16) {
                 ZStack {
                     Circle()
                         .fill(AppTheme.accent.opacity(colorScheme == .light ? 0.12 : 0.18))
-                        .frame(width: 88, height: 88)
+                        .frame(width: 80, height: 80)
                     Image(systemName: "sparkles")
-                        .font(.system(size: 34, weight: .semibold))
+                        .font(.system(size: 32, weight: .semibold))
                         .foregroundColor(AppTheme.accent)
                 }
                 
                 Text("今日目标达成")
-                    .font(.title2.weight(.bold))
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
                 
                 Text("已完成 \(completed) / \(goal) 个番茄")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 13.5, weight: .semibold, design: .rounded).monospacedDigit())
                     .foregroundColor(AppTheme.accent)
                 
                 Text("可以收工，或继续做轻松的事。")
-                    .font(.caption)
+                    .font(.system(size: 12.5))
                     .foregroundColor(AppTheme.secondaryText(for: colorScheme))
                     .multilineTextAlignment(.center)
                 
@@ -123,27 +125,35 @@ struct DailyGoalCelebrationOverlay: View {
                     onDismiss()
                 } label: {
                     Text("好的")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.system(size: 13.5, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 9)
-                        .background(Capsule().fill(AppTheme.accent))
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 8.5)
+                        .background(
+                            Capsule()
+                                .fill(AppTheme.accent)
+                                .shadow(color: AppTheme.accent.opacity(0.32), radius: 5, y: 2)
+                        )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SoftScaleButtonStyle())
                 .keyboardShortcut(.defaultAction)
                 .padding(.top, 4)
             }
             .padding(28)
-            .frame(maxWidth: 340)
+            .frame(maxWidth: 320)
             .background(
                 RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard + 4, style: .continuous)
-                    .fill(AppTheme.cardBackground(for: colorScheme))
-                    .shadow(color: AppTheme.softShadow(for: colorScheme), radius: 20, y: 8)
+                    .fill(AppTheme.cardBackground(for: colorScheme).opacity(colorScheme == .light ? 0.88 : 0.65))
+            )
+            .background(
+                .ultraThinMaterial,
+                in: RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard + 4, style: .continuous)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.cornerRadiusCard + 4, style: .continuous)
-                    .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 1)
+                    .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.75)
             )
+            .multiLayerShadow(elevation: .popover, colorScheme: colorScheme)
         }
     }
 }
@@ -1042,17 +1052,18 @@ struct AccountMenuPopover: View {
             menuButton("设置", icon: "gearshape", action: onSettings)
                 .keyboardShortcut(",", modifiers: .command)
         }
-        .padding(12)
-        .frame(width: 228, alignment: .leading)
+        .padding(10)
+        .frame(width: 232, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(AppTheme.menuBackground(for: colorScheme))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(AppTheme.separator(for: colorScheme), lineWidth: 1)
-                )
-                .shadow(color: Color.black.opacity(colorScheme == .light ? 0.10 : 0.35), radius: 20, y: 8)
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .fill(AppTheme.menuBackground(for: colorScheme).opacity(colorScheme == .light ? 0.86 : 0.62))
         )
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.75)
+        )
+        .multiLayerShadow(elevation: .popover, colorScheme: colorScheme)
         .onDisappear {
             updates.resetTransientStatusIfNeeded()
         }

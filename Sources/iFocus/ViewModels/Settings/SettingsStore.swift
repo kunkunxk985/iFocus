@@ -656,7 +656,8 @@ class SettingsStore: ObservableObject {
         let densityRaw = defaults.string(forKey: Key.uiDensity) ?? UIDensity.comfortable.rawValue
         self.uiDensity = UIDensity(rawValue: densityRaw) ?? .comfortable
         self.dockBounceOnComplete = defaults.object(forKey: Key.dockBounceOnComplete) as? Bool ?? false
-        self.decorativeMotionEnabled = defaults.object(forKey: Key.decorativeMotionEnabled) as? Bool ?? false
+        self.decorativeMotionEnabled = defaults.object(forKey: Key.decorativeMotionEnabled) as? Bool
+            ?? !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         self.smartLaunchLanding = defaults.object(forKey: Key.smartLaunchLanding) as? Bool ?? true
         
         self.analyticsShowInsight = defaults.object(forKey: Key.analyticsShowInsight) as? Bool ?? true

@@ -33,11 +33,11 @@ private enum SettingsWindowPanel: String, CaseIterable, Identifiable {
     var searchTerms: String {
         switch self {
         case .general:
-            return "登录 开机 自动打开 启动 默认 专注钟 今天 清单 快捷键 空格 暂停 新手 引导 欢迎 帮助 教程 分类 标签 自定义 颜色 图标 管理"
+            return "登录 开机 自动打开 启动 默认 专注钟 今天 清单 快捷键 空格 暂停 新手 引导 欢迎 帮助 教程"
         case .timer:
             return "正计时 专注时长 短休息 长休息 长休 自动休息 自动专注 严格自律 跳过 每日目标 暂停提醒"
         case .appearance:
-            return "外观 浅色 深色 跟随系统 强调色 菜单栏 图标 界面密度 密度 舒适 紧凑 通知 权限 提示音 声音 音效 试听 程序坞 Dock 触感 触控板 震动 反馈 haptics"
+            return "外观 浅色 深色 跟随系统 强调色 菜单栏 图标 界面密度 密度 舒适 紧凑 动效 呼吸 动画 通知 权限 提示音 声音 音效 试听 程序坞 Dock 触感 触控板 震动 反馈 haptics"
         case .data:
             return "数据 本地 离线 任务 专注历史 导出 备份 恢复 快照 自动保护 访达 Finder 文件夹 存储"
         }
@@ -672,6 +672,19 @@ struct SettingsWindowView: View {
                     .labelsHidden()
                     .frame(width: 130)
                     .accessibilityLabel("菜单栏图标样式")
+                }
+
+                SettingsDivider()
+
+                SettingsRow(
+                    title: "界面呼吸与微动效",
+                    subtitle: "专注圆环呼吸、状态脉冲点与达成目标时的轻柔反馈",
+                    keywords: "动效 呼吸 动画 减弱动态效果"
+                ) {
+                    Toggle("", isOn: $settings.decorativeMotionEnabled)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .accessibilityLabel("界面呼吸与微动效")
                 }
             }
 

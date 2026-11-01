@@ -2,6 +2,13 @@ import Foundation
 import SwiftUI
 import iFocusCore
 
+struct ProfileCategoryStat: Identifiable {
+    var id: String { category.id }
+    let category: TaskCategory
+    let minutes: Int
+    let count: Int
+}
+
 /// Profile cards + heatmap bundled with the range dashboard — one pass over sessions/tasks per refresh.
 struct AnalyticsPageSnapshot {
     let model: AnalyticsDashboardModel
@@ -52,7 +59,7 @@ struct AnalyticsPageSnapshot {
         }
 
         let byDay = FocusStats.minutesByDay(sessions: pairs)
-        let heatmapGrid = FocusStats.contributionGrid(minutesByDay: byDay)
+        let heatmapGrid = FocusStats.contributionGrid(minutesByDay: byDay, relativeTo: now)
         let heatmapMonthLabels = FocusStats.monthLabels(for: heatmapGrid)
 
         let categoryStats = categoriesInUse

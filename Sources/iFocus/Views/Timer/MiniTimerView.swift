@@ -40,9 +40,21 @@ struct MiniTimerView: View {
         ZStack {
             Circle()
                 .fill(.regularMaterial)
+                .shadow(
+                    color: Color.black.opacity(colorScheme == .light ? 0.12 : 0.38),
+                    radius: 12,
+                    y: 4
+                )
             Circle()
+                .strokeBorder(
+                    Color.white.opacity(colorScheme == .light ? 0.45 : 0.14),
+                    lineWidth: 0.75
+                )
+            Circle()
+                .inset(by: 5)
                 .stroke(AppTheme.separatorLow(for: colorScheme), lineWidth: 5)
             Circle()
+                .inset(by: 5)
                 .trim(from: 0, to: max(0.001, progress))
                 .stroke(
                     timerStore.mode.accent,
@@ -50,18 +62,26 @@ struct MiniTimerView: View {
                 )
                 .rotationEffect(.degrees(-90))
 
-            VStack(spacing: 6) {
+            VStack(spacing: isHovering ? 2 : 5) {
                 Text(time)
-                    .font(.system(size: 26, weight: .bold, design: .rounded).monospacedDigit())
+                    .font(.system(size: isHovering ? 23 : 27, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundColor(AppTheme.primaryText(for: colorScheme))
                     .minimumScaleFactor(0.7)
                     .lineLimit(1)
                 if !isHovering {
-                    Image(systemName: timerStore.isRunning ? "pause.fill" : "play.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(timerStore.mode.accent)
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(timerStore.mode.accent)
+                            .frame(width: 5, height: 5)
+                        Text(taskTitle)
+                            .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: 96)
                 }
             }
+            .offset(y: isHovering ? -16 : 0)
             .padding(.horizontal, 16)
             .allowsHitTesting(false)
         }
@@ -71,11 +91,12 @@ struct MiniTimerView: View {
             if isHovering {
                 miniButton(systemName: "xmark", help: "隐藏迷你窗", action: onClose)
                     .offset(x: 2, y: -2)
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
             }
         }
         .overlay(alignment: .bottom) {
             if isHovering {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     miniButton(
                         systemName: timerStore.isRunning ? "pause.fill" : "play.fill",
                         help: timerStore.isRunning ? "暂停" : (timerStore.isSessionInProgress ? "继续" : "开始"),
@@ -91,11 +112,26 @@ struct MiniTimerView: View {
                         onOpenMain()
                     }
                 }
-                .padding(.bottom, 16)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.5)
+                        )
+                )
+                .padding(.bottom, 22)
+                .transition(.scale(scale: 0.9).combined(with: .opacity))
             }
         }
         .help(isHovering ? taskTitle : "拖动可移动，悬停后可暂停或跳过")
-        .onHover { isHovering = $0 }
+        .onHover { hovering in
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+                isHovering = hovering
+            }
+        }
         .padding(8)
         .frame(width: 176, height: 176)
         .preferredColorScheme(settings.appearance.colorScheme)

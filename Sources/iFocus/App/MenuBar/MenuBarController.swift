@@ -291,7 +291,7 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
         let popover = NSPopover()
         popover.behavior = .transient
         popover.animates = true
-        popover.contentSize = NSSize(width: 300, height: 244)
+        popover.contentSize = NSSize(width: 300, height: 214)
         popover.contentViewController = hosting
         popover.delegate = self
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)

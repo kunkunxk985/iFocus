@@ -15,6 +15,7 @@ struct TimerView: View {
     @State private var showResetConfirm = false
     @State private var celebratePulse = false
     @State private var ringBreath = false
+    @State private var isHoveringTopChrome = false
     @StateObject private var focusMode = FocusModeController.shared
     @AppStorage("timerImmersiveMode") private var immersiveMode = false
 
@@ -193,6 +194,10 @@ struct TimerView: View {
                             focusEntry
                         }
                     }
+                    .opacity(stageImmersive && timerStore.isRunning && !isHoveringTopChrome ? 0.16 : 1.0)
+                    .animation(.easeInOut(duration: 0.24), value: isHoveringTopChrome)
+                    .animation(.easeInOut(duration: 0.30), value: timerStore.isRunning)
+                    .onHover { isHoveringTopChrome = $0 }
                     .padding(.top, layout.stageTopChrome)
 
                     if !stageImmersive {

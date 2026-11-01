@@ -44,41 +44,60 @@ struct MenuBarPanelView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 5) {
-                        Circle()
-                            .fill(modeColor)
-                            .frame(width: 6, height: 6)
+        VStack(alignment: .leading, spacing: 11) {
+            // 1. Top Hero: Status + Countdown + Play/Skip Controls
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        PulseDot(
+                            color: modeColor,
+                            isActive: timerStore.isRunning,
+                            size: 6.5,
+                            allowsPulse: settings.decorativeMotionEnabled
+                        )
                         Text(stateLabel)
-                            .font(TypeScale.eyebrow)
+                            .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                             .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                        Text("·")
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.5))
+                        Text("今日 \(timerStore.completedPomodoros)/\(settings.dailyGoal) · \(timerStore.totalSecondsToday / 60)分")
+                            .font(.system(size: 11, weight: .medium, design: .rounded).monospacedDigit())
+                            .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.85))
                     }
 
                     Text(time)
-                        .font(.system(size: 30, weight: .bold, design: .rounded).monospacedDigit())
+                        .font(.system(size: 32, weight: .bold, design: .rounded).monospacedDigit())
+                        .tracking(-0.5)
                         .foregroundColor(AppTheme.primaryText(for: colorScheme))
                         .contentTransition(.numericText())
-
-                    Text(taskTitle)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                        .lineLimit(1)
                 }
 
                 Spacer(minLength: 4)
 
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
                     Button {
                         AppHaptics.buttonClick()
                         timerStore.toggle()
                     } label: {
-                        Image(systemName: timerStore.isRunning ? "pause.fill" : "play.fill")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 36, height: 36)
-                            .background(Circle().fill(modeColor))
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [modeColor, modeColor.opacity(0.88)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .frame(width: 38, height: 38)
+                                .shadow(color: modeColor.opacity(0.32), radius: 5, y: 2)
+                            Circle()
+                                .strokeBorder(Color.white.opacity(0.28), lineWidth: 0.75)
+                                .frame(width: 38, height: 38)
+                            Image(systemName: timerStore.isRunning ? "pause.fill" : "play.fill")
+                                .font(.system(size: 13.5, weight: .bold))
+                                .foregroundColor(.white)
+                                .offset(x: timerStore.isRunning ? 0 : 1)
+                        }
                     }
                     .buttonStyle(SoftScaleButtonStyle())
                     .help(timerStore.isRunning ? "暂停" : (timerStore.isSessionInProgress ? "继续" : "开始"))
@@ -89,10 +108,17 @@ struct MenuBarPanelView: View {
                         timerStore.skipToNext()
                     } label: {
                         Image(systemName: "forward.end.fill")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: 10.5, weight: .semibold))
                             .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                            .frame(width: 26, height: 26)
-                            .background(Circle().fill(AppTheme.elevatedBackground(for: colorScheme)))
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle()
+                                    .fill(AppTheme.elevatedBackground(for: colorScheme))
+                                    .overlay(
+                                        Circle()
+                                            .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.5)
+                                    )
+                            )
                     }
                     .buttonStyle(SoftScaleButtonStyle())
                     .disabled(!timerStore.canSkipSegment)
@@ -101,6 +127,7 @@ struct MenuBarPanelView: View {
                 }
             }
 
+            // 2. Smooth Progress Track
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Capsule()
@@ -112,108 +139,153 @@ struct MenuBarPanelView: View {
                     }
                 }
             }
-            .frame(height: 4)
+            .frame(height: 4.5)
 
-            HStack(spacing: 6) {
-                Text("今日 \(timerStore.completedPomodoros) / \(settings.dailyGoal) 番茄")
-                Spacer()
-                Text("\(timerStore.totalSecondsToday / 60) 分")
+            // 3. Interactive Frosted Task Selector Pill
+            Menu {
+                if tasks.isEmpty {
+                    Text("暂无待办任务")
+                } else {
+                    ForEach(tasks) { task in
+                        Button {
+                            AppHaptics.buttonClick()
+                            timerStore.requestStartWorkFocus(taskId: task.id)
+                            onClose()
+                        } label: {
+                            Label(
+                                task.title,
+                                systemImage: taskStore.activeTaskId == task.id ? "checkmark" : "circle"
+                            )
+                        }
+                    }
+                    Divider()
+                }
+                Button {
+                    AppHaptics.buttonClick()
+                    timerStore.requestStartWorkFocus(taskId: nil)
+                    onClose()
+                } label: {
+                    Label("自由专注", systemImage: "sparkles")
+                }
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: taskStore.activeTask != nil ? "target" : "sparkles")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundColor(modeColor)
+                    Text(taskTitle)
+                        .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                        .foregroundColor(AppTheme.primaryText(for: colorScheme))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text("切换任务")
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.75))
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.65))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(AppTheme.elevatedBackground(for: colorScheme))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.5)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
-            .font(TypeScale.meta)
-            .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .accessibilityLabel("切换当前专注任务：\(taskTitle)")
 
-            Divider()
-                .opacity(0.7)
+            Rectangle()
+                .fill(AppTheme.separatorLow(for: colorScheme))
+                .frame(height: 0.5)
+                .padding(.vertical, 1)
 
-            HStack(spacing: 8) {
+            // 4. Unified Control Center Action Bar
+            HStack(spacing: 6) {
                 Button {
                     AppHaptics.buttonClick()
                     onOpenMain()
                 } label: {
-                    Label("专注钟", systemImage: "timer")
-                        .font(.system(size: 11.5, weight: .semibold))
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .tint(AppTheme.accent)
-
-                Menu {
-                    if tasks.isEmpty {
-                        Text("暂无待办任务")
-                    } else {
-                        ForEach(tasks) { task in
-                            Button {
-                                AppHaptics.buttonClick()
-                                timerStore.requestStartWorkFocus(taskId: task.id)
-                                onClose()
-                            } label: {
-                                Label(
-                                    task.title,
-                                    systemImage: taskStore.activeTaskId == task.id ? "checkmark" : "circle"
-                                )
-                            }
-                        }
-                        Divider()
-                        Button {
-                            AppHaptics.buttonClick()
-                            timerStore.requestStartWorkFocus(taskId: nil)
-                            onClose()
-                        } label: {
-                            Label("自由专注", systemImage: "sparkles")
-                        }
+                    HStack(spacing: 5) {
+                        Image(systemName: "macwindow")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("打开主窗口")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
                     }
-                } label: {
-                    Label("任务", systemImage: "list.bullet")
-                        .font(.system(size: 11.5, weight: .medium))
+                    .foregroundColor(AppTheme.accent)
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(AppTheme.accent.opacity(colorScheme == .light ? 0.12 : 0.20))
+                    )
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(AppTheme.accent.opacity(0.28), lineWidth: 0.5)
+                    )
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
+                .buttonStyle(SoftScaleButtonStyle())
+                .accessibilityLabel("打开主窗口")
 
                 Spacer(minLength: 4)
 
-                Menu {
-                    Button("迷你计时窗") {
-                        NotificationCenter.default.post(name: AppNavigation.toggleMiniTimer, object: nil)
-                        onClose()
-                    }
-                    Button("全屏专注") {
-                        NotificationCenter.default.post(name: AppNavigation.toggleFocusMode, object: nil)
-                        onClose()
-                    }
-                    Divider()
-                    Button("设置") {
-                        onOpenSettings()
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
+                panelIconButton(systemName: "pip.enter", help: "悬浮迷你计时窗") {
+                    NotificationCenter.default.post(name: AppNavigation.toggleMiniTimer, object: nil)
+                    onClose()
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .help("迷你计时窗、全屏专注、设置")
-                .accessibilityLabel("更多")
-            }
 
-            HStack {
-                Button("退出 iFocus") {
+                panelIconButton(systemName: "arrow.up.left.and.arrow.down.right", help: "全屏沉浸专注") {
+                    NotificationCenter.default.post(name: AppNavigation.toggleFocusMode, object: nil)
+                    onClose()
+                }
+
+                panelIconButton(systemName: "gearshape", help: "偏好设置") {
+                    onOpenSettings()
+                }
+
+                panelIconButton(systemName: "power", help: "退出 iFocus") {
                     onQuit()
                 }
-                .buttonStyle(.plain)
-                .font(.system(size: 10.5))
-                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
-
-                Spacer()
             }
         }
         .padding(16)
-        .frame(width: 300, height: 228, alignment: .top)
+        .frame(width: 300, height: 214, alignment: .top)
         .tint(AppTheme.accent)
         .preferredColorScheme(settings.appearance.colorScheme)
         .onReceive(timerStore.clockTick) { _ in clockVersion &+= 1 }
         .accessibilityElement(children: .contain)
+    }
+
+    private func panelIconButton(
+        systemName: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            AppHaptics.buttonClick()
+            action()
+        } label: {
+            Image(systemName: systemName)
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundColor(AppTheme.secondaryText(for: colorScheme))
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(AppTheme.elevatedBackground(for: colorScheme))
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(AppTheme.separatorLow(for: colorScheme), lineWidth: 0.5)
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(SoftScaleButtonStyle())
+        .help(help)
+        .accessibilityLabel(help)
     }
 }

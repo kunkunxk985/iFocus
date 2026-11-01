@@ -394,12 +394,12 @@ struct TaskListView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(AppTheme.secondaryText(for: colorScheme).opacity(0.78))
-            TextField("搜索标题、备注、分类或链接", text: $searchText)
+            TextField("搜索标题、备注或链接", text: $searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12.5))
                 .focused($isSearchFocused)
                 .accessibilityLabel("搜索当前任务列表")
-                .accessibilityHint("搜索任务标题、备注、分类、链接和重复周期")
+                .accessibilityHint("搜索任务标题、备注和链接")
             Button {
                 if !searchText.isEmpty {
                     searchText = ""
