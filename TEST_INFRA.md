@@ -1,122 +1,101 @@
-# E2E Test Infrastructure: iFocus Apple Health & Fitness Style Statistics Redesign
+# E2E Test Infrastructure: Things 3 Style Floating Modal & Task Interaction Redesign
 
-## 1. Test Philosophy & Principles
+## 1. Test Philosophy & Architectural Principles
 
-### 1.1 Opaque-Box & Requirement-Driven
-The Statistics and Records Redesign test suite is strictly opaque-box and requirement-driven, derived directly from `PROJECT.md § Feature Inventory` (Features 1–16) and `ORIGINAL_REQUEST.md` (Requirements R1–R5).
-- **Zero Coupling to Private Internals**: Tests interact solely through published contracts and domain models (`AnalyticsDashboardModel`, `AnalyticsPageSnapshot`, `FocusStats`, `AnalyticsTimeRange`, `TaskStore`, `FocusSession`, `FocusTask`, `AppTheme`). Private view hierarchy `@State` variables and animation timelines are decoupled from logic validation.
-- **Specification-Derived Assertions**: Every expected value is mathematically derived from product requirements, design system tokens, or explicit user agreements from the project specification:
-  - Dual ring progress math: `min(1.0, completed / target)`.
-  - Hover tooltip format: `M月d日 · H小时m分 · N个番茄` (or `m分 · N个番茄` when duration < 60 mins).
-  - Heatmap 4-step color ladder opacities: `0 / 0.25 / 0.50 / 0.75 / 1.00`.
-  - 2x2 metric tiles: `maxSingleFocusSession`, `averageDailyFocusMinutes`, `peakFocusHoursString`, `completionRate`.
-- **Deterministic & Isolated**: Each test runs with a deterministic Gregorian calendar set to UTC (`TimeZone(secondsFromGMT: 0)`), provisions an isolated temporary filesystem directory (`FileManager.default.temporaryDirectory`), sets up fresh store instances, cleans up on `tearDownWithError`, and runs without order dependency or side effects.
+### 1.1 Opaque-Box & Requirement-Driven Verification
+The Things 3 Style Floating Modal & Task Interaction Redesign test infrastructure strictly enforces opaque-box and requirement-driven testing, derived directly from `ORIGINAL_REQUEST.md` (Requirements R1–R5) and `PROJECT.md` (Features 1–17, Milestones M1–M4).
+- **Decoupled from Private UI View Tree**: Tests interact through published interface contracts, domain stores (`TaskStore`, `SettingsStore`, `TimerStore`), data models (`FocusTask`, `EditTaskSession`), visual design tokens (`FloatingCardSurfaceModifier`, `FloatingModalShortcutHint`, `FloatingModalCloseButton`, `AppTheme`), and authoritative calculation oracles.
+- **Specification-Derived Authoritative Oracles**:
+  - **Floating Modal Geometry & Surface**: Continuous squircle curvature (`cornerRadius: 18, style: .continuous`), `.ultraThinMaterial` translucency, 0.75pt specular inner highlight stroke (`AppTheme.cardInnerHighlight`), `.multiLayerShadow(elevation: .popover)`, task modal width (`460pt`), profile modal width (`350pt`), and keyboard shortcut hints (`⌘↵ 保存 · Esc 取消`).
+  - **Things 3 Date Capsule Logic & Conversions**: 5 standard preset capsules (`[ 无 ]`, `[ 今天 ]`, `[ 明天 ]`, `[ 稍后 ]`, `[ 自定义日期… ⌵ ]`) with deterministic bidirectional mapping to/from `Date?`, and `M月d日` compact date formatting.
+  - **4-Tier Context Menu Hierarchy & Action Dispatching**: Tier 1 Core Focus & Edit (`bolt.fill`, `pencil`), Tier 2 Quick Reschedule & Move (`sun.max`, `sunrise`, `clock`, `tray.and.arrow.down`), Tier 3 Status (`pin`/`pin.slash`, `checkmark.circle`/`circle`), and Tier 4 Utility & Safety (`doc.on.doc`, `trash` with `role: .destructive`).
+  - **Inline Note Lightweight Summary**: First non-empty trimmed line extraction, 12pt regular font, 50% opacity (`AppTheme.secondaryText.opacity(0.50)`), `lineLimit(1)`, `truncationMode(.tail)`, and full note exposure via tooltip hover (`.help(task.notes)`).
+  - **Profile State Transaction Safety**: Uncommitted changes to avatar photo and color swatches during modal presentation roll back cleanly upon cancel/backdrop-tap/Esc/xmark dismiss.
+- **Strict Isolation & Zero Side Effects**: Every test provisions an isolated sandbox filesystem directory (`FileManager.default.temporaryDirectory`), creates dedicated store instances, uses a deterministic Gregorian calendar (UTC), and cleans up all resources on `tearDownWithError`.
 
 ### 1.2 Four-Tier Testing Pyramid
-The test suite implements an exhaustive four-tier structure adhering to Dual Track E2E Standards:
-1. **Tier 1 — Feature Coverage**: Comprehensive requirement verification for Features 1–16 in isolation (dual rings, trend aggregation, hover tooltips, date bounds, squircle heatmap, color ladder, 2x2 metric tiles, persistence, zero dependencies, performance).
-2. **Tier 2 — Boundary & Corner Cases**: Stress-testing edge cases (0 minutes, negative/corrupt minutes defensive clamping, future timestamps, sessions > 24 hours, 0 tasks vs 100% completion, leap years, year boundaries, empty histories).
-3. **Tier 3 — Cross-Feature Combinations**: Pairwise multi-component interactions (today range with 0 sessions vs annual heatmap with active streaks; dual ring progress with live ticking session; time range switching consistency; task completion toggle; new session appended with simultaneous updates across header, chart, heatmap, and metric tiles).
-4. **Tier 4 — Real-World Application Scenarios**: Full multi-day and multi-week end-to-end user journeys (30-day productivity consistency workflow & 1-year 53-week heatmap and long-term volume stability).
+The test suite implements an exhaustive four-tier structure adhering to Dual-Track E2E Quality Standards:
+1. **Tier 1 — Feature Coverage**: Isolated unit and functional verification of each redesign capability across M1–M3 (Floating modal surfaces, Date capsules, 4-tier context menu, Inline note summary, Profile modal state).
+2. **Tier 2 — Boundary & Corner Cases**: Comprehensive edge condition stress testing (empty notes, whitespace/newline notes, multi-line trailing newlines, extreme line lengths, valid vs invalid URL schemes, leap year Feb 29, year rollover Dec 31 to Jan 01, uncommitted profile state rollbacks, empty task title validation).
+3. **Tier 3 — Cross-Feature Interactions**: Multi-module pairwise interaction testing (task rescheduling with note retention, modal editing save with live ticking focus timer preservation, context menu pin + complete list sort order, EditTaskSession snapshot isolation, and clipboard copy with task reproduction).
+4. **Tier 4 — Real-World Application Scenarios**: Complete multi-step end-to-end user journeys (full lifecycle from task creation -> context menu reschedule -> note inspection -> floating modal editing -> timer focus -> completion; and multi-task backlog triage workflow).
 
 ---
 
-## 2. Feature Inventory Mapping
+## 2. Requirement Coverage Matrix (R1–R4 across Tiers 1–4)
 
-| Feature # | Milestone | Feature Name | Requirement Contract | Test Suite Target | Tier 1 Tests |
-|---|---|---|---|---|---|
-| **F1** | M1 | 一体化大看板布局 | 无缝集成 Avatar、用户名、大号双圆环与三大核心指标 | `testF01_MasterDashboard_*` | 1 |
-| **F2** | M1 | 高阶同心双圆环 | 极细番茄环+时长环，当前主题 Accent 色层级渐变并具备优雅呼吸动画 | `testF02_ConcentricRings_*` | 4 |
-| **F3** | M1 | 3大等宽指标看板 | 专注时长、达成番茄、连续天数采用大号等宽数字对齐排布 | `testF03_MonospacedStats_*` | 1 |
-| **F4** | M2 | 纯色圆角趋势柱状图 | 全平纯色圆角柱体（当前主题 Accent 色），柔和清淡背景水平刻度线 | `testF04_TrendChart_*` | 1 |
-| **F5** | M2 | 平滑悬停微胶囊 Tooltip | 鼠标悬停柱体展示微型胶囊浮层（`M月d日 · H小时m分 · N个番茄`） | `testF05_HoverTooltip_*` | 4 |
-| **F6** | M2 | 时间跨度胶囊切换 | 支持今天、7天、30天、本月无缝切换，数据联动平滑响应 | `testF06_DateBounds_*` | 1 |
-| **F7** | M3 | Squircle 连续平滑圆角热力图 | 热力图单元格采用苹果经典 Squircle 平滑圆角（`AppTheme.squircle(radius: 2.8)`） | `testF07_SquircleHeatmap_*` | 1 |
-| **F8** | M3 | 4 档纯净 Accent 呼吸色阶 | 统一由当前 Accent 色构建 0 / 25% / 50% / 75% / 100% 梯级 | `testF08_SquircleHeatmap_*` | 2 |
-| **F9** | M3 | 热力图日期与打卡浮层 | 悬停日期方块精准浮动展示对应日期与打卡专注时长（`yyyy年M月d日 · N 分钟`） | `testF09_SquircleHeatmap_*` | 2 |
-| **F10** | M4 | 2x2 对称微磁贴布局 | 纯平 2x2 对称布局展示单次最长、日均专注、黄金时段与任务完成率 | `testF10_MetricTiles_*` | 4 |
-| **F11** | M4 | 统一主题色微图标与等宽大字 | 剔除彩虹色，使用统一主题微图标（`stopwatch`, `clock.fill`, `sun.max.fill`, `checkmark.circle.fill`） | `testF11_MetricTiles_*` | 1 |
-| **F12** | M5 | TaskStore 零破坏持久化 | 保持 `FocusTask` 与 `FocusSession` 现有磁盘存储模型 100% 向前兼容 | `testF12_TaskStore_*` | 1 |
-| **F13** | M5 | 零外部依赖引入 | 不在 `Package.swift` 中引入任何外部第三方依赖 | `testF13_ZeroExternalDependenciesRule` | 1 |
-| **F14** | M5 | 统计与格式化单元测试集 | 新增针对双圆环、趋势微胶囊数据聚合、热力图色阶与磁贴计算的自动化测试 | `StatisticsRedesignTests.swift` | 43 |
-| **F15** | M5 | 现有全量测试 100% 绿灯 | `swift test` 保证全部现有（367 项）与新增测试通过（0 failures, 0 errors） | All Suites | 410 |
-| **F16** | M5 | 性能约束验证 | `AnalyticsPageSnapshot.build` @5k sessions < 220ms, heatmap < 150ms | `testF16_Performance_*` | 2 |
+| Requirement | Scope & Feature Summary | Tier 1 (Feature) | Tier 2 (Boundary) | Tier 3 (Cross-Feature) | Tier 4 (Real-World) | Total Tests |
+|---|---|:---:|:---:|:---:|:---:|:---:|
+| **R1** | **Floating Card Task Editing Modal**<br>• 460pt floating squircle container (`cornerRadius: 18`)<br>• 0.75pt inner highlight & popover shadow<br>• Things 3 date capsule presets (`[ 无 ]`, `[ 今天 ]`, `[ 明天 ]`, `[ 稍后 ]`, `[ 自定义日期… ]`)<br>• Borderless 16pt title input & embedded cards<br>• URL validation (http/https) & clickable link | 11 tests | 6 tests | 2 tests | 2 tests | **21 tests** |
+| **R2** | **Profile Editing Floating Modal**<br>• 350pt floating squircle container (`cornerRadius: 18`)<br>• Capsule nickname input with `person.fill`<br>• 24pt swatches in recessed pill tray<br>• Top-right `xmark` dismiss & shortcut hints<br>• Safe uncommitted avatar state rollback | 5 tests | 2 tests | 1 test | 2 tests | **10 tests** |
+| **R3** | **Task Row 4-Tier Native Context Menu**<br>• Tier 1: 立即开启专注 (`bolt.fill`), 编辑任务… (`pencil`)<br>• Tier 2: 今天 (`sun.max`), 明天 (`sunrise`), 稍后 (`clock`), 收集箱 (`tray.and.arrow.down`)<br>• Tier 3: 置顶/取消置顶 (`pin`/`pin.slash`), 标记完成/未完成 (`checkmark.circle`/`circle`)<br>• Tier 4: 复制标题 (`doc.on.doc`), 破坏性删除 (`trash`) | 6 tests | 1 test | 2 tests | 2 tests | **11 tests** |
+| **R4** | **Inline Note Lightweight Summary**<br>• Extraction of first non-empty trimmed line<br>• 12pt secondary text at 50% opacity (`lineLimit(1)`)<br>• Nil on empty/whitespace-only notes<br>• Full note preserved in hover tooltip | 6 tests | 3 tests | 2 tests | 2 tests | **13 tests** |
+| **R5** | **Zero Breaking Changes & Zero Regression**<br>• Backward compatible `FocusTask` & `EditTaskSession`<br>• `tasks.json` storage stability<br>• 100% pass of baseline 501 tests + new E2E tests | — | — | — | — | **All Tests** |
 
 ---
 
 ## 3. Test Architecture & Harness Design
 
-### 3.1 Architecture Overview
-
 ```
-Tests/iFocusTests/Analytics/StatisticsRedesignTests.swift
-├── Design Metrics & Specification Oracle (StatisticsRedesignDesignSpec)
-│   ├── Ring Dimensions & Breathing Constants (default 104pt, min 84pt, line 6.5pt, scale 1.0..1.06)
-│   ├── Trend Chart & Tooltip Constants (bar corner 4pt, tooltip capsule 12pt, supported ranges)
-│   ├── Squircle Heatmap & Color Ladder (squircle 2.8pt, 53 weeks x 7 days, opacities 0.045..1.00)
-│   ├── 2x2 Metric Tile SF Symbols & Styling (stopwatch, clock.fill, sun.max.fill, checkmark.circle.fill)
-│   └── Performance Latency Thresholds (Snapshot < 220ms, Heatmap < 150ms, MinutesByDay < 120ms)
-├── Query & Mathematical Calculation Oracle (StatisticsRedesignTestHarness)
+Tests/iFocusTests/Things3FloatingModalE2ETests.swift
+├── Design Specification Oracle (Things3FloatingModalDesignSpec)
+│   ├── Modal Surface Metrics (taskModalWidth: 460pt, profileModalWidth: 350pt, cornerRadius: 18pt)
+│   ├── Stroke & Shadow Constants (innerHighlight: 0.75pt, popover elevation tokens)
+│   ├── Typography Tokens (title: 16pt, inlineNote: 12pt, inlineNoteOpacity: 0.50)
+│   ├── Things 3 Date Presets (无, 今天, 明天, 稍后, 自定义日期…)
+│   ├── 4-Tier Context Menu Actions & SF Symbols
+│   └── Keyboard Shortcut Contracts ("⌘↵ 保存 · Esc 取消")
+├── Query & Algorithm Oracle (Things3FloatingModalTestHarness)
 │   ├── Deterministic UTC Gregorian Calendar
-│   ├── Model Factory Helpers (makeSession, makeTask, deterministic date)
-│   ├── Authoritative Trend Tooltip Formatter (M月d日 · H小时m分 · N个番茄 / m分 · N个番茄)
-│   ├── Authoritative Heatmap Tooltip Formatter (yyyy年M月d日 · N 分钟)
-│   ├── Concentric Dual Ring Math Oracle (Today & Multi-Day Target Calculations)
-│   └── Performance Latency Measurement Helper
-├── Test Suites
-│   ├── Tier 1: Feature Coverage (Features 1–16, 26 tests)
-│   ├── Tier 2: Boundary & Corner Cases (10 tests)
-│   ├── Tier 3: Cross-Feature Combinations (5 tests)
-│   └── Tier 4: Real-World Application Scenarios (2 comprehensive journeys)
+│   ├── Date Capsule Preset Classifier & Date Resolver
+│   ├── Custom Date Label Formatter ("M月d日")
+│   ├── Inline Note First-Line Extractor
+│   ├── Valid URL Scheme Verifier (http / https)
+│   ├── Context Menu Action Dispatch Simulator
+│   └── Profile Transaction State Rollback Verifier
+└── Test Suites
+    ├── Tier 1: Feature Coverage (28 tests)
+    │   ├── Feature 1: Floating Card Modal Surface Tokens (6 tests)
+    │   ├── Feature 2: Things 3 Date Capsules Logic & Conversions (6 tests)
+    │   ├── Feature 3: 4-Tier Native Context Menu Structure & Dispatching (6 tests)
+    │   ├── Feature 4: Inline Note First Line Extraction & Formatting (6 tests)
+    │   └── Feature 5: Profile Editing Modal State Management (4 tests)
+    ├── Tier 2: Boundary & Corner Cases (13 tests)
+    │   ├── Empty / whitespace-only notes
+    │   ├── Multi-line trailing newlines & carriage returns (\r\n)
+    │   ├── Extreme length first lines
+    │   ├── Valid HTTP/HTTPS URLs vs invalid schemes (ftp, javascript, file, mailto)
+    │   ├── Custom date leap year (Feb 29) & year rollover (Dec 31 -> Jan 01)
+    │   ├── Uncommitted profile state discards & rollbacks
+    │   └── Empty task title validation in editor
+    ├── Tier 3: Cross-Feature Interactions (5 tests)
+    │   ├── Rescheduling across lists while retaining notes, links, and priority
+    │   ├── Modal save preserving live active focus timer session
+    │   ├── Context menu pin + complete list sort order & filter stability
+    │   ├── EditTaskSession snapshot decoupling from live TaskStore background changes
+    │   └── Inline note extraction with clipboard title copy & task reproduction
+    └── Tier 4: Real-World Scenarios (2 tests)
+        ├── Complete task lifecycle: Quick Add -> Context Menu Reschedule -> Note Review -> Modal Edit -> Focus -> Completion
+        └── Multi-task backlog triage: Batch creation, 4-tier context triage, link inspection, undo deletion, and profile customization
 ```
 
-### 3.2 Design Tokens Verification
-Visual and design-token contracts are tested through `StatisticsRedesignDesignSpec`, which asserts mathematical properties against `AppTheme`, `FocusStats`, and layout constants:
-- Confirms concentric ring sizes (`default 104pt`, `min 84pt`, `lineWidth 6.5pt`).
-- Confirms squircle curvature helper (`AppTheme.squircle(radius: 2.8)`).
-- Confirms color ladder opacities (`0 / 0.25 / 0.50 / 0.75 / 1.00`).
-- Confirms 2x2 metric tile SF Symbols and background opacity (`0.08`).
+---
 
-### 3.3 State & Store Lifecycle Verification
-Session lifecycle, time ranges, and data models are tested through isolated `TaskStore` sandboxes:
-- Verifies `FocusSession` and `FocusTask` JSON serialization and deserialization across store instances.
-- Verifies range bounds calculation across `.today`, `.days7`, `.days30`, and `.month`.
-- Verifies live session ticking accumulation on top of historical records.
-- Verifies task completion rate calculation without side effects.
+## 4. Verification Methods & Commands
+
+### Running the New E2E Suite
+```bash
+swift test --filter Things3FloatingModalE2ETests
+```
+
+### Running Full Project Regression (Baseline 501 + New Tests)
+```bash
+swift test --disable-sandbox
+```
 
 ---
 
-## 4. Tier 4 Real-World Application Scenarios
-
-The suite includes two comprehensive end-to-end integration scenarios representing realistic user histories:
-
-1. **Scenario 1 — 30-Day Full User Journey (`testTier4_ThirtyDayUserJourney_ProductivityConsistencyAcrossAllWidgets`)**:
-   - Synthesizes 30 days of user activity with realistic workday patterns (4 pomodoros / 100 mins), weekend patterns (1 pomodoro / 25 mins), and vacation gaps (0 pomodoros).
-   - Validates data consistency across all 4 widgets simultaneously:
-     - Header ring progress against 30-day target (`dailyGoal * 30`).
-     - Trend bar chart aggregation matching range total minutes and pomodoros.
-     - Heatmap active day count matching exactly the active days in the 30-day period.
-     - 2x2 metric tiles correctly calculating `maxSingleFocusSession` (90 mins), task completion rate (75%), and average daily focus.
-
-2. **Scenario 2 — 1-Year Full Annual Journey (`testTier4_OneYearFullJourney_HeatmapAndLongTermStats`)**:
-   - Simulates 53 weeks (365 days) with 1,200+ sessions across different months.
-   - Verifies 53 columns × 7 rows grid structure (371 cells) with correct weekday alignment.
-   - Verifies month labels generation at column transitions.
-   - Verifies golden time "黄金时段" modal hour detection under high volume.
-   - Verifies TaskStore disk persistence and reload fidelity with 1,200+ sessions without data loss.
-
----
-
-## 5. Coverage & Verification Thresholds
-
-| Metric | Threshold | Method of Verification |
-|---|---|---|
-| **Tier 1 Feature Coverage** | 100% of Features 1–16 | `StatisticsRedesignTests.swift` (26 tests) |
-| **Tier 2 Boundary Cases** | >= 10 edge case scenarios | `StatisticsRedesignTests.swift` (10 tests) |
-| **Tier 3 Combinations** | >= 5 pairwise cross-feature tests | `StatisticsRedesignTests.swift` (5 tests) |
-| **Tier 4 Workflows** | 2 comprehensive real-world scenarios | `StatisticsRedesignTests.swift` (2 tests) |
-| **Total Redesign Tests** | 43 new test cases | `swift test --filter StatisticsRedesignTests` |
-| **Baseline Regression** | 367 / 367 existing tests pass (0 failures) | `swift test` execution output |
-| **Total Passing Tests** | 410 / 410 tests passed (100% green) | `swift test` execution output |
-| **Performance Benchmark** | `AnalyticsPageSnapshot.build @5k < 220ms` | Executed at ~29ms in benchmark test |
-| **Dependency Rule** | 0 external third-party packages | Asserted via `Package.swift` parsing test |
+## 5. Quality Invariants & Exit Criteria
+1. **Zero Failures**: 100% of tests pass cleanly (0 unexpected failures, 0 regressions).
+2. **Deterministic Reproducibility**: Zero flaky tests; all date and string calculations run with fixed calendars and temporary isolated sandboxes.
+3. **Zero Implementation Modifications**: Authored strictly within `Tests/iFocusTests/` without altering production code in `Sources/`.

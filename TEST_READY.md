@@ -1,123 +1,128 @@
-# TEST_READY: iFocus Apple Health & Fitness Style Statistics Redesign
+# TEST_READY: Things 3 Style Floating Modal & Task Interaction Redesign
 
 ## 1. Test Runner Commands
 
-### Full Suite Run (Baseline + Statistics Redesign E2E)
+### Full Project Regression Run (Baseline + Floating Modal E2E)
 ```bash
-swift test
+swift test --disable-sandbox
 ```
-*Alternative with scratch-path & sandbox disabled (CI / release verification)*:
+
+### Things 3 Floating Modal E2E Suite Only
+```bash
+swift test --disable-sandbox --filter Things3FloatingModalE2ETests
+```
+
+### Clean Rebuild Verification
 ```bash
 CLANG_MODULE_CACHE_PATH=.build/clang-module-cache \
   swift test --disable-sandbox --scratch-path .build
-```
-
-### Statistics Redesign Suite Only
-```bash
-swift test --filter StatisticsRedesignTests
-```
-
-### Performance & Latency Benchmarks
-```bash
-swift test --filter PerformanceBenchmarks
 ```
 
 ---
 
 ## 2. Test Execution & Coverage Statistics
 
-| Category / Tier | Target Scope | Tests Planned | Tests Executed | Passed | Failed | Execution Time |
-|---|---|---|---|---|---|---|
-| **Tier 1 — Feature Coverage** | Features 1–16 (M1–M5 isolation) | 26 | 26 | 26 | 0 | 0.040s |
-| **Tier 2 — Boundary & Corner Cases** | Edge cases, 0 mins, 24h+, leap years, 0 goals | 10 | 10 | 10 | 0 | 0.005s |
-| **Tier 3 — Cross-Feature Combinations** | Range switching, live session, multi-widget sync | 5 | 5 | 5 | 0 | 0.002s |
-| **Tier 4 — Real-World Scenarios** | 30-day journey & 1-year annual volume flow | 2 | 2 | 2 | 0 | 0.014s |
-| **Subtotal (Statistics Redesign)** | `StatisticsRedesignTests.swift` | **43** | **43** | **43** | **0** | **0.061s** |
-| **Existing Baseline Suite** | Core, Stores, Services, App, Product, E2E | 367 | 367 | 367 | 0 | 1.605s |
-| **Total Test Suite** | Full Project | **410** | **410** | **410** | **0** | **1.666s** |
+| Category / Tier | Scope | Tests Planned | Tests Executed | Passed | Failed | Execution Time |
+|---|---|:---:|:---:|:---:|:---:|:---:|
+| **Tier 1 — Feature Coverage** | Floating surface, Date capsules, 4-tier context menu, Inline notes, Profile modal | 28 | 28 | 28 | 0 | 0.021s |
+| **Tier 2 — Boundary & Corner Cases** | Empty/whitespace notes, multiline trailing, URL validation, leap year, rollback | 12 | 12 | 12 | 0 | 0.007s |
+| **Tier 3 — Cross-Feature Interactions** | Reschedule retention, live timer preservation, sort order, snapshot decoupling | 5 | 5 | 5 | 0 | 0.007s |
+| **Tier 4 — Real-World Scenarios** | End-to-end task lifecycle, Backlog triage with clipboard & undo safety | 2 | 2 | 2 | 0 | 0.010s |
+| **Subtotal (Floating Modal E2E)** | `Things3FloatingModalE2ETests.swift` | **48** | **48** | **48** | **0** | **0.045s** |
+| **Existing Baseline Suite** | Core, Stores, Services, App, Views, Product, E2E | 521 | 521 | 521 | 0 | 3.390s |
+| **Total Test Suite** | Full Project | **569** | **569** | **569** | **0** | **3.435s** |
 
-**Pass Rate**: **100% (410 / 410 passed, 0 failures, 0 unexpected)**.
-
----
-
-## 3. Detailed Feature Breakdown (Tier 1: 26 Tests)
-
-### Feature 1–3 (M1): Top Dashboard & Concentric Dual Rings
-1. `testF01_MasterDashboard_VisualHierarchyAndDesignTokens`: Verifies ring size (default 104pt, min 84pt), line width (6.5pt), breathing scale bounds (1.00..1.06), and animation duration (1.8s).
-2. `testF02_ConcentricRings_TodayPomodoroProgressMath`: Verifies today pomodoro progress math for 0 completed (0%), 4/8 completed (50%), 8/8 completed (100%), and 12/8 completed (clipped at 100%).
-3. `testF02_ConcentricRings_TodayDurationProgressMath`: Verifies today duration progress against target (`dailyGoal * 25`), checking 25 mins (25%), 100 mins (100%), and 150 mins (clipped at 100%).
-4. `testF02_ConcentricRings_MultiDayRangesProgressMath`: Verifies target scaling across 7 days (`dailyGoal * 7`) and 30 days (`dailyGoal * 30`).
-5. `testF02_ConcentricRings_ZeroDailyGoalSafeguard`: Defensive guard when `dailyGoal = 0`, ensuring 0.0 return without NaN or crash.
-6. `testF03_MonospacedStats_FormattingExactness`: Verifies `FocusStats.formatTotalMinutes` for 0m, 25m, 60m, 75m, 120m, 145m, and streak calculation.
-
-### Feature 4–6 (M2): Trend Bar Chart & Hover Tooltip & Date Bounds
-7. `testF04_TrendChart_DailySessionAggregation`: Verifies session aggregation per calendar day (start-of-day resolution), summing durations correctly.
-8. `testF05_HoverTooltip_FormatStandardLongDuration`: Verifies tooltip string formatting for duration >= 60m: `10月28日 · 2小时15分 · 5个番茄`.
-9. `testF05_HoverTooltip_FormatSubHourDuration`: Verifies tooltip string formatting for duration < 60m: `10月28日 · 45分 · 2个番茄`.
-10. `testF05_HoverTooltip_FormatExactHourDuration`: Verifies tooltip string formatting for exact hours: `10月28日 · 2小时 · 4个番茄`.
-11. `testF05_HoverTooltip_FormatZeroDuration`: Verifies tooltip string formatting for 0 duration: `10月28日 · 0分 · 0个番茄`.
-12. `testF06_DateBounds_SupportedRangesFidelity`: Verifies day bounds for `.today` (1 day), `.days7` (7 days inclusive), `.days30` (30 days inclusive), and `.month` (1st of month through today).
-
-### Feature 7–9 (M3): Squircle Heatmap & 4-Step Color Ladder
-13. `testF07_SquircleHeatmap_ShapeTokenContinuousRadius`: Verifies continuous squircle curvature token (`AppTheme.squircle(radius: 2.8)`).
-14. `testF08_SquircleHeatmap_IntensityLevelThresholds`: Verifies thresholds: Level 0 (0m), Level 1 (1..25m), Level 2 (26..50m), Level 3 (51..100m), Level 4 (>100m).
-15. `testF08_SquircleHeatmap_ColorLadderOpacities`: Verifies opacity ladder tokens: Level 0 (0.045), Level 1 (0.25), Level 2 (0.50), Level 3 (0.75), Level 4 (1.00).
-16. `testF09_SquircleHeatmap_53WeeksGridStructure`: Verifies annual heatmap grid structure: exactly 53 columns × 7 rows (371 cells).
-17. `testF09_SquircleHeatmap_MonthLabelsAndActiveDaysCount`: Verifies month labels generation at column transitions and active day counting.
-
-### Feature 10–11 (M4): 2x2 Metric Tiles & Unified Icons
-18. `testF10_MetricTiles_MaxSingleFocusSession`: Identifies the longest focus session duration across mixed history.
-19. `testF10_MetricTiles_AverageDailyFocusCalculation`: Calculates average daily focus (`totalMinutes / activeDays`) formatted as human-readable string.
-20. `testF10_MetricTiles_PeakFocusHoursGoldenTime`: Identifies the modal peak focus hour ("黄金时段"), formatted as `HH:00 - HH:00`.
-21. `testF10_MetricTiles_TaskCompletionRateCalculation`: Calculates task completion percentage, capped at 100% and safe on 0 tasks.
-22. `testF11_MetricTiles_SFSymbolsContractAndVisualTokens`: Verifies SF Symbol contracts: `stopwatch` (or `flame.fill`), `clock.fill`, `sun.max.fill`, `checkmark.circle.fill`, with soft 0.08 background fill.
-
-### Feature 12–16 (M5): TaskStore Persistence, Zero Dependencies & Performance
-23. `testF12_TaskStore_ModelPersistenceAndZeroDataLoss`: Verifies `FocusSession` and `FocusTask` roundtrip fidelity through disk storage.
-24. `testF13_ZeroExternalDependenciesRule`: Validates that `Package.swift` introduces 0 external third-party package dependencies.
-25. `testF16_Performance_PageSnapshot5000SessionsUnderBudget`: `AnalyticsPageSnapshot.build` over 5,000 sessions executes in ~29ms (Budget: 220ms).
-26. `testF16_Performance_HeatmapGridComputationUnderBudget`: `FocusStats.contributionGrid` over 365 days executes in ~0.3ms (Budget: 150ms).
+**Pass Rate**: **100% (569 / 569 passed, 0 failures, 0 unexpected)**.
 
 ---
 
-## 4. Boundary, Combination & Real-World Breakdown (Tiers 2–4: 17 Tests)
+## 3. Detailed Feature Breakdown (Tier 1: 28 Tests)
 
-### Tier 2: Boundary & Corner Cases (10 Tests)
-- `testTier2_ZeroMinutesSession_SafelyHandledWithoutDivisionByZero`: Handles zero session duration without division-by-zero or NaN.
-- `testTier2_NegativeAndDefensiveMinutes_SanitizedToZero`: Sanitizes corrupt negative minutes to 0 defensively.
-- `testTier2_FutureTimestampSession_HandledSafely`: Future timestamp sessions do not pollute current day bounds.
-- `testTier2_SingleSessionExceeding24Hours_HandledWithoutOverflow`: Sessions > 24 hours (1500 mins) format cleanly as "25小时".
-- `testTier2_ZeroTasks_CompletionRateIsZeroPercent`: Zero total tasks yields "0%" without error.
-- `testTier2_AllTasksCompleted_CompletionRateIs100Percent`: All tasks completed yields "100%".
-- `testTier2_LeapYear_February29_BoundsAndHeatmap`: Leap year Feb 29 bounds span 29 days correctly.
-- `testTier2_YearBoundary_Dec31ToJan01_StreakAndMonthBounds`: Streak continuity across Dec 31 to Jan 01 year rollover.
-- `testTier2_DailyGoalZero_ProgressCappedCleanly`: Daily goal 0 yields progress 0.0 safely.
-- `testTier2_EmptyHistory_PeakHoursAndAverageYieldsSafeDefaults`: Empty session history yields fallback "暂无数据" and "0分钟".
+### Feature 1: Floating Card Modal Surface Tokens & Geometry (R1 & R2)
+1. `testF01_FloatingCardSurface_ContinuousSquircleCornerRadius18`: Confirms squircle curvature token (`AppTheme.squircle(radius: 18)`) and default corner radius `18pt` continuous style.
+2. `testF01_FloatingCardSurface_InnerHighlightStroke075pt`: Confirms 0.75pt inner highlight stroke width and 0.50pt outer hairline boundary with top-to-bottom specular gradients in light and dark modes.
+3. `testF01_FloatingCardSurface_PopoverElevationTokens`: Confirms `.multiLayerShadow(elevation: .popover)` ambient radius `28pt` (y: `14pt`) and contact radius `5pt` (y: `2.5pt`).
+4. `testF01_FloatingCardSurface_ModalDimensionsTask460Profile350`: Validates task modal width (`460pt`), profile modal width (`350pt`), avatar size (`72pt`), and color swatches (`24pt`).
+5. `testF01_FloatingCardSurface_ShortcutHintsTextContract`: Confirms footer shortcut hint text `"⌘↵ 保存 · Esc 取消"`.
+6. `testF01_FloatingCardSurface_CloseButtonInitializesAndDispatches`: Confirms `FloatingModalCloseButton` dismisses on user action.
 
-### Tier 3: Cross-Feature Combinations (5 Tests)
-- `testTier3_TodayZeroSessions_WithAnnualHeatmapActiveStreak`: Today has 0 sessions, yet yesterday's active streak is preserved while today's rings show 0%.
-- `testTier3_DualRingProgress_WithLiveTickingSession`: Live ticking session expands duration ring while pomodoro count remains committed count.
-- `testTier3_TimeRangeSwitching_ConsistencyAcrossAllViews`: Changing range between Today -> 7 days -> 30 days updates chart and rings in strict synchronization.
-- `testTier3_TaskCompletionToggle_InstantlyReflectsIn2x2CompletionRate`: Task completion toggle immediately updates completion rate tile.
-- `testTier3_NewSessionAppended_SimultaneousUpdateAcrossHeaderChartHeatmapTiles`: Adding a session updates Header, Trend Chart, Heatmap active days, and 2x2 Tiles simultaneously.
+### Feature 2: Things 3 Date Capsules Logic & Date Conversions (R1)
+7. `testF02_DateCapsules_PresetTitlesAndCount`: Verifies standard 5 preset capsules (`["无", "今天", "明天", "稍后", "自定义日期…"]`).
+8. `testF02_DateCapsules_NilDueDateMapsToNonePreset`: Classifies `nil` due date as `.none` ("无") and resolves to `nil`.
+9. `testF02_DateCapsules_TodayDateMapsToTodayPreset`: Classifies current day timestamps as `.today` ("今天") and resolves to start of today.
+10. `testF02_DateCapsules_TomorrowDateMapsToTomorrowPreset`: Classifies tomorrow dates as `.tomorrow` ("明天") and resolves to start of tomorrow.
+11. `testF02_DateCapsules_LaterDateMapsToLaterPreset`: Classifies today + 2 days as `.later` ("稍后") and resolves to start of later day.
+12. `testF02_DateCapsules_ArbitraryDateMapsToCustomPresetWithFormattedLabel`: Classifies future dates as `.custom` with canonical Chinese formatting `"M月d日"`.
 
-### Tier 4: Real-World Application Scenarios (2 Tests)
-- `testTier4_ThirtyDayUserJourney_ProductivityConsistencyAcrossAllWidgets`: Synthetic 30 days of varied activity (workdays, weekends, vacation break) verifying consistent metrics across all 4 widgets.
-- `testTier4_OneYearFullJourney_HeatmapAndLongTermStats`: 53 weeks (365 days) with 1,200+ sessions verifying full 53x7 grid, month labels, modal peak hour detection, and zero data loss on TaskStore reload.
+### Feature 3: 4-Tier Native Context Menu Structure & Action Dispatching (R3)
+13. `testF03_ContextMenu_FourTierStructureAndSeparators`: Verifies 4 tiers separated by 3 dividers with exact SF Symbol and label specifications.
+14. `testF03_ContextMenu_Tier1FocusAndEditContracts`: Dispatches Tier 1 actions: starts focus session intent (`bolt.fill`) and generates `EditTaskSession` snapshot (`pencil`).
+15. `testF03_ContextMenu_Tier2RescheduleMovesAcrossFilters`: Dispatches Tier 2 actions (`今天`, `明天`, `稍后`, `收集箱`) updating task `dueDate` and filter alignment.
+16. `testF03_ContextMenu_Tier3PinTogglePreservesSortPriority`: Dispatches Tier 3 pin toggle, setting `isPinned` and keeping priority sorting intact.
+17. `testF03_ContextMenu_Tier3CompleteToggleMarksCompleted`: Dispatches Tier 3 completion toggle, marking `isCompleted` with `completedAt` timestamp.
+18. `testF03_ContextMenu_Tier4ClipboardCopyAndDestructiveDelete`: Dispatches Tier 4 title copy to `NSPasteboard` and soft-deletes task with undo banner presentation.
+
+### Feature 4: Inline Note First Line Extraction & Formatting (R4)
+19. `testF04_InlineNote_SingleLineExtraction`: Extracts plain single line note without alteration.
+20. `testF04_InlineNote_MultiLineReturnsFirstNonEmptyLine`: Extracts first line of multi-line note, ignoring subsequent paragraphs.
+21. `testF04_InlineNote_LeadingBlankLinesSkipped`: Skips leading whitespace and blank lines to extract the first substantive line.
+22. `testF04_InlineNote_VisualTokens12ptAnd50PercentOpacity`: Confirms 12pt regular typography and 50% opacity styling (`AppTheme.secondaryText.opacity(0.50)`).
+23. `testF04_InlineNote_HoverTooltipPreservesFullMultitext`: Confirms raw task notes are preserved for complete hover tooltip exposure (`.help(task.notes)`).
+24. `testF04_InlineNote_CarriageReturnAndWindowsNewlineFidelity`: Verifies cross-platform newline compatibility (`\r\n` and `\r`).
+
+### Feature 5: Profile Editing Modal State Management (R2)
+25. `testF05_ProfileModal_Squircle350WidthAndDismissContract`: Verifies 350pt squircle container and dismiss lifecycle.
+26. `testF05_ProfileModal_CapsuleNicknameWithPersonGlyph`: Verifies capsule nickname container with `person.fill` icon.
+27. `testF05_ProfileModal_24ptColorSwatchesInRecessedTray`: Verifies 24pt swatches across 6 AccentPreset colors in recessed pill tray.
+28. `testF05_ProfileModal_UncommittedAvatarChangeRollbackOnCancel`: Verifies that uncommitted avatar path and color modifications roll back to initial state on cancel.
+29. `testF05_ProfileModal_CommittedStatePersistsOnSave`: Verifies that saving profile commits sanitized username and new avatar selections.
 
 ---
 
-## 5. Performance Benchmark Verification
+## 4. Boundary, Combination & Real-World Breakdown (Tiers 2–4: 19 Tests)
 
-All performance benchmarks executed well within the specified budgets:
-- `AnalyticsPageSnapshot.build (5,000 sessions + 500 tasks)`: **26.8ms – 29.1ms** (Limit: 220ms, ~8x faster than budget).
-- `Heatmap contributionGrid computation (5,000 sessions)`: **0.25ms – 0.31ms** (Limit: 150ms, ~500x faster than budget).
-- `minutesByDay aggregation (5,000 sessions)`: **3.0ms** (Limit: 120ms, ~40x faster than budget).
-- `TaskStore init reload (2k tasks + 2k sessions)`: **19.0ms** (Limit: 500ms).
-- `flushPendingSaves (1k tasks + 500 sessions)`: **6.2ms** (Limit: 400ms).
+### Tier 2: Boundary & Corner Cases (12 Tests)
+- `testTier2_EmptyNotes_ReturnsNilSummary`: Empty notes string yields `nil` summary.
+- `testTier2_WhitespaceOnlyNotes_ReturnsNilSummary`: Tabs, spaces, and newline-only notes yield `nil` summary.
+- `testTier2_SingleLineNotesWithoutNewlines_ExtractedCleanly`: Leading and trailing whitespaces stripped from single-line notes.
+- `testTier2_MultiLineNotesWithTrailingNewlines_PreservesFirstLine`: Consecutive trailing newlines do not corrupt first line extraction.
+- `testTier2_ExtremeLengthFirstLine_ExtractedForTailTruncation`: Long 800+ character first line preserved intact for SwiftUI tail truncation.
+- `testTier2_URLValidation_ValidHTTPSchemesAccepted`: Standard HTTP and HTTPS URLs with query params, hashes, and ports validated true.
+- `testTier2_URLValidation_InvalidSchemesRejected`: Unsupported schemes (`ftp://`, `javascript:`, `file:///`, `mailto:`, `tel:`) validated false.
+- `testTier2_URLValidation_MalformedAndWhitespaceURLsRejected`: Empty, whitespace, scheme-only, and malformed strings safely rejected.
+- `testTier2_CustomDate_EdgeCaseLeapYearFebruary29`: Leap day (Feb 29) formats cleanly as `"2月29日"`.
+- `testTier2_CustomDate_EdgeCaseYearRolloverDec31ToJan01`: Year boundary rollover from Dec 31 to Jan 01 correctly resolves tomorrow.
+- `testTier2_UncommittedProfileState_MultipleDiscardsRollbackCleanly`: Multiple sequential discards restore initial state without leaking dirty edits.
+- `testTier2_EmptyTaskTitleInEditor_DisallowsSave`: Empty or whitespace-only task title disables modal save action.
+
+### Tier 3: Cross-Feature Interactions (5 Tests)
+- `testTier3_TaskRescheduling_PreservesInlineNotesAndURL`: Rescheduling across Today -> Tomorrow -> Week -> Inbox retains notes and link intact.
+- `testTier3_EditingModalSave_PreservesActiveFocusSessionAndTimer`: Updating a task in the floating modal while a focus timer is running preserves the active timer session.
+- `testTier3_ContextMenuPinAndComplete_PreservesSortOrderAndFilterTransitions`: Context menu Pin + Complete operations maintain list ordering and filter integrity.
+- `testTier3_EditSessionSnapshot_DecoupledFromLiveTaskMutations`: Background task mutations do not dirty an active in-flight `EditTaskSession`.
+- `testTier3_InlineNoteExtraction_WithClipboardCopyAndRecreation`: Copying a task title to clipboard and recreating a task preserves first-line summary extraction.
+
+### Tier 4: Real-World Scenarios (2 Tests)
+- `testTier4_CompleteUserTaskLifecycle_CreationRescheduleNoteInspectionModalEditingCompletion`:
+  Comprehensive end-to-end user journey:
+  1. Quick Add creates task in Today list.
+  2. Context menu Tier 2 reschedules task to Tomorrow.
+  3. Notes and URL attached; first line extracted as row summary.
+  4. Floating card modal opened with `EditTaskSession` snapshot.
+  5. Title, notes, and custom date modified; saved with keyboard shortcut contract.
+  6. Context menu Tier 1 starts focus session; timer runs smoothly.
+  7. Context menu Tier 3 marks task complete; verified in completed filter.
+- `testTier4_MultiTaskBacklogTriageWorkflow_BatchTriageWithClipboardAndDeletionSafety`:
+  Multi-task triage scenario:
+  1. Batch tasks added to Inbox with mixed notes and URLs.
+  2. Context menu Tier 3 pins urgent task.
+  3. Context menu Tier 2 distributes tasks across Today and Tomorrow.
+  4. Context menu Tier 4 copies title to system pasteboard.
+  5. Context menu Tier 4 deletes item with soft-delete undo restoration.
+  6. Profile modal customization tested with uncommitted state rollback.
 
 ---
 
-## 6. Verification Status
+## 5. Verification Status
 
-The E2E test suite for the iFocus Apple Health & Fitness Style Statistics Redesign is **100% green (410/410 tests passing)**, fully requirement-driven, self-contained, and ready for deployment verification and packaging.
+The E2E test suite for the Things 3 Style Floating Modal & Task Interaction Redesign is **100% green (569/569 tests passing)**, strictly requirement-driven, fully isolated, and ready for deployment verification and packaging.

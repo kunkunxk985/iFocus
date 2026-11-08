@@ -161,9 +161,20 @@ struct TaskRowView: View {
         !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// First non-empty line of notes for Things 3 whisper-quiet inline preview.
+    private var firstNoteLine: String? {
+        for line in task.notes.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+        }
+        return nil
+    }
+
     /// Task has secondary metadata to display.
     private var hasMetadata: Bool {
-        task.timeSpentMinutes > 0 || hasNotes || task.hasLink || task.dueDate != nil
+        task.timeSpentMinutes > 0 || task.hasLink || task.dueDate != nil
     }
 
     /// Unified whisper-quiet metadata opacity (0.50 light / 0.55 dark).
@@ -275,18 +286,26 @@ struct TaskRowView: View {
                         
                         Spacer(minLength: 0)
                     }
+
+                    // Things 3 whisper-quiet inline note summary (R4)
+                    if hasNotes, let noteLine = firstNoteLine {
+                        Text(noteLine)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundColor(
+                                completedFade
+                                ? AppTheme.secondaryText(for: colorScheme).opacity(0.35)
+                                : AppTheme.secondaryText(for: colorScheme).opacity(0.50)
+                            )
+                            .strikethrough(completedFade, color: AppTheme.secondaryText(for: colorScheme).opacity(0.25))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .help(task.notes)
+                    }
                     
                     // Secondary metadata row (conditional — rendered ONLY when metadata exists)
                     if hasMetadata {
                         HStack(spacing: 8) {
                             focusDurationMeta
-                            
-                            if hasNotes {
-                                Image(systemName: "text.alignleft")
-                                    .font(.system(size: AppTheme.iconMeta, weight: .medium))
-                                    .foregroundColor(metadataForeground)
-                                    .help(task.notes)
-                            }
                             
                             if task.hasLink {
                                 Button(action: openTaskLink) {
@@ -482,8 +501,55 @@ struct TaskRowView: View {
     
     @ViewBuilder
     private var contextMenuContent: some View {
+        // Tier 1: Core Focus & Edit
         Button(action: handleFocusButton) {
-            Label(focusButtonHelp, systemImage: focusButtonIcon)
+            Label("立即开启专注", systemImage: "bolt.fill")
+        }
+        
+        Button(action: onEdit) {
+            Label("编辑任务…", systemImage: "pencil")
+        }
+        
+        if task.hasLink {
+            Button(action: openTaskLink) {
+                Label("打开链接", systemImage: "link")
+            }
+        }
+        
+        Divider()
+        
+        // Tier 2: Quick Reschedule & Move
+        Button {
+            taskStore.moveTask(id: task.id, to: .todayTask)
+        } label: {
+            Label("今天", systemImage: "sun.max")
+        }
+        
+        Button {
+            taskStore.moveTask(id: task.id, to: .tomorrowTask)
+        } label: {
+            Label("明天", systemImage: "sunrise")
+        }
+        
+        Button {
+            taskStore.moveTask(id: task.id, to: .weekTask)
+        } label: {
+            Label("稍后", systemImage: "clock")
+        }
+        
+        Button {
+            taskStore.moveTask(id: task.id, to: .inboxTask)
+        } label: {
+            Label("移入收集箱", systemImage: "tray.and.arrow.down")
+        }
+        
+        Divider()
+        
+        // Tier 3: Status Management
+        Button {
+            taskStore.togglePin(for: task)
+        } label: {
+            Label(task.isPinned ? "取消置顶" : "置顶", systemImage: task.isPinned ? "pin.slash" : "pin")
         }
         
         Button {
@@ -497,48 +563,24 @@ struct TaskRowView: View {
             }
             taskStore.toggleCompletion(for: task)
         } label: {
-            Label(task.isCompleted ? "标记为未完成" : "标记为已完成",
-                  systemImage: task.isCompleted ? "circle" : "checkmark.circle.fill")
-        }
-        
-        if !task.isCompleted {
-            Button {
-                taskStore.togglePin(for: task)
-            } label: {
-                Label(task.isPinned ? "取消置顶" : "置顶", systemImage: task.isPinned ? "pin.slash" : "pin")
-            }
-        }
-        
-        Menu("移到") {
-            Button("今天") {
-                taskStore.moveTask(id: task.id, to: .todayTask)
-            }
-            Button("明天") {
-                taskStore.moveTask(id: task.id, to: .tomorrowTask)
-            }
-            Button("稍后") {
-                taskStore.moveTask(id: task.id, to: .weekTask)
-            }
-            Button("收集箱") {
-                taskStore.moveTask(id: task.id, to: .inboxTask)
-            }
-        }
-        
-        Button(action: onEdit) {
-            Label("编辑任务", systemImage: "pencil")
-        }
-        
-        if task.hasLink {
-            Button {
-                openTaskLink()
-            } label: {
-                Label("打开链接", systemImage: "link")
-            }
+            Label(
+                task.isCompleted ? "标记为未完成" : "标记为已完成",
+                systemImage: task.isCompleted ? "circle" : "checkmark.circle"
+            )
         }
         
         Divider()
         
+        // Tier 4: Utility & Safety
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(task.title, forType: .string)
+        } label: {
+            Label("复制任务标题", systemImage: "doc.on.doc")
+        }
+        
         Button(role: .destructive) {
+            AppHaptics.buttonClick()
             taskStore.deleteTask(task)
         } label: {
             Label("删除任务", systemImage: "trash")

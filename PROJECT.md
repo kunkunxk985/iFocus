@@ -1,94 +1,84 @@
-# Project: iFocus Apple Health & Fitness Style Statistics Redesign
+# Project: iFocus Things 3 Style Floating Modal & Task Interaction Redesign
 
 ## Architecture
-- **Framework & Deployment Target**: macOS 13.0+, Swift 5.9+, SwiftUI, Swift Charts.
-- **Data Layer**:
-  - `TaskStore` (`Sources/iFocus/ViewModels/Tasks/TaskStore.swift`): In-memory published state for `FocusSession` and `FocusTask`. Disk storage strictly in `tasks.json`, `focus_sessions.json`, `app_state.json`. Zero disk schema modifications.
-  - `FocusStats` (`Sources/iFocusCore/FocusStats.swift`): Pure algorithms computing total duration, pomodoros, streaks, peak hours, daily averages, and heatmap grids.
-  - `AnalyticsDashboardModel` (`Sources/iFocus/ViewModels/Tasks/AnalyticsDashboardModel.swift`): Aggregates live session data and calculates range totals.
+- **Framework & Deployment Target**: macOS 13.0+, Swift 5.9+, SwiftUI.
+- **Design System & Visual Tokens Layer**:
+  - `FloatingCardSurface.swift` / `AppTheme.swift`: Reusable `.floatingCardSurface(cornerRadius: 18)` container modifier with `.ultraThinMaterial`, `0.75pt` specular inner highlight stroke (`AppTheme.cardInnerHighlight`), `.multiLayerShadow(elevation: .popover)`, and `AppTheme.separatorLow` boundary.
 - **View Layer**:
-  - `AnalyticsView` (`Sources/iFocus/Views/Analytics/AnalyticsView.swift`): Main container page for "我的记录".
-  - `AnalyticsCards.swift` (`Sources/iFocus/Views/Analytics/AnalyticsCards.swift`): Top Apple Fitness master dashboard (`achievementHero`) with concentric dual rings and 3 monospaced metrics.
-  - `AnalyticsCharts.swift` (`Sources/iFocus/Views/Analytics/AnalyticsCharts.swift`): Trend bar chart (`WeeklyFocusChart`) with Swift Charts, rounded bars, soft gridlines, and hover capsule tooltip overlay.
-  - `ProfileHeatmapCard.swift` (`Sources/iFocus/Views/Profile/ProfileHeatmapCard.swift`): Annual activity heatmap with Squircle continuous smooth curves, 5-step Accent color breathing ladder, and date/duration tooltip.
-  - `ProfileInsightsCard.swift` (`Sources/iFocus/Views/Profile/ProfileInsightsCard.swift`): 2x2 symmetric pure-flat micro metric tiles with unified Accent icons and monospaced digits.
-- **Design Tokens**:
-  - `AppTheme.swift` (`Sources/iFocus/Theme/AppTheme.swift`): `AppTheme.accent`, `AppTheme.squircle(radius:)`, `AppTheme.separatorLow`, `AppTheme.springInteractive`.
+  - `EditProfileSheet.swift`: Upgraded floating card profile editing modal (width 350pt, cornerRadius 18 squircle, top-right `xmark` dismiss, capsule nickname input with person icon, 24pt swatches in recessed pill tray, shortcut hints `⌘↵ 保存 · Esc 取消`, safe uncommitted rollback).
+  - `TaskListView.swift`: Replaces system attached `.sheet` with centered in-window `.overlay`, dimming backdrop (`Color.black.opacity(...)`), backdrop tap-to-dismiss, and top-level `onExitCommand` Esc key handling.
+  - `EditTaskView.swift`: Restructured floating card task editing modal (width 460pt, cornerRadius 18 squircle, borderless 16pt rounded title input, Things 3 date capsule presets with popover DatePicker, embedded card fields for notes and URL with clickable valid links, top-right `xmark`, bottom shortcut hints).
+  - `TaskRowView.swift`: 4-tier native `.contextMenu` separated by `Divider()`, flat reschedule actions, clipboard copy (`doc.on.doc`), destructive delete (`trash`), and inline note lightweight summary (first line, 12pt, 50% opacity, lineLimit(1), hover tooltip).
+- **Data & Persistence Layer**:
+  - `TaskStore.swift`: Zero breaking changes to `FocusTask`, `EditTaskSession`, or `tasks.json` schema.
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | 一体化大看板布局 | 消除多重卡片嵌套与割裂感，Avatar、用户名与看板统一无缝集成 | M1 | R1 |
-| 2 | 高阶同心双圆环 | 极细番茄环+时长环，当前主题 Accent 色层级渐变并具备优雅呼吸动画 | M1 | R1 |
-| 3 | 3大等宽指标看板 | 专注时长、达成番茄、连续天数采用大号等宽数字并列排布 | M1 | R1 |
-| 4 | 纯色圆角趋势柱状图 | 全平纯色圆角柱体（当前主题 Accent 色），柔和清淡背景水平刻度线 | M2 | R2 |
-| 5 | 平滑悬停微胶囊 Tooltip | 鼠标悬停柱体展示微型胶囊浮层（格式如 `10月28日 · 2小时15分 · 5个番茄`） | M2 | R2 |
-| 6 | 时间跨度胶囊切换 | 支持今天、7天、30天、本月无缝切换，数据联动平滑响应 | M2 | R2 |
-| 7 | Squircle 连续平滑圆角热力图 | 热力图单元格采用苹果经典 Squircle 平滑圆角 | M3 | R3 |
-| 8 | 4 档纯净 Accent 呼吸色阶 | 统一由当前 Accent 色构建 0 / 25% / 50% / 75% / 100% 梯级 | M3 | R3 |
-| 9 | 热力图日期与打卡浮层 | 悬停日期方块精准浮动展示对应日期与打卡专注时长 | M3 | R3 |
-| 10 | 2x2 对称微磁贴布局 | 纯平 2x2 对称布局展示单次最长、日均专注、黄金时段与任务完成率 | M4 | R4 |
-| 11 | 统一主题色微图标与等宽大字 | 剔除彩虹色图标与生硬分割线，使用统一主题微图标与清晰等宽大字号 | M4 | R4 |
-| 12 | TaskStore 零破坏持久化 | 保持 `FocusTask` 与 `FocusSession` 现有磁盘存储模型 100% 向前兼容 | M5 | R5 |
-| 13 | 零外部依赖引入 | 不在 `Package.swift` 中引入任何外部第三方依赖 | M5 | R5 |
-| 14 | 统计与格式化单元测试集 | 新增针对双圆环、趋势微胶囊数据聚合、热力图色阶与磁贴计算的自动化测试 | M5 | R5 |
-| 15 | 现有 367 项全量测试 100% 绿灯 | `swift test` 保证全部现有与新增测试通过（0 failures, 0 errors） | M5 | R5 |
-| 16 | 自动化编译打包与安装验证 | 执行 `./Scripts/package_app.sh` 编译打包并安装至 `/Applications/iFocus.app` | M5 | R5 |
+| 1 | 浮动卡片通用表面修饰器 | 提供 `.floatingCardSurface(cornerRadius: 18)`，集成 `.ultraThinMaterial`、0.75pt 镜面高光内描边、`.multiLayerShadow(elevation: .popover)` 与微边框 | M1 | R2 |
+| 2 | 个人资料浮动模态卡片 | `EditProfileSheet` 升级为居中浮动 Squircle 卡片（宽 350pt，圆角 18），右上角 `xmark` 关闭，底部快捷键提示 | M1 | R2 |
+| 3 | 高质感胶囊昵称输入框 | 废弃旧式 `.roundedBorder`，使用 `Capsule` 容器搭配 `person.fill` 图标、纯平文本输入、聚焦微发光与一键清空按钮 | M1 | R2 |
+| 4 | 精致化头像与色盘交互 | 24pt 颜色色块嵌入内凹胶囊凹槽，弹簧选择动画，`AccentPreset` 专属悬停提示与触觉反馈 | M1 | R2 |
+| 5 | 安全未提交状态回滚 | 修复遮罩/Esc/xmark 关闭时未提交头像与色盘状态泄露的问题，在取消与 `onDisappear` 中自动安全回滚 | M1 | R2 |
+| 6 | 任务编辑居中浮动遮罩呈现 | `TaskListView` 废弃顶部下挂的系统 `.sheet`，采用全屏居中 `.overlay`、半透明遮罩暗色背景与遮罩点击关闭 | M2 | R1 |
+| 7 | 任务编辑卡片容器与快捷键 | `EditTaskView` 采用 460pt 居中浮动 Squircle 容器、右上角 `xmark` 按钮、底部 `⌘↵ 保存 · Esc 取消` 与全局键盘响应 | M2 | R1 |
+| 8 | Things 3 日期胶囊预设组 | 水平排列胶囊预设：`[ 无 ]`、`[ 今天 ]`、`[ 明天 ]`、`[ 稍后 ]`、`[ 自定义日期… ⌵ ]`，实时高亮选中项 | M2 | R1 |
+| 9 | 自定义日期紧凑 Popover | 点击自定义日期胶囊展开紧凑型日历 Popover，选择日期后胶囊自动更新为对应格式化日期 | M2 | R1 |
+| 10 | 无边框 16pt 粗圆体标题输入 | 左对齐纯平无边框标题输入框，采用 16pt 半粗圆体字形，自然融入卡片顶部 | M2 | R1 |
+| 11 | 嵌入式卡片备注编辑区 | 多行 `TextEditor` 嵌入微卡片容器，支持占位符，支持回车换行而不触发模态框保存退出 | M2 | R1 |
+| 12 | 嵌入式 URL 卡片与链接高亮 | 嵌入式 URL 卡片，合规链接以主题色高亮并提供原生可点击打开按钮（`NSWorkspace.shared.open`） | M2 | R1 |
+| 13 | 4 层级原生右键上下文菜单 | `TaskRowView` 采用 `Divider()` 严格划分为 4 个层级，彻底扁平化移动操作，告别深层二级子菜单 | M3 | R3 |
+| 14 | 完整上下文菜单操作联动 | Tier 1: 立即专注/编辑；Tier 2: 今天/明天/稍后/收集箱；Tier 3: 置顶/完成；Tier 4: 复制标题/删除任务 | M3 | R3 |
+| 15 | 剪贴板复制与安全删除 | Tier 4 支持快速复制任务标题到 `NSPasteboard`，删除任务带 `.destructive` 警示红字与撤销提示 | M3 | R3 |
+| 16 | 任务行内轻量备注摘要 | 提取备注第一有效行，在标题下方以 12pt、50% 弱透明度、`lineLimit(1)` 优雅呈现，配备悬停完整 Tooltip | M3 | R4 |
+| 17 | 全量自动化测试与发布打包 | 保证现有 501 项全量测试 100% 绿灯，新增测试完备，执行 `./Scripts/package_app.sh` 顺利打包并成功安装至 `/Applications/iFocus.app` | M4 | R5 |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M1 | 顶部 Apple Fitness 核心指标大看板 | 重构 `AnalyticsCards.swift` 中的 `achievementHero`，实现极细高阶同心双圆环呼吸动画及 3 大等宽数字看板 | none | DONE |
-| M2 | Apple Health 交互级趋势柱状图 | 重构 `AnalyticsCharts.swift` 中的 `WeeklyFocusChart`，实现纯色圆角柱、柔和水平刻度、悬停胶囊微气泡 Tooltip 及时间跨度无缝联动 | M1 | DONE |
-| M3 | Squircle 平滑圆角与呼吸色阶年度热力图 | 重构 `ProfileHeatmapCard.swift`，实现 Squircle 连续平滑圆角、Accent 0/25/50/75/100% 呼吸色阶及精准悬停气泡 | none | DONE |
-| M4 | 2x2 对称纯平微磁贴统计洞察 | 重构 `ProfileInsightsCard.swift`，实现 2x2 对称微磁贴、统一主题微图标、黄金时段文案与等宽大字号 | none | DONE |
-| M5 | 自动化测试套件验收、全量回归与打包发布 | 编写新增单元测试（涵盖格式化、趋势聚合与色阶），运行 `swift test`（367+ 项 100% 绿灯），执行 `./Scripts/package_app.sh` 安装至 `/Applications/iFocus.app` | M1, M2, M3, M4 | DONE |
+| M1 | 浮动卡片表面修饰器与个人资料编辑模态框升级 (R2) | 实现 `FloatingCardSurface` 视觉修饰器，升级 `EditProfileSheet.swift` 为浮动卡片，实现胶囊输入框、精致色盘、快捷键提示与未提交状态回滚 | none | DONE |
+| M2 | Things 3 风格任务编辑浮动卡片模态框 (R1) | 重构 `TaskListView.swift` 模态呈现逻辑，升级 `EditTaskView.swift` 为 460pt 浮动卡片、Things 3 日期胶囊预设组、日期 Popover、无边框标题与嵌入式备注/URL 卡片 | M1 | PLANNED |
+| M3 | 任务行 4 层级原生上下文菜单与内联备注摘要 (R3 & R4) | 重构 `TaskRowView.swift`，实现 4 层级原生右键菜单（Focus/Edit、Reschedule、Status、Utility/Delete），实现标题下方 12pt 50% 不透明度内联备注首行摘要 | none | PLANNED |
+| M4 | 全量测试套件验收、零回归保障与发布打包 (R5) | 运行全量单元与 E2E 自动化测试（501+ 项保持 100% 绿灯），验证无破坏性变更，执行 `./Scripts/package_app.sh && open /Applications/iFocus.app` 完成打包安装 | M1, M2, M3 | PLANNED |
 
 ## Interface Contracts
-### M1: ConcentricDualRingView ↔ AnalyticsCards
-- **Props**:
-  - `pomodoroProgress: Double` (0.0 ... 1.0+)
-  - `durationProgress: Double` (0.0 ... 1.0+)
-  - `accentColor: Color`
-  - `ringSize: CGFloat` (default ~100-110pt)
-  - `lineWidth: CGFloat` (极细高阶 ~6-7pt)
-- **Output**: Concentric dual circular rings with breathing animation.
+### M1: FloatingCardSurfaceModifier
+- **Signature**: `View.floatingCardSurface(cornerRadius: CGFloat = 18) -> some View`
+- **Behavior**:
+  - Background: `.ultraThinMaterial` continuous squircle + `AppTheme.cardBackground` adaptive tint.
+  - Border: 0.75pt specular inner highlight stroke (`AppTheme.cardInnerHighlight`) + 0.5pt subtle separator.
+  - Shadow: `.multiLayerShadow(elevation: .popover)`.
 
-### M2: Chart Day Data Model ↔ Hover Tooltip
-- **Data**:
-  - `DayFocus` in `AnalyticsCharts.swift`: `date: Date`, `label: String`, `minutes: Int`, `pomodoros: Int`
-- **Tooltip string generator**:
-  - Format: `M月d日 · H小时m分 · N个番茄` (or `m分 · N个番茄` when duration < 60 mins).
-- **Interaction**:
-  - macOS 13 compatible: `.chartOverlay` with `ChartProxy.value(atX:as: Date.self)` & `.onContinuousHover`.
+### M2: EditTaskView & TaskListView Overlay Contract
+- **State Binding**: `activeSheet: TaskListSheet?` (using `EditTaskSession`).
+- **Overlay Container**: Centered `ZStack` with `Color.black.opacity(...)` backdrop and `.contentShape(Rectangle())`.
+- **Keyboard Shortcuts**:
+  - `⌘↵`: Save and dismiss (calls `onSave`).
+  - `Esc`: Cancel and dismiss without saving.
+- **Date Presets**:
+  - `[ 无 ]`: `dueDate = nil`
+  - `[ 今天 ]`: `dueDate = calendar.startOfDay(for: Date())`
+  - `[ 明天 ]`: `dueDate = calendar.date(byAdding: .day, value: 1, to: today)`
+  - `[ 稍后 ]`: `dueDate = calendar.date(byAdding: .day, value: 2, to: today)`
+  - `[ 自定义日期… ⌵ ]`: Compact popover with `DatePicker("", selection: $dueDate, displayedComponents: .date)`.
 
-### M3: Heatmap Cell Model ↔ Squircle Cell & Floating Tooltip
-- **Props**:
-  - `level: Int` (0, 1, 2, 3, 4)
-  - `accentColor: Color`
-  - `date: Date`, `minutes: Int`
-- **Shape**:
-  - `AppTheme.squircle(radius: 2.8)`
-- **Color ladder**:
-  - Level 0: `AppTheme.separatorLow.opacity(0.35)`
-  - Level 1: `accentColor.opacity(0.25)`
-  - Level 2: `accentColor.opacity(0.50)`
-  - Level 3: `accentColor.opacity(0.75)`
-  - Level 4: `accentColor` (1.0)
-
-### M4: Metric Tile Model ↔ 2x2 Grid
-- **Tiles**:
-  - Tile 1: "单次最长" (`maxSingleFocusSession`) — SF Symbol `stopwatch` (or `flame.fill`)
-  - Tile 2: "日均专注" (`averageDailyLabel`) — SF Symbol `clock.fill`
-  - Tile 3: "黄金时段" (`peakFocusHoursString`) — SF Symbol `sun.max.fill`
-  - Tile 4: "任务完成率" (`completionRate`) — SF Symbol `checkmark.circle.fill`
-- **Color**:
-  - Uniform `AppTheme.accent` with soft background `AppTheme.accent.opacity(0.08)`.
+### M3: TaskRowView Context Menu & Note Summary Contract
+- **Context Menu Structure**:
+  - Tier 1: `立即开启专注` (`bolt.fill`), `编辑任务…` (`pencil`).
+  - Divider()
+  - Tier 2: `今天` (`sun.max`), `明天` (`sunrise`), `稍后` (`clock`), `移入收集箱` (`tray.and.arrow.down`).
+  - Divider()
+  - Tier 3: `置顶 / 取消置顶` (`pin` / `pin.slash`), `标记为已完成 / 标记为未完成` (`checkmark.circle` / `circle`).
+  - Divider()
+  - Tier 4: `复制任务标题` (`doc.on.doc`), `删除任务` (`trash`, `role: .destructive`).
+- **Inline Note Summary**:
+  - Extract: First non-empty trimmed line from `task.notes`.
+  - Style: `.font(.system(size: 12, weight: .regular))`, `foregroundColor(AppTheme.secondaryText.opacity(0.50))`, `lineLimit(1)`, `truncationMode(.tail)`, `.help(task.notes)`.
 
 ## Code Layout
-- `Sources/iFocus/Views/Analytics/AnalyticsCards.swift` (M1: Hero dual rings & monospaced stats)
-- `Sources/iFocus/Views/Analytics/AnalyticsCharts.swift` (M2: Trend chart, rounded bars, tooltip capsule)
-- `Sources/iFocus/Views/Analytics/AnalyticsView.swift` (M1/M2: Integration and range chip sync if needed)
-- `Sources/iFocus/Views/Profile/ProfileHeatmapCard.swift` (M3: Squircle heatmap cells, breathing palette, hover tooltip)
-- `Sources/iFocus/Views/Profile/ProfileInsightsCard.swift` (M4: 2x2 symmetric metric tiles, accent icons)
-- `Tests/iFocusTests/Analytics/StatisticsRedesignTests.swift` (M5 & E2E: Automated tests for metrics, formatting, hover data)
+- `Sources/iFocus/Views/DesignSystem/FloatingCardSurface.swift`: Shared floating card surface modifier and close button helper.
+- `Sources/iFocus/Views/Profile/EditProfileSheet.swift`: Upgraded profile editing floating card.
+- `Sources/iFocus/Views/Tasks/TaskListView.swift`: In-window overlay presentation for floating modals.
+- `Sources/iFocus/Views/Tasks/EditTaskView.swift`: Things 3 floating task editor with date capsules and card fields.
+- `Sources/iFocus/Views/Tasks/TaskRowView.swift`: 4-tier context menu and inline note summary.
+- `Tests/iFocusTests/`: Automated unit and E2E regression tests.

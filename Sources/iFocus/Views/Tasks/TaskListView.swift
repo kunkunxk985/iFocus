@@ -34,7 +34,7 @@ struct TaskListView: View {
     @EnvironmentObject var viewState: ContentViewState
     @Environment(\.colorScheme) private var colorScheme
     /// One sheet per screen; edit sessions keep a stable snapshot identity.
-    private enum TaskListSheet: Identifiable {
+    private enum TaskListSheet: Identifiable, Equatable {
         case edit(EditTaskSession)
 
         var id: String {
@@ -307,30 +307,63 @@ struct TaskListView: View {
                 activeChip = .all
             }
         }
-        // Snapshot identity (`EditTaskSession`) — never `sheet(item:)` a live FocusTask
-        // that mutates while the timer is running.
-        .sheet(item: $activeSheet) { sheet in
-            switch sheet {
-            case .edit(let session):
-                EditTaskView(session: session, categories: taskStore.allCategories) { title, category, priority, pomodoros, due, recurrence, notes, linkURL in
-                    taskStore.updateTask(
-                        id: session.id,
-                        title: title,
-                        category: category,
-                        priority: priority,
-                        estimatedPomodoros: pomodoros,
-                        dueDate: due,
-                        recurrence: recurrence,
-                        notes: notes,
-                        linkURL: linkURL
-                    )
+        // In-window centered floating modal overlay with Things 3 backdrop dimming.
+        // Snapshot identity (`EditTaskSession`) — never inspect a live mutating FocusTask.
+        .overlay {
+            if let sheet = activeSheet {
+                ZStack {
+                    Color.black.opacity(colorScheme == .light ? 0.20 : 0.45)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .transition(.opacity)
+                        .onTapGesture {
+                            withAnimation(AppTheme.springInteractive) {
+                                activeSheet = nil
+                            }
+                        }
+
+                    switch sheet {
+                    case .edit(let session):
+                        EditTaskView(
+                            session: session,
+                            categories: taskStore.allCategories,
+                            onCancel: {
+                                withAnimation(AppTheme.springInteractive) {
+                                    activeSheet = nil
+                                }
+                            },
+                            onSave: { title, category, priority, pomodoros, due, recurrence, notes, linkURL in
+                                taskStore.updateTask(
+                                    id: session.id,
+                                    title: title,
+                                    category: category,
+                                    priority: priority,
+                                    estimatedPomodoros: pomodoros,
+                                    dueDate: due,
+                                    recurrence: recurrence,
+                                    notes: notes,
+                                    linkURL: linkURL
+                                )
+                                withAnimation(AppTheme.springInteractive) {
+                                    activeSheet = nil
+                                }
+                            }
+                        )
+                        // Force full re-init of @State when reopening the same task after save.
+                        .id("\(session.id)-\(session.notes)-\(session.linkURL)-\(session.title)")
+                        .transition(.scale(scale: 0.98).combined(with: .opacity))
+                    }
                 }
-                // Force full re-init of @State when reopening the same task after save.
-                .id("\(session.id)-\(session.notes)-\(session.linkURL)-\(session.title)")
+                .zIndex(100)
             }
         }
+        .animation(AppTheme.springInteractive, value: activeSheet?.id)
         .onExitCommand {
-            if isSelecting {
+            if activeSheet != nil {
+                withAnimation(AppTheme.springInteractive) {
+                    activeSheet = nil
+                }
+            } else if isSelecting {
                 withAnimation(AppTheme.springInteractive) {
                     isSelecting = false
                     selectedIDs.removeAll()
@@ -767,7 +800,10 @@ struct TaskListView: View {
         guard let id = taskStore.addTask(for: currentFilter, dueOverride: dueOverride) else { return }
         AppHaptics.buttonClick()
         if openEditor, let task = taskStore.tasks.first(where: { $0.id == id }) {
-            activeSheet = .edit(EditTaskSession(task: task))
+            isQuickAddFocused = false
+            withAnimation(AppTheme.springInteractive) {
+                activeSheet = .edit(EditTaskSession(task: task))
+            }
         }
     }
     
@@ -974,7 +1010,11 @@ struct TaskListView: View {
                     selectedIDs.insert(task.id)
                 }
             },
-            onEdit: { activeSheet = .edit(EditTaskSession(task: task)) },
+            onEdit: {
+                withAnimation(AppTheme.springInteractive) {
+                    activeSheet = .edit(EditTaskSession(task: task))
+                }
+            },
             onToggleTimer: { timerStore.toggle() },
             onStartFocus: {
                 timerStore.startFocus(on: task.id)
