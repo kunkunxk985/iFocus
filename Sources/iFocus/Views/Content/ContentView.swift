@@ -417,6 +417,7 @@ struct ContentView: View {
             .background(AppTheme.contentBackground(for: colorScheme).ignoresSafeArea())
             .id(viewState.selectedScreen)
             .animation(.easeInOut(duration: 0.22), value: viewState.selectedScreen)
+            .zIndex(viewState.isModalOverlayPresented ? 30 : 0)
 
             // Top: recoverable session after quit / crash (survives "稍后").
             if timerStore.pendingResumeSnapshot != nil {

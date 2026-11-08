@@ -179,6 +179,11 @@ struct EditTaskView: View {
             }
             .padding([.top, .trailing], 14)
         }
+        .onAppear {
+            DispatchQueue.main.async {
+                isTitleFocused = true
+            }
+        }
         .onExitCommand {
             handleCancel()
         }

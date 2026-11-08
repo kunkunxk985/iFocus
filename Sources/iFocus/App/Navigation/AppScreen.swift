@@ -11,4 +11,5 @@ class ContentViewState: ObservableObject {
     @Published var selectedScreen: AppScreen? = .timer
     @Published var shouldFocusQuickAdd: Bool = false
     @Published var shouldFocusSearch: Bool = false
+    @Published var isModalOverlayPresented: Bool = false
 }

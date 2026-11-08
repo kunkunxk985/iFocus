@@ -7,6 +7,7 @@ struct AnalyticsView: View {
     @EnvironmentObject var timerStore: TimerStore
     @EnvironmentObject var settings: SettingsStore
     @EnvironmentObject var taskStore: TaskStore
+    @EnvironmentObject var viewState: ContentViewState
     @Environment(\.colorScheme) private var colorScheme
     @State private var clockVersion: UInt = 0
     /// Dashboard numbers are minute-granularity. Ignore per-second ticks inside the same minute.
@@ -101,17 +102,35 @@ struct AnalyticsView: View {
                     Color.black.opacity(colorScheme == .light ? 0.20 : 0.45)
                         .ignoresSafeArea()
                         .contentShape(Rectangle())
-                        .onTapGesture { isEditingProfile = false }
+                        .transition(.opacity)
+                        .onTapGesture {
+                            withAnimation(AppTheme.springInteractive) {
+                                isEditingProfile = false
+                            }
+                        }
                     EditProfileSheet(
                         tempUsername: $tempUsername,
                         isPresented: $isEditingProfile
                     )
                     .transition(.scale(scale: 0.98).combined(with: .opacity))
                 }
-                .zIndex(20)
+                .zIndex(100)
             }
         }
-        .animation(.easeOut(duration: 0.16), value: isEditingProfile)
+        .animation(AppTheme.springInteractive, value: isEditingProfile)
+        .onChange(of: isEditingProfile) { isPresented in
+            viewState.isModalOverlayPresented = isPresented
+        }
+        .onDisappear {
+            viewState.isModalOverlayPresented = false
+        }
+        .onExitCommand {
+            if isEditingProfile {
+                withAnimation(AppTheme.springInteractive) {
+                    isEditingProfile = false
+                }
+            }
+        }
     }
 
     private func header(model: AnalyticsDashboardModel) -> some View {
@@ -124,7 +143,9 @@ struct AnalyticsView: View {
             HStack(spacing: 8) {
                 Button {
                     tempUsername = displayName
-                    isEditingProfile = true
+                    withAnimation(AppTheme.springInteractive) {
+                        isEditingProfile = true
+                    }
                 } label: {
                     PageHeaderActionPillLabel(
                         title: "编辑资料",

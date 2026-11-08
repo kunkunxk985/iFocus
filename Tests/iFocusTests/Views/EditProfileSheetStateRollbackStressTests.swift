@@ -287,18 +287,22 @@ final class EditProfileSheetStateRollbackStressTests: XCTestCase {
         pumpRunLoop(seconds: 0.05)
 
         // User uploads avatar
-        let uploaded = store.uploadAvatar(from: dummyImageURL)
+        let uploaded = store.uploadAvatar(from: dummyImageURL, removePrevious: false)
         XCTAssertTrue(uploaded)
-        XCTAssertNotNil(store.avatarPath)
+        let uncommittedPath = store.avatarPath
+        XCTAssertNotNil(uncommittedPath)
         XCTAssertNotNil(defaults.string(forKey: "avatarPath"))
 
         // User cancels by clicking backdrop
         model.isPresented = false
         pumpRunLoop(seconds: 0.05)
 
-        // Verify avatarPath is rolled back to nil
+        // Verify avatarPath is rolled back to nil and uncommitted file is cleaned up
         XCTAssertNil(store.avatarPath, "avatarPath must revert to nil when cancelled")
         XCTAssertNil(defaults.string(forKey: "avatarPath"), "UserDefaults avatarPath must be removed")
+        if let uncommittedPath {
+            XCTAssertFalse(FileManager.default.fileExists(atPath: uncommittedPath), "Uncommitted avatar file must be cleaned up on rollback")
+        }
 
         window.contentView = nil
     }
@@ -325,7 +329,7 @@ final class EditProfileSheetStateRollbackStressTests: XCTestCase {
         window.contentView = hosting
         pumpRunLoop(seconds: 0.05)
 
-        // User clicks "恢复默认" (clears avatarPath)
+        // User clicks "恢复默认" (clears avatarPath without deleting file until save)
         store.avatarPath = nil
         XCTAssertNil(store.avatarPath)
         XCTAssertNil(defaults.string(forKey: "avatarPath"))
@@ -334,9 +338,12 @@ final class EditProfileSheetStateRollbackStressTests: XCTestCase {
         model.isPresented = false
         pumpRunLoop(seconds: 0.05)
 
-        // Verify existingPath is restored
+        // Verify existingPath is restored and file still exists on disk
         XCTAssertEqual(store.avatarPath, existingPath, "avatarPath must be restored to previous path")
         XCTAssertEqual(defaults.string(forKey: "avatarPath"), existingPath)
+        if let existingPath {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: existingPath), "Original avatar file must remain intact on disk after cancel")
+        }
 
         window.contentView = nil
     }

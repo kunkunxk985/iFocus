@@ -203,7 +203,10 @@ struct EditProfileSheet: View {
                 Button {
                     AppHaptics.buttonClick()
                     withAnimation(AppTheme.springInteractive) {
-                        settings.removeAvatar()
+                        if let currentPath = settings.avatarPath, currentPath != originalAvatarPath {
+                            try? FileManager.default.removeItem(atPath: currentPath)
+                        }
+                        settings.avatarPath = nil
                     }
                 } label: {
                     HStack(spacing: 5) {
@@ -348,6 +351,9 @@ struct EditProfileSheet: View {
         AppHaptics.buttonClick()
         settings.username = tempUsername
         settings.sanitizeUsername()
+        if let oldPath = originalAvatarPath, oldPath != settings.avatarPath {
+            try? FileManager.default.removeItem(atPath: oldPath)
+        }
         originalAvatarPath = settings.avatarPath
         originalAvatarColorIndex = settings.avatarColorIndex
         isPresented = false
@@ -356,6 +362,9 @@ struct EditProfileSheet: View {
     private func rollbackAvatarState() {
         guard !hasSaved else { return }
         if settings.avatarPath != originalAvatarPath {
+            if let uncommittedPath = settings.avatarPath, uncommittedPath != originalAvatarPath {
+                try? FileManager.default.removeItem(atPath: uncommittedPath)
+            }
             settings.avatarPath = originalAvatarPath
         }
         if settings.avatarColorIndex != originalAvatarColorIndex {
@@ -384,9 +393,14 @@ struct EditProfileSheet: View {
                     url.stopAccessingSecurityScopedResource()
                 }
             }
-            if !settings.uploadAvatar(from: url) {
+            let previousTempPath = settings.avatarPath
+            if !settings.uploadAvatar(from: url, removePrevious: false) {
                 avatarErrorMessage = "图片读取失败，请换一张 JPG、PNG 或 HEIC 图片后重试。"
                 isShowingAvatarError = true
+            } else if let previousTempPath,
+                      previousTempPath != originalAvatarPath,
+                      previousTempPath != settings.avatarPath {
+                try? FileManager.default.removeItem(atPath: previousTempPath)
             }
         }
 

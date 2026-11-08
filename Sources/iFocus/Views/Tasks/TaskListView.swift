@@ -350,7 +350,7 @@ struct TaskListView: View {
                             }
                         )
                         // Force full re-init of @State when reopening the same task after save.
-                        .id("\(session.id)-\(session.notes)-\(session.linkURL)-\(session.title)")
+                        .id("\(session.id)-\(session.notes)-\(session.linkURL)-\(session.title)-\(session.dueDate?.timeIntervalSince1970 ?? -1)")
                         .transition(.scale(scale: 0.98).combined(with: .opacity))
                     }
                 }
@@ -358,6 +358,12 @@ struct TaskListView: View {
             }
         }
         .animation(AppTheme.springInteractive, value: activeSheet?.id)
+        .onChange(of: activeSheet != nil) { isPresented in
+            viewState.isModalOverlayPresented = isPresented
+        }
+        .onDisappear {
+            viewState.isModalOverlayPresented = false
+        }
         .onExitCommand {
             if activeSheet != nil {
                 withAnimation(AppTheme.springInteractive) {

@@ -548,7 +548,7 @@ class SettingsStore: ObservableObject {
     }
     
     @discardableResult
-    func uploadAvatar(from url: URL) -> Bool {
+    func uploadAvatar(from url: URL, removePrevious: Bool = true) -> Bool {
         let fileManager = FileManager.default
         do {
             try fileManager.createDirectory(at: avatarStorageDirectory, withIntermediateDirectories: true)
@@ -582,7 +582,7 @@ class SettingsStore: ObservableObject {
         do {
             try (pngData as Data).write(to: destinationURL, options: .atomic)
             self.avatarPath = destinationURL.path
-            if let previousAvatarPath, previousAvatarPath != destinationURL.path {
+            if removePrevious, let previousAvatarPath, previousAvatarPath != destinationURL.path {
                 try? fileManager.removeItem(atPath: previousAvatarPath)
             }
             return true
